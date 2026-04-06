@@ -1,18 +1,19 @@
 # UniVet
 
-Sistema de Gestao Veterinaria desenvolvido para o Projeto Integrador I da UNIVESP.
+Sistema de gestao veterinaria desenvolvido para o Projeto Integrador I da UNIVESP.
 
 ## Visao geral
 
-O UniVet foi planejado como um MVP para apoiar a rotina da recepcao da clinica veterinaria, com foco em organizacao de dados e praticidade de uso.
+O UniVet organiza a rotina da recepcao da Clinica Veterinaria Fernanda Calixto com foco em cadastro, agenda e praticidade.
 
 ## Funcionalidades do MVP
 
-- login da proprietaria
-- dashboard com agenda do dia
-- cadastro de tutores
-- cadastro de pets vinculados a tutores
-- cadastro e acompanhamento de consultas
+- acesso por codigo da proprietaria
+- pagina inicial com agenda do dia
+- cadastro de tutores com CPF validado
+- cadastro de animais vinculados a tutores
+- calendario mensal de consultas
+- agenda detalhada por dia
 
 ## Tecnologias utilizadas
 
@@ -29,13 +30,15 @@ O UniVet foi planejado como um MVP para apoiar a rotina da recepcao da clinica v
 UniVet/
 |-- app.py
 |-- init_db.py
+|-- run_server.py
 |-- banco.db
 |-- static/
+|   |-- logo-clinica.jpg
 |   |-- style.css
 |-- templates/
 |   |-- base.html
-|   |-- dashboard.html
 |   |-- login.html
+|   |-- pagina_inicial.html
 |   |-- tutores/
 |   |   |-- form.html
 |   |   |-- lista.html
@@ -43,61 +46,29 @@ UniVet/
 |   |   |-- form.html
 |   |   |-- lista.html
 |   |-- consultas/
+|       |-- dia.html
 |       |-- form.html
 |       |-- lista.html
 ```
 
-## Modelagem do banco
-
-### Tabela usuarios
-
-- `id`
-- `login`
-- `senha_hash`
-
-### Tabela tutores
-
-- `id`
-- `nome`
-- `telefone`
-- `endereco`
-
-### Tabela pets
-
-- `id`
-- `nome`
-- `especie`
-- `raca`
-- `idade`
-- `tutor_id`
-- `historico`
-
-### Tabela consultas
-
-- `id`
-- `data_hora`
-- `pet_id`
-- `observacoes`
-- `status`
-
 ## Como executar
 
-1. Instale a dependencia principal:
+1. Instale as dependencias:
 
 ```bash
-pip install flask
+pip install -r requirements.txt
 ```
 
-2. Crie ou atualize o banco de dados:
+2. Crie ou atualize o banco:
 
 ```bash
 python init_db.py
 ```
 
-3. Inicie o sistema:
+3. Rode o sistema:
 
 ```bash
-python app.py
+python run_server.py
 ```
 
 4. Abra no navegador:
@@ -106,21 +77,15 @@ python app.py
 http://127.0.0.1:5000
 ```
 
-## Usuario inicial para testes
+## Credenciais iniciais
 
-- Login: `admin`
-- Senha: `123456`
+- Codigo de acesso: `246810`
 
-## Regras de negocio implementadas
+## Regras implementadas
 
-- o login e obrigatorio para acessar as paginas internas
-- todo pet deve estar vinculado a um tutor
-- uma consulta sempre precisa estar vinculada a um pet
-- um tutor com pets cadastrados nao pode ser excluido
-- um pet com consultas cadastradas nao pode ser excluido
-
-## Observacoes academicas
-
-- O codigo foi escrito com foco em simplicidade e leitura, para facilitar a apresentacao do grupo.
-- As rotas do Flask e as funcoes principais possuem comentarios curtos.
-- O projeto prioriza clareza antes de sofisticacao, o que ajuda alunos de primeiro semestre a entenderem o fluxo completo.
+- a pagina interna exige autenticacao por codigo
+- todo tutor precisa de CPF valido
+- todo animal precisa estar vinculado a um tutor
+- toda consulta precisa estar vinculada a um animal
+- um tutor com animais nao pode ser excluido
+- um animal com consultas nao pode ser excluido

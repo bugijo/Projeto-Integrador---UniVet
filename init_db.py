@@ -9,19 +9,15 @@ DATABASE = BASE_DIR / "banco.db"
 
 
 def garantir_coluna(cursor, tabela, coluna, definicao):
-    """Adiciona uma coluna nova quando o banco ja existe e precisa evoluir."""
     colunas = cursor.execute(f"PRAGMA table_info({tabela})").fetchall()
-    nomes_colunas = [coluna_existente[1] for coluna_existente in colunas]
-
-    if coluna not in nomes_colunas:
+    nomes = [coluna_existente[1] for coluna_existente in colunas]
+    if coluna not in nomes:
         cursor.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {definicao}")
 
 
 def init_db():
-    """Cria as tabelas principais do sistema e um usuario inicial de teste."""
     connection = sqlite3.connect(DATABASE)
     cursor = connection.cursor()
-
     cursor.execute("PRAGMA foreign_keys = ON;")
 
     cursor.execute(
@@ -33,7 +29,6 @@ def init_db():
         );
         """
     )
-
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS tutores (
@@ -43,7 +38,6 @@ def init_db():
         );
         """
     )
-
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS pets (
@@ -57,7 +51,6 @@ def init_db():
         );
         """
     )
-
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS consultas (
@@ -71,39 +64,32 @@ def init_db():
         """
     )
 
-    # Campos extras opcionais para aproximar o sistema do formulario pedido no briefing.
+    garantir_coluna(cursor, "usuarios", "access_code_hash", "TEXT")
+    garantir_coluna(cursor, "tutores", "cpf", "TEXT")
     garantir_coluna(cursor, "tutores", "endereco", "TEXT")
     garantir_coluna(cursor, "pets", "idade", "TEXT")
+    garantir_coluna(cursor, "consultas", "tipo_consulta", "TEXT DEFAULT 'Consulta clinica'")
+    garantir_coluna(cursor, "consultas", "confirmacao_status", "TEXT DEFAULT 'Pendente'")
 
-    usuario_existente = cursor.execute(
-        "SELECT id, senha_hash FROM usuarios WHERE login = ?;",
-        ("admin",),
-    ).fetchone()
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tutores_cpf ON tutores (cpf)")
 
-    if not usuario_existente:
+    usuario = cursor.execute("SELECT id, senha_hash, access_code_hash FROM usuarios WHERE login = ?", ("admin",)).fetchone()
+    if not usuario:
         cursor.execute(
-            """
-            INSERT INTO usuarios (login, senha_hash)
-            VALUES (?, ?);
-            """,
-            ("admin", generate_password_hash("123456")),
+            "INSERT INTO usuarios (login, senha_hash, access_code_hash) VALUES (?, ?, ?)",
+            ("admin", generate_password_hash("123456"), generate_password_hash("246810")),
         )
-    elif not str(usuario_existente[1]).startswith("scrypt:"):
-        cursor.execute(
-            """
-            UPDATE usuarios
-            SET senha_hash = ?
-            WHERE id = ?;
-            """,
-            (generate_password_hash("123456"), usuario_existente[0]),
-        )
+    else:
+        if not str(usuario[1]).startswith("scrypt:"):
+            cursor.execute("UPDATE usuarios SET senha_hash = ? WHERE id = ?", (generate_password_hash("123456"), usuario[0]))
+        if not usuario[2]:
+            cursor.execute("UPDATE usuarios SET access_code_hash = ? WHERE id = ?", (generate_password_hash("246810"), usuario[0]))
 
     connection.commit()
     connection.close()
 
     print("Banco de dados inicializado com sucesso.")
-    print("Usuario padrao: admin")
-    print("Senha padrao: 123456")
+    print("Codigo de acesso padrao: 246810")
 
 
 if __name__ == "__main__":

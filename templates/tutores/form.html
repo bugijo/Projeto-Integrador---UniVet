@@ -6,17 +6,22 @@
     <section class="page-header">
         <div>
             <h1>{{ acao }}</h1>
-            <p>Preencha os dados principais do tutor para manter a recepcao organizada.</p>
+            <p>Cadastre o tutor com identificacao completa, incluindo CPF valido.</p>
         </div>
         <a class="btn btn-secondary" href="{{ url_for('listar_tutores') }}">Voltar</a>
     </section>
 
     <section class="card form-card">
         <div class="card-body">
-            <form method="post" class="form-grid">
+            <form method="post" class="form-grid two-columns" id="form-tutor">
                 <div class="field-group">
                     <label for="nome">Nome do tutor</label>
                     <input type="text" id="nome" name="nome" value="{{ tutor['nome'] if tutor else '' }}" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="cpf">CPF</label>
+                    <input type="text" id="cpf" name="cpf" value="{{ tutor['cpf'] if tutor else '' }}" placeholder="000.000.000-00" maxlength="14" required>
                 </div>
 
                 <div class="field-group">
@@ -29,11 +34,24 @@
                     <input type="text" id="endereco" name="endereco" value="{{ tutor['endereco'] if tutor else '' }}" placeholder="Rua, numero e bairro">
                 </div>
 
-                <div class="actions">
+                <div class="actions" style="grid-column: 1 / -1;">
                     <button class="btn" type="submit">Salvar tutor</button>
                     <a class="btn btn-secondary" href="{{ url_for('listar_tutores') }}">Cancelar</a>
                 </div>
             </form>
         </div>
     </section>
+
+    <script>
+        const cpfInput = document.getElementById("cpf");
+        if (cpfInput) {
+            cpfInput.addEventListener("input", (event) => {
+                let value = event.target.value.replace(/\D/g, "").slice(0, 11);
+                value = value.replace(/(\d{3})(\d)/, "$1.$2");
+                value = value.replace(/(\d{3})(\d)/, "$1.$2");
+                value = value.replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+                event.target.value = value;
+            });
+        }
+    </script>
 {% endblock %}

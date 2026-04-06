@@ -6,23 +6,23 @@
     <section class="page-header">
         <div>
             <h1>{{ acao }}</h1>
-            <p>Marque, altere ou acompanhe consultas com status simples e facil de explicar na banca.</p>
+            <p>Defina o horario, o tipo de consulta e o status de confirmacao do atendimento.</p>
         </div>
         <a class="btn btn-secondary" href="{{ url_for('listar_consultas') }}">Voltar</a>
     </section>
 
     <section class="card form-card">
         <div class="card-body">
-            <form method="post" class="form-grid">
+            <form method="post" class="form-grid two-columns">
                 <div class="field-group">
                     <label for="data_hora">Data e hora</label>
                     <input type="datetime-local" id="data_hora" name="data_hora" value="{{ consulta['data_hora'] if consulta else '' }}" required>
                 </div>
 
                 <div class="field-group">
-                    <label for="pet_id">Pet</label>
+                    <label for="pet_id">Paciente</label>
                     <select id="pet_id" name="pet_id" required>
-                        <option value="">Selecione um pet</option>
+                        <option value="">Selecione um animal</option>
                         {% for pet in pets %}
                             <option value="{{ pet['id'] }}" {% if consulta and consulta['pet_id']|string == pet['id']|string %}selected{% endif %}>
                                 {{ pet["nome"] }} - Tutor: {{ pet["tutor_nome"] }}
@@ -32,7 +32,17 @@
                 </div>
 
                 <div class="field-group">
-                    <label for="status">Status</label>
+                    <label for="tipo_consulta">Tipo de consulta</label>
+                    {% set tipo_atual = consulta['tipo_consulta'] if consulta and consulta['tipo_consulta'] else 'Consulta clinica' %}
+                    <select id="tipo_consulta" name="tipo_consulta" required>
+                        {% for tipo in tipos_consulta %}
+                            <option value="{{ tipo }}" {% if tipo_atual == tipo %}selected{% endif %}>{{ tipo }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <label for="status">Status da consulta</label>
                     {% set status_atual = consulta['status'] if consulta else 'Agendada' %}
                     <select id="status" name="status" required>
                         <option value="Agendada" {% if status_atual == 'Agendada' %}selected{% endif %}>Agendada</option>
@@ -42,11 +52,21 @@
                 </div>
 
                 <div class="field-group">
+                    <label for="confirmacao_status">Confirmacao</label>
+                    {% set confirmacao_atual = consulta['confirmacao_status'] if consulta and consulta['confirmacao_status'] else 'Pendente' %}
+                    <select id="confirmacao_status" name="confirmacao_status" required>
+                        {% for item in status_confirmacao %}
+                            <option value="{{ item }}" {% if confirmacao_atual == item %}selected{% endif %}>{{ item }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="field-group" style="grid-column: 1 / -1;">
                     <label for="observacoes">Observacoes</label>
                     <textarea id="observacoes" name="observacoes" placeholder="Anotacoes sobre o atendimento ou preparacao da consulta.">{{ consulta['observacoes'] if consulta else '' }}</textarea>
                 </div>
 
-                <div class="actions">
+                <div class="actions" style="grid-column: 1 / -1;">
                     <button class="btn" type="submit">Salvar consulta</button>
                     <a class="btn btn-secondary" href="{{ url_for('listar_consultas') }}">Cancelar</a>
                 </div>

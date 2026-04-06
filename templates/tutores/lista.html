@@ -6,7 +6,7 @@
     <section class="page-header">
         <div>
             <h1>Tutores</h1>
-            <p>Cadastre e mantenha os dados dos responsaveis pelos pets.</p>
+            <p>Cadastre e mantenha os dados completos dos responsaveis pelos animais.</p>
         </div>
         <a class="btn" href="{{ url_for('criar_tutor') }}">Novo tutor</a>
     </section>
@@ -17,7 +17,7 @@
                 <form method="get">
                     <div class="field-group">
                         <label for="busca">Buscar tutor</label>
-                        <input type="text" id="busca" name="busca" value="{{ busca or '' }}" placeholder="Nome, telefone ou endereco">
+                        <input type="text" id="busca" name="busca" value="{{ busca or '' }}" placeholder="Nome, telefone, CPF ou endereco">
                     </div>
                     <button class="btn" type="submit">Filtrar</button>
                     <a class="btn btn-secondary" href="{{ url_for('listar_tutores') }}">Limpar</a>
@@ -29,6 +29,7 @@
                     <thead>
                         <tr>
                             <th>Nome</th>
+                            <th>CPF</th>
                             <th>Telefone</th>
                             <th>Endereco</th>
                             <th>Acoes</th>
@@ -39,6 +40,7 @@
                             {% for tutor in tutores %}
                                 <tr>
                                     <td>{{ tutor["nome"] }}</td>
+                                    <td>{{ tutor["cpf"] or "Nao informado" }}</td>
                                     <td>{{ tutor["telefone"] }}</td>
                                     <td>{{ tutor["endereco"] or "Nao informado" }}</td>
                                     <td>
@@ -53,7 +55,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="4" class="empty-state">Nenhum tutor cadastrado ate o momento.</td>
+                                <td colspan="5" class="empty-state">Nenhum tutor cadastrado ate o momento.</td>
                             </tr>
                         {% endif %}
                     </tbody>

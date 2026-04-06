@@ -6,27 +6,45 @@
     <section class="page-header">
         <div>
             <h1>{{ acao }}</h1>
-            <p>Todo pet deve estar vinculado a um tutor, conforme a regra de negocio do projeto.</p>
+            <p>Todo animal deve estar vinculado a um tutor, com especie sugerida e raca assistida.</p>
         </div>
         <a class="btn btn-secondary" href="{{ url_for('listar_pets') }}">Voltar</a>
     </section>
 
     <section class="card form-card">
         <div class="card-body">
-            <form method="post" class="form-grid two-columns">
+            <form method="post" class="form-grid two-columns" id="pet-form">
                 <div class="field-group">
-                    <label for="nome">Nome do pet</label>
+                    <label for="nome">Nome do animal</label>
                     <input type="text" id="nome" name="nome" value="{{ pet['nome'] if pet else '' }}" required>
                 </div>
 
                 <div class="field-group">
                     <label for="especie">Especie</label>
-                    <input type="text" id="especie" name="especie" value="{{ pet['especie'] if pet else '' }}" required>
+                    <input type="text" id="especie" name="especie" list="especies-lista" value="{{ pet['especie'] if pet else '' }}" placeholder="Comece a digitar a especie" required>
+                    <datalist id="especies-lista">
+                        {% for especie in especies_sugeridas %}
+                            <option value="{{ especie|title }}"></option>
+                        {% endfor %}
+                    </datalist>
                 </div>
 
                 <div class="field-group">
-                    <label for="raca">Raca</label>
-                    <input type="text" id="raca" name="raca" value="{{ pet['raca'] if pet else '' }}" required>
+                    <label for="raca_padrao">Raca</label>
+                    {% set raca_atual = pet['raca'] if pet else '' %}
+                    {% set raca_existe = raca_atual in racas_comuns %}
+                    <select id="raca_padrao" name="raca_padrao" required>
+                        <option value="">Selecione uma raca</option>
+                        {% for raca in racas_comuns %}
+                            <option value="{{ raca }}" {% if raca_atual == raca %}selected{% endif %}>{{ raca }}</option>
+                        {% endfor %}
+                        <option value="Outra" {% if pet and raca_atual and not raca_existe %}selected{% endif %}>Outra</option>
+                    </select>
+                </div>
+
+                <div class="field-group" id="raca-personalizada-box" {% if not (pet and raca_atual and not raca_existe) %}style="display: none;"{% endif %}>
+                    <label for="raca_personalizada">Digite a raca</label>
+                    <input type="text" id="raca_personalizada" name="raca_personalizada" value="{% if pet and raca_atual and not raca_existe %}{{ raca_atual }}{% elif pet and pet['raca_personalizada'] %}{{ pet['raca_personalizada'] }}{% endif %}" placeholder="Informe a raca manualmente">
                 </div>
 
                 <div class="field-group">
@@ -40,7 +58,7 @@
                         <option value="">Selecione um tutor</option>
                         {% for tutor in tutores %}
                             <option value="{{ tutor['id'] }}" {% if pet and pet['tutor_id']|string == tutor['id']|string %}selected{% endif %}>
-                                {{ tutor["nome"] }}
+                                {{ tutor["nome"] }} - {{ tutor["cpf"] }}
                             </option>
                         {% endfor %}
                     </select>
@@ -52,10 +70,30 @@
                 </div>
 
                 <div class="actions" style="grid-column: 1 / -1;">
-                    <button class="btn" type="submit">Salvar pet</button>
+                    <button class="btn" type="submit">Salvar animal</button>
                     <a class="btn btn-secondary" href="{{ url_for('listar_pets') }}">Cancelar</a>
                 </div>
             </form>
         </div>
     </section>
+
+    <script>
+        const racaPadrao = document.getElementById("raca_padrao");
+        const racaBox = document.getElementById("raca-personalizada-box");
+        const racaPersonalizada = document.getElementById("raca_personalizada");
+
+        function alternarCampoRaca() {
+            const mostrar = racaPadrao.value === "Outra";
+            racaBox.style.display = mostrar ? "grid" : "none";
+            racaPersonalizada.required = mostrar;
+            if (!mostrar) {
+                racaPersonalizada.value = "";
+            }
+        }
+
+        if (racaPadrao) {
+            racaPadrao.addEventListener("change", alternarCampoRaca);
+            alternarCampoRaca();
+        }
+    </script>
 {% endblock %}

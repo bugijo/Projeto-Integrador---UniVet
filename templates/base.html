@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}UniVet{% endblock %}</title>
+    <link rel="icon" type="image/jpeg" href="{{ logo_url }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -12,13 +13,16 @@
 <body>
     <div class="app-shell">
         <header class="topbar">
-            <div class="brand">
-                <strong>UniVet</strong>
-                <span>Gestao veterinaria simples para a recepcao</span>
-            </div>
+            <a href="{{ url_for('pagina_inicial') }}" class="brand">
+                <img src="{{ logo_url }}" alt="Logo da Clinica Veterinaria Fernanda Calixto">
+                <div>
+                    <strong>UniVet</strong>
+                    <span>Clinica Veterinaria Fernanda Calixto</span>
+                </div>
+            </a>
 
             <div class="topbar-side">
-                <span class="welcome">Usuaria: {{ session.get('usuario_login', 'Visitante') }}</span>
+                <span class="welcome">Sessao ativa: {{ session.get('usuario_login', 'Visitante') }}</span>
                 <a class="btn btn-secondary" href="{{ url_for('logout') }}">Sair</a>
             </div>
         </header>
@@ -26,14 +30,26 @@
         <div class="layout">
             <aside class="sidebar">
                 <nav class="menu">
-                    <a href="{{ url_for('dashboard') }}" class="{% if secao == 'dashboard' %}active{% endif %}">Dashboard</a>
+                    <a href="{{ url_for('pagina_inicial') }}" class="{% if secao == 'pagina_inicial' %}active{% endif %}">Pagina inicial</a>
                     <a href="{{ url_for('listar_tutores') }}" class="{% if secao == 'tutores' %}active{% endif %}">Tutores</a>
-                    <a href="{{ url_for('listar_pets') }}" class="{% if secao == 'pets' %}active{% endif %}">Pets</a>
+                    <a href="{{ url_for('listar_pets') }}" class="{% if secao == 'pets' %}active{% endif %}">Animais</a>
                     <a href="{{ url_for('listar_consultas') }}" class="{% if secao == 'consultas' %}active{% endif %}">Consultas</a>
                 </nav>
             </aside>
 
             <main class="content">
+                {% if breadcrumbs %}
+                    <nav class="breadcrumbs" aria-label="Breadcrumb">
+                        {% for label, link in breadcrumbs %}
+                            {% if link %}
+                                <a href="{{ link }}">{{ label }}</a>
+                            {% else %}
+                                <span>{{ label }}</span>
+                            {% endif %}
+                        {% endfor %}
+                    </nav>
+                {% endif %}
+
                 {% with mensagens = get_flashed_messages(with_categories=true) %}
                     {% if mensagens %}
                         <ul class="flash-list">

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Agenda do Dia{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Agenda detalhada do dia</h1>
+            <p>Data selecionada: {{ data_iso|data_br }}</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_consultas') }}">Voltar ao calendario</a>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Horario</th>
+                            <th>Paciente</th>
+                            <th>Tutor</th>
+                            <th>Tipo</th>
+                            <th>Status</th>
+                            <th>Confirmacao</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if consultas %}
+                            {% for consulta in consultas %}
+                                <tr>
+                                    <td>{{ consulta["data_hora"]|hora_br }}</td>
+                                    <td>{{ consulta["pet_nome"] }}</td>
+                                    <td>{{ consulta["tutor_nome"] }}</td>
+                                    <td>{{ consulta["tipo_consulta"] or "Consulta clinica" }}</td>
+                                    <td><span class="status status-{{ consulta['status']|status_slug }}">{{ consulta["status"] }}</span></td>
+                                    <td><span class="status status-{{ consulta['confirmacao_status']|status_slug }}">{{ consulta["confirmacao_status"] }}</span></td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="6" class="empty-state">Nenhuma consulta cadastrada para esta data.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}

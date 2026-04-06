@@ -5,10 +5,10 @@
 {% block content %}
     <section class="page-header">
         <div>
-            <h1>Pets</h1>
-            <p>Gerencie os animais atendidos e mantenha o vinculo com cada tutor.</p>
+            <h1>Animais</h1>
+            <p>Gerencie os pacientes atendidos e mantenha o vinculo com cada tutor.</p>
         </div>
-        <a class="btn" href="{{ url_for('criar_pet') }}">Novo pet</a>
+        <a class="btn" href="{{ url_for('criar_pet') }}">Novo animal</a>
     </section>
 
     <section class="card table-card">
@@ -16,8 +16,8 @@
             <div class="toolbar">
                 <form method="get">
                     <div class="field-group">
-                        <label for="busca">Buscar pet</label>
-                        <input type="text" id="busca" name="busca" value="{{ busca or '' }}" placeholder="Nome do pet, especie, raca ou tutor">
+                        <label for="busca">Buscar animal</label>
+                        <input type="text" id="busca" name="busca" value="{{ busca or '' }}" placeholder="Nome do animal, especie, raca ou tutor">
                     </div>
                     <button class="btn" type="submit">Filtrar</button>
                     <a class="btn btn-secondary" href="{{ url_for('listar_pets') }}">Limpar</a>
@@ -28,7 +28,7 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Nome</th>
+                            <th>Paciente</th>
                             <th>Especie</th>
                             <th>Raca</th>
                             <th>Idade</th>
@@ -41,7 +41,7 @@
                         {% if pets %}
                             {% for pet in pets %}
                                 <tr>
-                                    <td>{{ pet["nome"] }}</td>
+                                        <td>{{ pet["nome"] }}</td>
                                     <td>{{ pet["especie"] }}</td>
                                     <td>{{ pet["raca"] }}</td>
                                     <td>{{ pet["idade"] or "Nao informada" }}</td>
@@ -51,7 +51,7 @@
                                         <div class="inline-actions">
                                             <a class="btn btn-secondary" href="{{ url_for('editar_pet', pet_id=pet['id']) }}">Editar</a>
                                             <form method="post" action="{{ url_for('excluir_pet', pet_id=pet['id']) }}">
-                                                <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este pet?')">Excluir</button>
+                                                <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este animal?')">Excluir</button>
                                             </form>
                                         </div>
                                     </td>
@@ -59,7 +59,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="7" class="empty-state">Nenhum pet cadastrado ate o momento.</td>
+                                <td colspan="7" class="empty-state">Nenhum animal cadastrado ate o momento.</td>
                             </tr>
                         {% endif %}
                     </tbody>
