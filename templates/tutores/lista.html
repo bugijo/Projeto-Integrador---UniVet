@@ -13,6 +13,17 @@
 
     <section class="card table-card">
         <div class="card-body">
+            <div class="toolbar">
+                <form method="get">
+                    <div class="field-group">
+                        <label for="busca">Buscar tutor</label>
+                        <input type="text" id="busca" name="busca" value="{{ busca or '' }}" placeholder="Nome, telefone ou endereco">
+                    </div>
+                    <button class="btn" type="submit">Filtrar</button>
+                    <a class="btn btn-secondary" href="{{ url_for('listar_tutores') }}">Limpar</a>
+                </form>
+            </div>
+
             <div class="table-scroll">
                 <table>
                     <thead>

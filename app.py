@@ -35,36 +35,75 @@ def login_obrigatorio(view_function):
     return wrapped_view
 
 
-def buscar_tutores():
-    """Lista todos os tutores para preencher tabelas e seletores."""
+def buscar_tutores(termo_busca=""):
+    """Lista tutores e permite filtrar pelo nome ou telefone."""
     connection = get_db_connection()
-    tutores = connection.execute(
-        "SELECT * FROM tutores ORDER BY nome ASC"
-    ).fetchall()
+    if termo_busca:
+        filtro = f"%{termo_busca}%"
+        tutores = connection.execute(
+            """
+            SELECT *
+            FROM tutores
+            WHERE nome LIKE ? OR telefone LIKE ? OR endereco LIKE ?
+            ORDER BY nome ASC
+            """,
+            (filtro, filtro, filtro),
+        ).fetchall()
+    else:
+        tutores = connection.execute(
+            "SELECT * FROM tutores ORDER BY nome ASC"
+        ).fetchall()
     connection.close()
     return tutores
 
 
-def buscar_pets():
-    """Lista pets com o nome do tutor vinculado."""
+def buscar_pets(termo_busca=""):
+    """Lista pets com o nome do tutor vinculado e permite filtro simples."""
     connection = get_db_connection()
-    pets = connection.execute(
-        """
-        SELECT pets.*, tutores.nome AS tutor_nome
-        FROM pets
-        INNER JOIN tutores ON tutores.id = pets.tutor_id
-        ORDER BY pets.nome ASC
-        """
-    ).fetchall()
+    if termo_busca:
+        filtro = f"%{termo_busca}%"
+        pets = connection.execute(
+            """
+            SELECT pets.*, tutores.nome AS tutor_nome
+            FROM pets
+            INNER JOIN tutores ON tutores.id = pets.tutor_id
+            WHERE pets.nome LIKE ?
+               OR pets.especie LIKE ?
+               OR pets.raca LIKE ?
+               OR tutores.nome LIKE ?
+            ORDER BY pets.nome ASC
+            """,
+            (filtro, filtro, filtro, filtro),
+        ).fetchall()
+    else:
+        pets = connection.execute(
+            """
+            SELECT pets.*, tutores.nome AS tutor_nome
+            FROM pets
+            INNER JOIN tutores ON tutores.id = pets.tutor_id
+            ORDER BY pets.nome ASC
+            """
+        ).fetchall()
     connection.close()
     return pets
 
 
-def buscar_consultas():
-    """Lista consultas com informacoes do pet e do tutor."""
+def buscar_consultas(termo_busca="", status=""):
+    """Lista consultas com informacoes do pet e do tutor e aplica filtros."""
     connection = get_db_connection()
-    consultas = connection.execute(
-        """
+    filtros = []
+    parametros = []
+
+    if termo_busca:
+        filtros.append("(pets.nome LIKE ? OR tutores.nome LIKE ? OR consultas.data_hora LIKE ?)")
+        filtro = f"%{termo_busca}%"
+        parametros.extend([filtro, filtro, filtro])
+
+    if status:
+        filtros.append("consultas.status = ?")
+        parametros.append(status)
+
+    sql = """
         SELECT
             consultas.*,
             pets.nome AS pet_nome,
@@ -72,9 +111,13 @@ def buscar_consultas():
         FROM consultas
         INNER JOIN pets ON pets.id = consultas.pet_id
         INNER JOIN tutores ON tutores.id = pets.tutor_id
-        ORDER BY consultas.data_hora ASC
-        """
-    ).fetchall()
+    """
+
+    if filtros:
+        sql += " WHERE " + " AND ".join(filtros)
+
+    sql += " ORDER BY consultas.data_hora ASC"
+    consultas = connection.execute(sql, parametros).fetchall()
     connection.close()
     return consultas
 
@@ -159,7 +202,13 @@ def dashboard():
 @login_obrigatorio
 def listar_tutores():
     """Exibe a lista de tutores cadastrados."""
-    return render_template("tutores/lista.html", tutores=buscar_tutores(), secao="tutores")
+    busca = request.args.get("busca", "").strip()
+    return render_template(
+        "tutores/lista.html",
+        tutores=buscar_tutores(busca),
+        busca=busca,
+        secao="tutores",
+    )
 
 
 @app.route("/tutores/novo", methods=["GET", "POST"])
@@ -269,7 +318,13 @@ def excluir_tutor(tutor_id):
 @login_obrigatorio
 def listar_pets():
     """Exibe a lista de pets com seus respectivos tutores."""
-    return render_template("pets/lista.html", pets=buscar_pets(), secao="pets")
+    busca = request.args.get("busca", "").strip()
+    return render_template(
+        "pets/lista.html",
+        pets=buscar_pets(busca),
+        busca=busca,
+        secao="pets",
+    )
 
 
 @app.route("/pets/novo", methods=["GET", "POST"])
@@ -412,7 +467,15 @@ def excluir_pet(pet_id):
 @login_obrigatorio
 def listar_consultas():
     """Exibe todas as consultas cadastradas no sistema."""
-    return render_template("consultas/lista.html", consultas=buscar_consultas(), secao="consultas")
+    busca = request.args.get("busca", "").strip()
+    status = request.args.get("status", "").strip()
+    return render_template(
+        "consultas/lista.html",
+        consultas=buscar_consultas(busca, status),
+        busca=busca,
+        status=status,
+        secao="consultas",
+    )
 
 
 @app.route("/consultas/nova", methods=["GET", "POST"])

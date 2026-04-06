@@ -136,6 +136,26 @@ a {
     line-height: 1.5;
 }
 
+.toolbar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: end;
+    margin-bottom: 18px;
+}
+
+.toolbar form {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: end;
+    width: 100%;
+}
+
+.toolbar .field-group {
+    flex: 1 1 220px;
+}
+
 .btn,
 button.btn {
     display: inline-flex;
