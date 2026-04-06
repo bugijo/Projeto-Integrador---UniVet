@@ -10,3 +10,5 @@ banco.db
 .env
 .flaskenv
 .pytest_cache/
+server.out.log
+server.err.log
