@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Dashboard{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Agenda do Dia</h1>
+            <p>Resumo rapido do sistema e consultas marcadas para hoje.</p>
+        </div>
+        <a class="btn" href="{{ url_for('criar_consulta') }}">Agendar consulta</a>
+    </section>
+
+    <section class="grid-cards">
+        <article class="card">
+            <div class="card-body">
+                <span class="metric-label">Tutores cadastrados</span>
+                <strong class="metric-value">{{ totais.tutores }}</strong>
+            </div>
+        </article>
+        <article class="card">
+            <div class="card-body">
+                <span class="metric-label">Pets cadastrados</span>
+                <strong class="metric-value">{{ totais.pets }}</strong>
+            </div>
+        </article>
+        <article class="card">
+            <div class="card-body">
+                <span class="metric-label">Consultas no sistema</span>
+                <strong class="metric-value">{{ totais.consultas }}</strong>
+            </div>
+        </article>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <h2>Consultas de {{ agora.strftime("%d/%m/%Y") }}</h2>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Horario</th>
+                            <th>Pet</th>
+                            <th>Tutor</th>
+                            <th>Status</th>
+                            <th>Observacoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if consultas_hoje %}
+                            {% for consulta in consultas_hoje %}
+                                <tr>
+                                    <td>{{ consulta["data_hora"][11:16] }}</td>
+                                    <td>{{ consulta["pet_nome"] }}</td>
+                                    <td>{{ consulta["tutor_nome"] }}</td>
+                                    <td>
+                                        <span class="status status-{{ consulta['status']|lower }}">
+                                            {{ consulta["status"] }}
+                                        </span>
+                                    </td>
+                                    <td>{{ consulta["observacoes"] or "Sem observacoes." }}</td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="empty-state">Nenhuma consulta marcada para hoje.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="highlight-box">
+                Este painel foi pensado para a recepcao visualizar rapidamente o movimento do dia sem precisar abrir varios modulos.
+            </div>
+        </div>
+    </section>
+{% endblock %}

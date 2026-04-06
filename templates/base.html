@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}UniVet{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand">
+                <strong>UniVet</strong>
+                <span>Gestao veterinaria simples para a recepcao</span>
+            </div>
+
+            <div class="topbar-side">
+                <span class="welcome">Usuaria: {{ session.get('usuario_login', 'Visitante') }}</span>
+                <a class="btn btn-secondary" href="{{ url_for('logout') }}">Sair</a>
+            </div>
+        </header>
+
+        <div class="layout">
+            <aside class="sidebar">
+                <nav class="menu">
+                    <a href="{{ url_for('dashboard') }}" class="{% if secao == 'dashboard' %}active{% endif %}">Dashboard</a>
+                    <a href="{{ url_for('listar_tutores') }}" class="{% if secao == 'tutores' %}active{% endif %}">Tutores</a>
+                    <a href="{{ url_for('listar_pets') }}" class="{% if secao == 'pets' %}active{% endif %}">Pets</a>
+                    <a href="{{ url_for('listar_consultas') }}" class="{% if secao == 'consultas' %}active{% endif %}">Consultas</a>
+                </nav>
+            </aside>
+
+            <main class="content">
+                {% with mensagens = get_flashed_messages(with_categories=true) %}
+                    {% if mensagens %}
+                        <ul class="flash-list">
+                            {% for categoria, mensagem in mensagens %}
+                                <li class="flash-item {{ categoria }}">{{ mensagem }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+</body>
+</html>

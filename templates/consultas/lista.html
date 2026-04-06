@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Consultas{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Consultas</h1>
+            <p>Organize a agenda da clinica e acompanhe o status de cada atendimento.</p>
+        </div>
+        <a class="btn" href="{{ url_for('criar_consulta') }}">Nova consulta</a>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data e hora</th>
+                            <th>Pet</th>
+                            <th>Tutor</th>
+                            <th>Status</th>
+                            <th>Observacoes</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if consultas %}
+                            {% for consulta in consultas %}
+                                <tr>
+                                    <td>{{ consulta["data_hora"].replace("T", " ") }}</td>
+                                    <td>{{ consulta["pet_nome"] }}</td>
+                                    <td>{{ consulta["tutor_nome"] }}</td>
+                                    <td>
+                                        <span class="status status-{{ consulta['status']|lower }}">
+                                            {{ consulta["status"] }}
+                                        </span>
+                                    </td>
+                                    <td>{{ consulta["observacoes"] or "Sem observacoes." }}</td>
+                                    <td>
+                                        <div class="inline-actions">
+                                            <a class="btn btn-secondary" href="{{ url_for('editar_consulta', consulta_id=consulta['id']) }}">Editar</a>
+                                            <form method="post" action="{{ url_for('excluir_consulta', consulta_id=consulta['id']) }}">
+                                                <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir esta consulta?')">Excluir</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="empty-state">Nenhuma consulta cadastrada ate o momento.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}

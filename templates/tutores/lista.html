@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Tutores{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Tutores</h1>
+            <p>Cadastre e mantenha os dados dos responsaveis pelos pets.</p>
+        </div>
+        <a class="btn" href="{{ url_for('criar_tutor') }}">Novo tutor</a>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Telefone</th>
+                            <th>Endereco</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if tutores %}
+                            {% for tutor in tutores %}
+                                <tr>
+                                    <td>{{ tutor["nome"] }}</td>
+                                    <td>{{ tutor["telefone"] }}</td>
+                                    <td>{{ tutor["endereco"] or "Nao informado" }}</td>
+                                    <td>
+                                        <div class="inline-actions">
+                                            <a class="btn btn-secondary" href="{{ url_for('editar_tutor', tutor_id=tutor['id']) }}">Editar</a>
+                                            <form method="post" action="{{ url_for('excluir_tutor', tutor_id=tutor['id']) }}">
+                                                <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este tutor?')">Excluir</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="4" class="empty-state">Nenhum tutor cadastrado ate o momento.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}

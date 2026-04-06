@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UniVet | Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        :root {
+            --verde-agua: #d8f3dc;
+            --verde-claro: #b7e4c7;
+            --azul-suave: #dceefb;
+            --rosa-suave: #f9dde7;
+            --creme: #fffaf5;
+            --texto: #35524a;
+            --texto-secundario: #618076;
+            --destaque: #72bda3;
+            --destaque-hover: #5ca58d;
+            --sombra: rgba(90, 139, 121, 0.18);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: "Nunito", sans-serif;
+            color: var(--texto);
+            background:
+                radial-gradient(circle at top left, var(--rosa-suave), transparent 35%),
+                radial-gradient(circle at bottom right, var(--azul-suave), transparent 30%),
+                linear-gradient(135deg, var(--creme), #f4fff8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .login-wrapper {
+            width: 100%;
+            max-width: 960px;
+            display: grid;
+            grid-template-columns: 1fr;
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 18px 50px var(--sombra);
+            border: 1px solid rgba(114, 189, 163, 0.18);
+        }
+
+        .brand-panel {
+            padding: 32px 28px;
+            background: linear-gradient(180deg, rgba(216, 243, 220, 0.95), rgba(220, 238, 251, 0.85));
+        }
+
+        .brand-tag {
+            display: inline-block;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.68);
+            color: var(--texto-secundario);
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 18px;
+        }
+
+        .brand-panel h1 {
+            font-size: 2rem;
+            line-height: 1.15;
+            margin-bottom: 12px;
+        }
+
+        .brand-panel p {
+            color: var(--texto-secundario);
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+
+        .brand-card {
+            background: rgba(255, 255, 255, 0.75);
+            border-radius: 20px;
+            padding: 18px;
+            border: 1px solid rgba(114, 189, 163, 0.16);
+        }
+
+        .brand-card strong {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .login-panel {
+            padding: 32px 28px;
+        }
+
+        .login-panel h2 {
+            font-size: 1.7rem;
+            margin-bottom: 8px;
+        }
+
+        .login-panel p {
+            color: var(--texto-secundario);
+            margin-bottom: 24px;
+        }
+
+        form {
+            display: grid;
+            gap: 16px;
+        }
+
+        label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid #cfe9da;
+            background: #fcfffd;
+            font-size: 1rem;
+            color: var(--texto);
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        input:focus {
+            border-color: var(--destaque);
+            box-shadow: 0 0 0 4px rgba(114, 189, 163, 0.16);
+        }
+
+        button {
+            border: none;
+            border-radius: 16px;
+            padding: 14px 18px;
+            background: var(--destaque);
+            color: white;
+            font-size: 1rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 12px 24px rgba(114, 189, 163, 0.25);
+        }
+
+        button:hover {
+            background: var(--destaque-hover);
+            transform: translateY(-1px);
+        }
+
+        .flash-list {
+            list-style: none;
+            margin-bottom: 18px;
+            display: grid;
+            gap: 10px;
+        }
+
+        .flash-item {
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: #fff3f5;
+            color: #9b4d66;
+            border: 1px solid #f2c7d5;
+            font-weight: 700;
+        }
+
+        .hint-box {
+            margin-top: 18px;
+            padding: 14px;
+            border-radius: 16px;
+            background: #f5fffa;
+            border: 1px dashed #b7e4c7;
+            color: var(--texto-secundario);
+            font-size: 0.96rem;
+        }
+
+        @media (min-width: 840px) {
+            .login-wrapper {
+                grid-template-columns: 1.05fr 0.95fr;
+            }
+
+            .brand-panel,
+            .login-panel {
+                padding: 44px;
+            }
+
+            .brand-panel h1 {
+                font-size: 2.6rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="login-wrapper">
+        <section class="brand-panel">
+            <span class="brand-tag">Sistema de Gestao Veterinaria</span>
+            <h1>UniVet</h1>
+            <p>
+                Um ambiente simples, acolhedor e organizado para apoiar a rotina da recepcao,
+                os cadastros da clinica e o acompanhamento dos pets.
+            </p>
+
+            <div class="brand-card">
+                <strong>Foco do MVP</strong>
+                <p>Login, agenda do dia, cadastro de tutores, cadastro de pets e consultas.</p>
+            </div>
+        </section>
+
+        <section class="login-panel">
+            <h2>Acesso da Clinica</h2>
+            <p>Entre com seu usuario para acessar o painel principal do sistema.</p>
+
+            {% with mensagens = get_flashed_messages(with_categories=true) %}
+                {% if mensagens %}
+                    <ul class="flash-list">
+                        {% for categoria, mensagem in mensagens %}
+                            <li class="flash-item">{{ mensagem }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            {% endwith %}
+
+            <form method="post">
+                <div>
+                    <label for="login">Usuario</label>
+                    <input type="text" id="login" name="login" placeholder="Digite seu usuario" required>
+                </div>
+
+                <div>
+                    <label for="senha">Senha</label>
+                    <input type="password" id="senha" name="senha" placeholder="Digite sua senha" required>
+                </div>
+
+                <button type="submit">Entrar no sistema</button>
+            </form>
+
+            <div class="hint-box">
+                Usuario inicial para testes: <strong>admin</strong> | Senha: <strong>123456</strong>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

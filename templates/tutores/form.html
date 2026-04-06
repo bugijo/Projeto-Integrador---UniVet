@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | {{ acao }}{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>{{ acao }}</h1>
+            <p>Preencha os dados principais do tutor para manter a recepcao organizada.</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_tutores') }}">Voltar</a>
+    </section>
+
+    <section class="card form-card">
+        <div class="card-body">
+            <form method="post" class="form-grid">
+                <div class="field-group">
+                    <label for="nome">Nome do tutor</label>
+                    <input type="text" id="nome" name="nome" value="{{ tutor['nome'] if tutor else '' }}" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="telefone">Telefone</label>
+                    <input type="text" id="telefone" name="telefone" value="{{ tutor['telefone'] if tutor else '' }}" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="endereco">Endereco</label>
+                    <input type="text" id="endereco" name="endereco" value="{{ tutor['endereco'] if tutor else '' }}" placeholder="Rua, numero e bairro">
+                </div>
+
+                <div class="actions">
+                    <button class="btn" type="submit">Salvar tutor</button>
+                    <a class="btn btn-secondary" href="{{ url_for('listar_tutores') }}">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </section>
+{% endblock %}

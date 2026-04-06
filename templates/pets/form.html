@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | {{ acao }}{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>{{ acao }}</h1>
+            <p>Todo pet deve estar vinculado a um tutor, conforme a regra de negocio do projeto.</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_pets') }}">Voltar</a>
+    </section>
+
+    <section class="card form-card">
+        <div class="card-body">
+            <form method="post" class="form-grid two-columns">
+                <div class="field-group">
+                    <label for="nome">Nome do pet</label>
+                    <input type="text" id="nome" name="nome" value="{{ pet['nome'] if pet else '' }}" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="especie">Especie</label>
+                    <input type="text" id="especie" name="especie" value="{{ pet['especie'] if pet else '' }}" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="raca">Raca</label>
+                    <input type="text" id="raca" name="raca" value="{{ pet['raca'] if pet else '' }}" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="idade">Idade</label>
+                    <input type="text" id="idade" name="idade" value="{{ pet['idade'] if pet else '' }}" placeholder="Ex.: 3 anos">
+                </div>
+
+                <div class="field-group">
+                    <label for="tutor_id">Tutor responsavel</label>
+                    <select id="tutor_id" name="tutor_id" required>
+                        <option value="">Selecione um tutor</option>
+                        {% for tutor in tutores %}
+                            <option value="{{ tutor['id'] }}" {% if pet and pet['tutor_id']|string == tutor['id']|string %}selected{% endif %}>
+                                {{ tutor["nome"] }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="field-group" style="grid-column: 1 / -1;">
+                    <label for="historico">Observacoes clinicas</label>
+                    <textarea id="historico" name="historico" placeholder="Alergias, cuidados ou observacoes importantes.">{{ pet['historico'] if pet else '' }}</textarea>
+                </div>
+
+                <div class="actions" style="grid-column: 1 / -1;">
+                    <button class="btn" type="submit">Salvar pet</button>
+                    <a class="btn btn-secondary" href="{{ url_for('listar_pets') }}">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </section>
+{% endblock %}

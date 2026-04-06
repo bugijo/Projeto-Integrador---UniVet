@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | {{ acao }}{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>{{ acao }}</h1>
+            <p>Marque, altere ou acompanhe consultas com status simples e facil de explicar na banca.</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_consultas') }}">Voltar</a>
+    </section>
+
+    <section class="card form-card">
+        <div class="card-body">
+            <form method="post" class="form-grid">
+                <div class="field-group">
+                    <label for="data_hora">Data e hora</label>
+                    <input type="datetime-local" id="data_hora" name="data_hora" value="{{ consulta['data_hora'] if consulta else '' }}" required>
+                </div>
+
+                <div class="field-group">
+                    <label for="pet_id">Pet</label>
+                    <select id="pet_id" name="pet_id" required>
+                        <option value="">Selecione um pet</option>
+                        {% for pet in pets %}
+                            <option value="{{ pet['id'] }}" {% if consulta and consulta['pet_id']|string == pet['id']|string %}selected{% endif %}>
+                                {{ pet["nome"] }} - Tutor: {{ pet["tutor_nome"] }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <label for="status">Status</label>
+                    {% set status_atual = consulta['status'] if consulta else 'Agendada' %}
+                    <select id="status" name="status" required>
+                        <option value="Agendada" {% if status_atual == 'Agendada' %}selected{% endif %}>Agendada</option>
+                        <option value="Concluida" {% if status_atual == 'Concluida' %}selected{% endif %}>Concluida</option>
+                        <option value="Cancelada" {% if status_atual == 'Cancelada' %}selected{% endif %}>Cancelada</option>
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <label for="observacoes">Observacoes</label>
+                    <textarea id="observacoes" name="observacoes" placeholder="Anotacoes sobre o atendimento ou preparacao da consulta.">{{ consulta['observacoes'] if consulta else '' }}</textarea>
+                </div>
+
+                <div class="actions">
+                    <button class="btn" type="submit">Salvar consulta</button>
+                    <a class="btn btn-secondary" href="{{ url_for('listar_consultas') }}">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </section>
+{% endblock %}

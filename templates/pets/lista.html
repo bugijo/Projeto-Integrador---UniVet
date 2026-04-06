@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Pets{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Pets</h1>
+            <p>Gerencie os animais atendidos e mantenha o vinculo com cada tutor.</p>
+        </div>
+        <a class="btn" href="{{ url_for('criar_pet') }}">Novo pet</a>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Especie</th>
+                            <th>Raca</th>
+                            <th>Idade</th>
+                            <th>Tutor</th>
+                            <th>Historico</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if pets %}
+                            {% for pet in pets %}
+                                <tr>
+                                    <td>{{ pet["nome"] }}</td>
+                                    <td>{{ pet["especie"] }}</td>
+                                    <td>{{ pet["raca"] }}</td>
+                                    <td>{{ pet["idade"] or "Nao informada" }}</td>
+                                    <td>{{ pet["tutor_nome"] }}</td>
+                                    <td>{{ pet["historico"] or "Sem observacoes." }}</td>
+                                    <td>
+                                        <div class="inline-actions">
+                                            <a class="btn btn-secondary" href="{{ url_for('editar_pet', pet_id=pet['id']) }}">Editar</a>
+                                            <form method="post" action="{{ url_for('excluir_pet', pet_id=pet['id']) }}">
+                                                <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este pet?')">Excluir</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="7" class="empty-state">Nenhum pet cadastrado ate o momento.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}

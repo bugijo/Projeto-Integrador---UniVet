@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  validar-projeto:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Validar sintaxe Python
+        run: python -m py_compile app.py init_db.py
+
+      - name: Testar inicializacao do banco
+        run: python init_db.py
+
+      - name: Testar rota de login
+        run: |
+          python - <<'PY'
+          from app import app
+
+          client = app.test_client()
+          response = client.get("/login")
+          assert response.status_code == 200
+          print("Tela de login validada com sucesso.")
+          PY
