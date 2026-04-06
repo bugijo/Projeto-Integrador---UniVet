@@ -30,6 +30,33 @@
                 <strong class="metric-value">{{ totais.consultas }}</strong>
             </div>
         </article>
+        <article class="card">
+            <div class="card-body">
+                <span class="metric-label">Consultas de hoje</span>
+                <strong class="metric-value">{{ consultas_hoje|length }}</strong>
+            </div>
+        </article>
+    </section>
+
+    <section class="grid-cards">
+        <article class="card soft-card">
+            <div class="card-body">
+                <span class="metric-label">Agendadas hoje</span>
+                <strong class="metric-value">{{ resumo_hoje["Agendada"] }}</strong>
+            </div>
+        </article>
+        <article class="card soft-card">
+            <div class="card-body">
+                <span class="metric-label">Concluidas hoje</span>
+                <strong class="metric-value">{{ resumo_hoje["Concluida"] }}</strong>
+            </div>
+        </article>
+        <article class="card soft-card">
+            <div class="card-body">
+                <span class="metric-label">Canceladas hoje</span>
+                <strong class="metric-value">{{ resumo_hoje["Cancelada"] }}</strong>
+            </div>
+        </article>
     </section>
 
     <section class="card table-card">
@@ -72,6 +99,44 @@
 
             <div class="highlight-box">
                 Este painel foi pensado para a recepcao visualizar rapidamente o movimento do dia sem precisar abrir varios modulos.
+            </div>
+        </div>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <h2>Proximas consultas</h2>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data e hora</th>
+                            <th>Pet</th>
+                            <th>Tutor</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if proximas_consultas %}
+                            {% for consulta in proximas_consultas %}
+                                <tr>
+                                    <td>{{ consulta["data_hora"].replace("T", " ") }}</td>
+                                    <td>{{ consulta["pet_nome"] }}</td>
+                                    <td>{{ consulta["tutor_nome"] }}</td>
+                                    <td>
+                                        <span class="status status-{{ consulta['status']|lower }}">
+                                            {{ consulta["status"] }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="4" class="empty-state">Ainda nao existem consultas futuras cadastradas.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </section>

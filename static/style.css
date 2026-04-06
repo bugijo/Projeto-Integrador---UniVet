@@ -205,6 +205,10 @@ button.btn:hover {
     box-shadow: 0 16px 40px var(--sombra);
 }
 
+.soft-card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(239, 251, 244, 0.88));
+}
+
 .card-body {
     padding: 20px;
 }
@@ -219,6 +223,11 @@ button.btn:hover {
 .metric-value {
     font-size: 2rem;
     font-weight: 800;
+}
+
+h2 {
+    margin: 0 0 16px;
+    font-size: 1.25rem;
 }
 
 .table-card {

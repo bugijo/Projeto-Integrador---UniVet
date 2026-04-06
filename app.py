@@ -9,6 +9,7 @@ from werkzeug.security import check_password_hash
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE = BASE_DIR / "banco.db"
+STATUSS_VALIDOS = {"Agendada", "Concluida", "Cancelada"}
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "univet-chave-inicial-dev"
@@ -122,6 +123,18 @@ def buscar_consultas(termo_busca="", status=""):
     return consultas
 
 
+def contar_consultas_por_status(consultas):
+    """Resume a agenda do dia por status para o dashboard."""
+    resumo = {"Agendada": 0, "Concluida": 0, "Cancelada": 0}
+
+    for consulta in consultas:
+        status = consulta["status"]
+        if status in resumo:
+            resumo[status] += 1
+
+    return resumo
+
+
 @app.context_processor
 def inject_now():
     """Envia a data atual para os templates internos do sistema."""
@@ -188,11 +201,28 @@ def dashboard():
         "pets": connection.execute("SELECT COUNT(*) FROM pets").fetchone()[0],
         "consultas": connection.execute("SELECT COUNT(*) FROM consultas").fetchone()[0],
     }
+    proximas_consultas = connection.execute(
+        """
+        SELECT
+            consultas.*,
+            pets.nome AS pet_nome,
+            tutores.nome AS tutor_nome
+        FROM consultas
+        INNER JOIN pets ON pets.id = consultas.pet_id
+        INNER JOIN tutores ON tutores.id = pets.tutor_id
+        WHERE consultas.data_hora >= ?
+        ORDER BY consultas.data_hora ASC
+        LIMIT 5
+        """,
+        (datetime.now().strftime("%Y-%m-%dT%H:%M"),),
+    ).fetchall()
     connection.close()
 
     return render_template(
         "dashboard.html",
         consultas_hoje=consultas_hoje,
+        proximas_consultas=proximas_consultas,
+        resumo_hoje=contar_consultas_por_status(consultas_hoje),
         totais=totais,
         secao="dashboard",
     )
@@ -230,12 +260,14 @@ def criar_tutor():
             )
 
         connection = get_db_connection()
-        connection.execute(
-            "INSERT INTO tutores (nome, telefone, endereco) VALUES (?, ?, ?)",
-            (nome, telefone, endereco),
-        )
-        connection.commit()
-        connection.close()
+        try:
+            connection.execute(
+                "INSERT INTO tutores (nome, telefone, endereco) VALUES (?, ?, ?)",
+                (nome, telefone, endereco),
+            )
+            connection.commit()
+        finally:
+            connection.close()
 
         flash("Tutor cadastrado com sucesso.", "sucesso")
         return redirect(url_for("listar_tutores"))
@@ -273,16 +305,18 @@ def editar_tutor(tutor_id):
                 secao="tutores",
             )
 
-        connection.execute(
-            """
-            UPDATE tutores
-            SET nome = ?, telefone = ?, endereco = ?
-            WHERE id = ?
-            """,
-            (nome, telefone, endereco, tutor_id),
-        )
-        connection.commit()
-        connection.close()
+        try:
+            connection.execute(
+                """
+                UPDATE tutores
+                SET nome = ?, telefone = ?, endereco = ?
+                WHERE id = ?
+                """,
+                (nome, telefone, endereco, tutor_id),
+            )
+            connection.commit()
+        finally:
+            connection.close()
 
         flash("Tutor atualizado com sucesso.", "sucesso")
         return redirect(url_for("listar_tutores"))
@@ -363,14 +397,32 @@ def criar_pet():
             )
 
         connection = get_db_connection()
-        connection.execute(
-            """
-            INSERT INTO pets (nome, especie, raca, idade, tutor_id, historico)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (nome, especie, raca, idade, tutor_id, historico),
-        )
-        connection.commit()
+        try:
+            connection.execute(
+                """
+                INSERT INTO pets (nome, especie, raca, idade, tutor_id, historico)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (nome, especie, raca, idade, tutor_id, historico),
+            )
+            connection.commit()
+        except sqlite3.IntegrityError:
+            connection.close()
+            flash("Nao foi possivel salvar o pet. Verifique o tutor selecionado.", "erro")
+            return render_template(
+                "pets/form.html",
+                pet={
+                    "nome": nome,
+                    "especie": especie,
+                    "raca": raca,
+                    "idade": idade,
+                    "tutor_id": tutor_id,
+                    "historico": historico,
+                },
+                tutores=tutores,
+                acao="Novo Pet",
+                secao="pets",
+            )
         connection.close()
 
         flash("Pet cadastrado com sucesso.", "sucesso")
@@ -423,15 +475,34 @@ def editar_pet(pet_id):
             )
 
         connection = get_db_connection()
-        connection.execute(
-            """
-            UPDATE pets
-            SET nome = ?, especie = ?, raca = ?, idade = ?, tutor_id = ?, historico = ?
-            WHERE id = ?
-            """,
-            (nome, especie, raca, idade, tutor_id, historico, pet_id),
-        )
-        connection.commit()
+        try:
+            connection.execute(
+                """
+                UPDATE pets
+                SET nome = ?, especie = ?, raca = ?, idade = ?, tutor_id = ?, historico = ?
+                WHERE id = ?
+                """,
+                (nome, especie, raca, idade, tutor_id, historico, pet_id),
+            )
+            connection.commit()
+        except sqlite3.IntegrityError:
+            connection.close()
+            flash("Nao foi possivel atualizar o pet. Verifique o tutor selecionado.", "erro")
+            return render_template(
+                "pets/form.html",
+                pet={
+                    "id": pet_id,
+                    "nome": nome,
+                    "especie": especie,
+                    "raca": raca,
+                    "idade": idade,
+                    "tutor_id": tutor_id,
+                    "historico": historico,
+                },
+                tutores=tutores,
+                acao="Editar Pet",
+                secao="pets",
+            )
         connection.close()
 
         flash("Pet atualizado com sucesso.", "sucesso")
@@ -509,15 +580,46 @@ def criar_consulta():
                 secao="consultas",
             )
 
+        if status not in STATUSS_VALIDOS:
+            flash("Selecione um status valido para a consulta.", "erro")
+            return render_template(
+                "consultas/form.html",
+                consulta={
+                    "data_hora": data_hora,
+                    "pet_id": pet_id,
+                    "observacoes": observacoes,
+                    "status": "Agendada",
+                },
+                pets=pets,
+                acao="Nova Consulta",
+                secao="consultas",
+            )
+
         connection = get_db_connection()
-        connection.execute(
-            """
-            INSERT INTO consultas (data_hora, pet_id, observacoes, status)
-            VALUES (?, ?, ?, ?)
-            """,
-            (data_hora, pet_id, observacoes, status),
-        )
-        connection.commit()
+        try:
+            connection.execute(
+                """
+                INSERT INTO consultas (data_hora, pet_id, observacoes, status)
+                VALUES (?, ?, ?, ?)
+                """,
+                (data_hora, pet_id, observacoes, status),
+            )
+            connection.commit()
+        except sqlite3.IntegrityError:
+            connection.close()
+            flash("Nao foi possivel salvar a consulta. Verifique o pet selecionado.", "erro")
+            return render_template(
+                "consultas/form.html",
+                consulta={
+                    "data_hora": data_hora,
+                    "pet_id": pet_id,
+                    "observacoes": observacoes,
+                    "status": status,
+                },
+                pets=pets,
+                acao="Nova Consulta",
+                secao="consultas",
+            )
         connection.close()
 
         flash("Consulta agendada com sucesso.", "sucesso")
@@ -565,16 +667,49 @@ def editar_consulta(consulta_id):
                 secao="consultas",
             )
 
+        if status not in STATUSS_VALIDOS:
+            flash("Selecione um status valido para a consulta.", "erro")
+            return render_template(
+                "consultas/form.html",
+                consulta={
+                    "id": consulta_id,
+                    "data_hora": data_hora,
+                    "pet_id": pet_id,
+                    "observacoes": observacoes,
+                    "status": consulta["status"],
+                },
+                pets=pets,
+                acao="Editar Consulta",
+                secao="consultas",
+            )
+
         connection = get_db_connection()
-        connection.execute(
-            """
-            UPDATE consultas
-            SET data_hora = ?, pet_id = ?, observacoes = ?, status = ?
-            WHERE id = ?
-            """,
-            (data_hora, pet_id, observacoes, status, consulta_id),
-        )
-        connection.commit()
+        try:
+            connection.execute(
+                """
+                UPDATE consultas
+                SET data_hora = ?, pet_id = ?, observacoes = ?, status = ?
+                WHERE id = ?
+                """,
+                (data_hora, pet_id, observacoes, status, consulta_id),
+            )
+            connection.commit()
+        except sqlite3.IntegrityError:
+            connection.close()
+            flash("Nao foi possivel atualizar a consulta. Verifique o pet selecionado.", "erro")
+            return render_template(
+                "consultas/form.html",
+                consulta={
+                    "id": consulta_id,
+                    "data_hora": data_hora,
+                    "pet_id": pet_id,
+                    "observacoes": observacoes,
+                    "status": status,
+                },
+                pets=pets,
+                acao="Editar Consulta",
+                secao="consultas",
+            )
         connection.close()
 
         flash("Consulta atualizada com sucesso.", "sucesso")
@@ -602,6 +737,16 @@ def logout():
     session.clear()
     flash("Sessao encerrada com sucesso.", "sucesso")
     return redirect(url_for("login"))
+
+
+@app.errorhandler(404)
+def pagina_nao_encontrada(error):
+    """Exibe uma mensagem simples quando a rota nao existe."""
+    if "usuario_id" not in session:
+        return redirect(url_for("login"))
+
+    flash("A pagina solicitada nao foi encontrada.", "erro")
+    return redirect(url_for("dashboard"))
 
 
 if __name__ == "__main__":
