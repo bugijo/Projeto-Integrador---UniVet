@@ -31,7 +31,24 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "univet-chave-inicial-dev")
 
 
+def garantir_banco_inicializado():
+    # Em produção o SQLite pode iniciar vazio; neste caso, criamos a estrutura automaticamente.
+    connection = sqlite3.connect(DATABASE)
+    try:
+        tabela = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'usuarios'"
+        ).fetchone()
+    finally:
+        connection.close()
+    if tabela:
+        return
+    from init_db import init_db
+
+    init_db()
+
+
 def get_db_connection():
+    garantir_banco_inicializado()
     connection = sqlite3.connect(DATABASE)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON;")
