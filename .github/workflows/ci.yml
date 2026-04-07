@@ -35,7 +35,7 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
-    deploy:
+  deploy:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
