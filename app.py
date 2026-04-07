@@ -2,6 +2,7 @@ from calendar import Calendar
 from datetime import datetime, timedelta
 from functools import lru_cache
 from functools import wraps
+import os
 from pathlib import Path
 import json
 import sqlite3
@@ -23,10 +24,11 @@ MESES_PT = {
 HORARIO_INICIO = 8
 HORARIO_FIM = 18
 SLOT_MINUTOS = 20
-USUARIO_AUTORIZADO = "Dra. Fernanda Calixto"
+PERFIS_AUTORIZADOS = ("admin", "veterinaria")
+LOGIN_DRA_FERNANDA = "fernanda.calixto"
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "univet-chave-inicial-dev"
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "univet-chave-inicial-dev")
 
 
 def get_db_connection():
@@ -39,9 +41,9 @@ def get_db_connection():
 def login_obrigatorio(view_function):
     @wraps(view_function)
     def wrapped_view(*args, **kwargs):
-        if "usuario_id" not in session or session.get("usuario_login") != USUARIO_AUTORIZADO:
+        if "usuario_id" not in session or session.get("usuario_perfil") not in PERFIS_AUTORIZADOS:
             session.clear()
-            flash("Use o código de acesso exclusivo da Dra. Fernanda Calixto.", "erro")
+            flash("Faça login com um usuário autorizado para acessar o sistema.", "erro")
             return redirect(url_for("login"))
         return view_function(*args, **kwargs)
 
@@ -105,11 +107,29 @@ def mes_anterior(ano, mes):
     return (ano - 1, 12) if mes == 1 else (ano, mes - 1)
 
 
-def usuario_principal():
+def usuario_por_login(identificador):
     connection = get_db_connection()
-    usuario = connection.execute("SELECT * FROM usuarios ORDER BY id ASC LIMIT 1").fetchone()
+    usuario = connection.execute(
+        """
+        SELECT * FROM usuarios
+        WHERE ativo = 1 AND (lower(login) = lower(?) OR lower(coalesce(nome, '')) = lower(?))
+        LIMIT 1
+        """,
+        (identificador, identificador),
+    ).fetchone()
     connection.close()
     return usuario
+
+
+def usuario_atual():
+    if "usuario_id" not in session:
+        return None
+    return {
+        "id": session.get("usuario_id"),
+        "login": session.get("usuario_login"),
+        "nome": session.get("usuario_nome"),
+        "perfil": session.get("usuario_perfil"),
+    }
 
 
 def limpar_caches_referencia():
@@ -134,7 +154,7 @@ def registrar_historico(entidade, registro_id, acao, dados):
             entidade,
             registro_id,
             acao,
-            session.get("usuario_login", USUARIO_AUTORIZADO),
+            session.get("usuario_nome") or session.get("usuario_login", "Sistema"),
             json.dumps(dados, ensure_ascii=False),
             datetime.now().strftime("%Y-%m-%dT%H:%M"),
         ),
@@ -353,7 +373,11 @@ def calendario_mensal(ano, mes):
 
 @app.context_processor
 def inject_now():
-    return {"agora": datetime.now(), "logo_url": url_for("static", filename="logo-clinica.jpg")}
+    return {
+        "agora": datetime.now(),
+        "logo_url": url_for("static", filename="logo-clinica.jpg"),
+        "usuario_logado": usuario_atual(),
+    }
 
 
 @app.template_filter("status_slug")
@@ -382,22 +406,20 @@ def login():
     if "usuario_id" in session:
         return redirect(url_for("pagina_inicial"))
     if request.method == "POST":
-        codigo = request.form.get("codigo_acesso", "").strip()
-        usuario = usuario_principal()
-        if not codigo:
-            flash("Digite o código de acesso para entrar.", "erro")
-        elif (
-            usuario
-            and usuario["login"] == USUARIO_AUTORIZADO
-            and usuario["access_code_hash"]
-            and check_password_hash(usuario["access_code_hash"], codigo)
-        ):
+        identificador = request.form.get("login", "").strip()
+        senha = request.form.get("senha", "").strip()
+        usuario = usuario_por_login(identificador) if identificador else None
+        if not identificador or not senha:
+            flash("Informe o usuário e a senha para entrar.", "erro")
+        elif usuario and check_password_hash(usuario["senha_hash"], senha):
             session["usuario_id"] = usuario["id"]
             session["usuario_login"] = usuario["login"]
+            session["usuario_nome"] = usuario["nome"] or usuario["login"]
+            session["usuario_perfil"] = usuario["perfil"]
             flash("Acesso liberado com sucesso.", "sucesso")
             return redirect(url_for("pagina_inicial"))
         else:
-            flash("Código de acesso inválido.", "erro")
+            flash("Usuário ou senha inválidos.", "erro")
     return render_template("login.html")
 
 
@@ -695,6 +717,47 @@ def obter_historico(entidade, registro_id):
     return historico
 
 
+def buscar_consulta_detalhada(consulta_id):
+    connection = get_db_connection()
+    consulta = connection.execute(
+        """
+        SELECT consultas.*, pets.nome AS pet_nome, pets.historico AS pet_historico,
+               tutores.nome AS tutor_nome, veterinarios.nome AS veterinario_nome,
+               servicos.nome AS servico_nome
+        FROM consultas
+        INNER JOIN pets ON pets.id = consultas.pet_id
+        INNER JOIN tutores ON tutores.id = pets.tutor_id
+        INNER JOIN veterinarios ON veterinarios.id = consultas.veterinario_id
+        INNER JOIN servicos ON servicos.id = consultas.servico_id
+        WHERE consultas.id = ?
+        """,
+        (consulta_id,),
+    ).fetchone()
+    connection.close()
+    return consulta
+
+
+def historico_clinico_pet(pet_id):
+    connection = get_db_connection()
+    registros = connection.execute(
+        """
+        SELECT consultas.*, pets.nome AS pet_nome, pets.historico AS pet_historico,
+               tutores.nome AS tutor_nome, veterinarios.nome AS veterinario_nome,
+               servicos.nome AS servico_nome
+        FROM consultas
+        INNER JOIN pets ON pets.id = consultas.pet_id
+        INNER JOIN tutores ON tutores.id = pets.tutor_id
+        INNER JOIN veterinarios ON veterinarios.id = consultas.veterinario_id
+        INNER JOIN servicos ON servicos.id = consultas.servico_id
+        WHERE consultas.pet_id = ?
+        ORDER BY consultas.data_hora DESC, consultas.id DESC
+        """,
+        (pet_id,),
+    ).fetchall()
+    connection.close()
+    return registros
+
+
 def salvar_consulta(formulario, consulta_id=None):
     data_hora = formulario.get("data_hora", "").strip()
     pet_id = formulario.get("pet_id", type=int)
@@ -703,8 +766,24 @@ def salvar_consulta(formulario, consulta_id=None):
     tipo_atendimento = formulario.get("tipo_atendimento", "").strip()
     confirmacao_status = formulario.get("confirmacao_status", "").strip()
     observacoes = formulario.get("observacoes", "").strip()
+    diagnostico = formulario.get("diagnostico", "").strip()
+    tratamento = formulario.get("tratamento", "").strip()
+    vacinas = formulario.get("vacinas", "").strip()
     status = formulario.get("status", "Agendada").strip()
-    consulta = {"id": consulta_id, "data_hora": data_hora, "pet_id": pet_id, "servico_id": servico_id, "veterinario_id": veterinario_id, "tipo_atendimento": tipo_atendimento, "confirmacao_status": confirmacao_status, "observacoes": observacoes, "status": status}
+    consulta = {
+        "id": consulta_id,
+        "data_hora": data_hora,
+        "pet_id": pet_id,
+        "servico_id": servico_id,
+        "veterinario_id": veterinario_id,
+        "tipo_atendimento": tipo_atendimento,
+        "confirmacao_status": confirmacao_status,
+        "observacoes": observacoes,
+        "diagnostico": diagnostico,
+        "tratamento": tratamento,
+        "vacinas": vacinas,
+        "status": status,
+    }
     if not data_hora or not pet_id or not servico_id or not veterinario_id or tipo_atendimento not in TIPOS_ATENDIMENTO or confirmacao_status not in STATUSS_CONFIRMACAO or status not in STATUSS_CONSULTA:
         return False, "Preencha corretamente os campos obrigatórios da consulta.", consulta, []
     duracao, servico = calcular_duracao_total(servico_id, tipo_atendimento)
@@ -725,18 +804,50 @@ def salvar_consulta(formulario, consulta_id=None):
                 UPDATE consultas
                 SET data_hora = ?, data_fim = ?, pet_id = ?, servico_id = ?, tipo_consulta = ?,
                     duracao_total_minutos = ?, veterinario_id = ?, tipo_atendimento = ?,
-                    observacoes = ?, status = ?, confirmacao_status = ?
+                    observacoes = ?, diagnostico = ?, tratamento = ?, vacinas = ?,
+                    status = ?, confirmacao_status = ?
                 WHERE id = ?
                 """,
-                (data_hora, fim_dt.strftime("%Y-%m-%dT%H:%M"), pet_id, servico_id, servico["nome"], duracao, veterinario_id, tipo_atendimento, observacoes, status, confirmacao_status, consulta_id),
+                (
+                    data_hora,
+                    fim_dt.strftime("%Y-%m-%dT%H:%M"),
+                    pet_id,
+                    servico_id,
+                    servico["nome"],
+                    duracao,
+                    veterinario_id,
+                    tipo_atendimento,
+                    observacoes,
+                    diagnostico,
+                    tratamento,
+                    vacinas,
+                    status,
+                    confirmacao_status,
+                    consulta_id,
+                ),
             )
         else:
             connection.execute(
                 """
-                INSERT INTO consultas (data_hora, data_fim, pet_id, servico_id, tipo_consulta, duracao_total_minutos, veterinario_id, tipo_atendimento, observacoes, status, confirmacao_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO consultas (data_hora, data_fim, pet_id, servico_id, tipo_consulta, duracao_total_minutos, veterinario_id, tipo_atendimento, observacoes, diagnostico, tratamento, vacinas, status, confirmacao_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (data_hora, fim_dt.strftime("%Y-%m-%dT%H:%M"), pet_id, servico_id, servico["nome"], duracao, veterinario_id, tipo_atendimento, observacoes, status, confirmacao_status),
+                (
+                    data_hora,
+                    fim_dt.strftime("%Y-%m-%dT%H:%M"),
+                    pet_id,
+                    servico_id,
+                    servico["nome"],
+                    duracao,
+                    veterinario_id,
+                    tipo_atendimento,
+                    observacoes,
+                    diagnostico,
+                    tratamento,
+                    vacinas,
+                    status,
+                    confirmacao_status,
+                ),
             )
         connection.commit()
     except sqlite3.IntegrityError:
@@ -850,6 +961,19 @@ def agenda_do_dia(data_iso):
 @app.route("/historico/<entidade>/<int:registro_id>")
 @login_obrigatorio
 def visualizar_historico(entidade, registro_id):
+    if entidade == "consultas":
+        consulta = buscar_consulta_detalhada(registro_id)
+        if not consulta:
+            flash("Consulta não encontrada.", "erro")
+            return redirect(url_for("listar_consultas"))
+        return render_template(
+            "consultas/historico.html",
+            consulta=consulta,
+            historico_clinico=historico_clinico_pet(consulta["pet_id"]),
+            auditoria=obter_historico(entidade, registro_id),
+            secao="consultas",
+            breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Histórico clínico", None)),
+        )
     titulos = {
         "tutores": "Histórico do tutor",
         "pets": "Histórico do animal",
@@ -958,21 +1082,68 @@ def editar_veterinario(veterinario_id):
 @app.route("/veterinarios/<int:veterinario_id>/excluir", methods=["POST"])
 @login_obrigatorio
 def excluir_veterinario(veterinario_id):
+    if request.form.get("confirmar_exclusao") != "sim":
+        flash("Confirme a exclusão para continuar.", "erro")
+        return redirect(url_for("listar_veterinarios_page"))
     connection = get_db_connection()
     veterinario = connection.execute("SELECT * FROM veterinarios WHERE id = ?", (veterinario_id,)).fetchone()
     uso = connection.execute("SELECT COUNT(*) FROM consultas WHERE veterinario_id = ?", (veterinario_id,)).fetchone()[0]
     total = connection.execute("SELECT COUNT(*) FROM veterinarios").fetchone()[0]
-    if uso or total <= 1:
+    if not veterinario:
         connection.close()
-        flash("Não é possível excluir este veterinário.", "erro")
+        flash("Veterinário não encontrado.", "erro")
         return redirect(url_for("listar_veterinarios_page"))
-    connection.execute("DELETE FROM veterinarios WHERE id = ?", (veterinario_id,))
-    connection.commit()
+    if total <= 1:
+        connection.close()
+        flash("Não é possível excluir o último veterinário cadastrado.", "erro")
+        return redirect(url_for("listar_veterinarios_page"))
+    substituto = connection.execute(
+        """
+        SELECT * FROM veterinarios
+        WHERE id != ?
+        ORDER BY CASE WHEN lower(nome) = lower(?) THEN 0 ELSE 1 END, nome ASC
+        LIMIT 1
+        """,
+        (veterinario_id, "Dra. Fernanda Calixto"),
+    ).fetchone()
+    if uso and not substituto:
+        connection.close()
+        flash("Não foi encontrado outro veterinário para receber os atendimentos vinculados.", "erro")
+        return redirect(url_for("listar_veterinarios_page"))
+    try:
+        if uso:
+            connection.execute(
+                "UPDATE consultas SET veterinario_id = ? WHERE veterinario_id = ?",
+                (substituto["id"], veterinario_id),
+            )
+        connection.execute("DELETE FROM veterinarios WHERE id = ?", (veterinario_id,))
+        connection.commit()
+    except sqlite3.IntegrityError:
+        connection.rollback()
+        connection.close()
+        flash("Não foi possível excluir o veterinário por causa de vínculos ativos no banco de dados.", "erro")
+        return redirect(url_for("listar_veterinarios_page"))
     connection.close()
     limpar_caches_referencia()
     if veterinario:
-        registrar_historico("veterinarios", veterinario_id, "excluido", serializar_row(veterinario))
-    flash("Veterinário excluído com sucesso.", "sucesso")
+        registrar_historico(
+            "veterinarios",
+            veterinario_id,
+            "excluido",
+            {
+                **serializar_row(veterinario),
+                "consultas_redistribuidas": uso,
+                "novo_veterinario_id": substituto["id"] if uso and substituto else None,
+                "novo_veterinario_nome": substituto["nome"] if uso and substituto else None,
+            },
+        )
+    if uso and substituto:
+        flash(
+            f"Veterinário excluído com sucesso. {uso} consulta(s) foram transferidas para {substituto['nome']}.",
+            "sucesso",
+        )
+    else:
+        flash("Veterinário excluído com sucesso.", "sucesso")
     return redirect(url_for("listar_veterinarios_page"))
 
 

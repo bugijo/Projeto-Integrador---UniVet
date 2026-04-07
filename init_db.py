@@ -36,12 +36,40 @@ SERVICOS = [
 
 VETERINARIOS = ["Dra. Fernanda Calixto", "Dr. Rafael Moreira"]
 
+USUARIOS_PADRAO = [
+    ("admin", "Administrador de testes", "admin", "123456"),
+    ("fernanda.calixto", "Dra. Fernanda Calixto", "veterinaria", "Fer123"),
+]
+
 
 def garantir_coluna(cursor, tabela, coluna, definicao):
     colunas = cursor.execute(f"PRAGMA table_info({tabela})").fetchall()
     nomes = [coluna_existente[1] for coluna_existente in colunas]
     if coluna not in nomes:
         cursor.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {definicao}")
+
+
+def criar_ou_atualizar_usuario(cursor, login, nome, perfil, senha):
+    usuario = cursor.execute("SELECT id FROM usuarios WHERE login = ?", (login,)).fetchone()
+    senha_hash = generate_password_hash(senha)
+    if usuario:
+        cursor.execute(
+            """
+            UPDATE usuarios
+            SET nome = ?, perfil = ?, senha_hash = ?, ativo = 1
+            WHERE id = ?
+            """,
+            (nome, perfil, senha_hash, usuario[0]),
+        )
+        return usuario[0]
+    cursor.execute(
+        """
+        INSERT INTO usuarios (login, nome, perfil, senha_hash, ativo)
+        VALUES (?, ?, ?, ?, 1)
+        """,
+        (login, nome, perfil, senha_hash),
+    )
+    return cursor.lastrowid
 
 
 def init_db():
@@ -96,6 +124,9 @@ def init_db():
 
     for tabela, coluna, definicao in [
         ("usuarios", "access_code_hash", "TEXT"),
+        ("usuarios", "nome", "TEXT"),
+        ("usuarios", "perfil", "TEXT DEFAULT 'veterinaria'"),
+        ("usuarios", "ativo", "INTEGER DEFAULT 1"),
         ("tutores", "cpf", "TEXT"),
         ("tutores", "endereco", "TEXT"),
         ("pets", "idade", "TEXT"),
@@ -108,6 +139,9 @@ def init_db():
         ("consultas", "duracao_total_minutos", "INTEGER DEFAULT 20"),
         ("consultas", "veterinario_id", "INTEGER"),
         ("consultas", "tipo_atendimento", "TEXT DEFAULT 'Presencial'"),
+        ("consultas", "diagnostico", "TEXT"),
+        ("consultas", "tratamento", "TEXT"),
+        ("consultas", "vacinas", "TEXT"),
     ]:
         garantir_coluna(cursor, tabela, coluna, definicao)
 
@@ -115,6 +149,7 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_entidade_registro ON historico_alteracoes (entidade, registro_id, criado_em)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_pets_tutor ON pets (tutor_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_consultas_pet ON consultas (pet_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_consultas_veterinario_periodo ON consultas (veterinario_id, data_hora, data_fim)")
 
     cursor.executescript(
         """
@@ -162,19 +197,11 @@ def init_db():
                 (raca_id, especie_id, raca_nome),
             )
 
-    usuario = cursor.execute("SELECT id, senha_hash, access_code_hash FROM usuarios ORDER BY id ASC LIMIT 1").fetchone()
-    if not usuario:
-        cursor.execute(
-            "INSERT INTO usuarios (login, senha_hash, access_code_hash) VALUES (?, ?, ?)",
-            ("Dra. Fernanda Calixto", generate_password_hash("123456"), generate_password_hash("246810")),
-        )
-    else:
-        cursor.execute("UPDATE usuarios SET login = ? WHERE id = ?", ("Dra. Fernanda Calixto", usuario[0]))
-        if not str(usuario[1]).startswith("scrypt:"):
-            cursor.execute("UPDATE usuarios SET senha_hash = ? WHERE id = ?", (generate_password_hash("123456"), usuario[0]))
-        if not usuario[2]:
-            cursor.execute("UPDATE usuarios SET access_code_hash = ? WHERE id = ?", (generate_password_hash("246810"), usuario[0]))
-        cursor.execute("DELETE FROM usuarios WHERE id != ?", (usuario[0],))
+    ids_autorizados = []
+    for login, nome, perfil, senha in USUARIOS_PADRAO:
+        ids_autorizados.append(criar_ou_atualizar_usuario(cursor, login, nome, perfil, senha))
+    marcadores = ", ".join("?" for _ in ids_autorizados)
+    cursor.execute(f"DELETE FROM usuarios WHERE id NOT IN ({marcadores})", ids_autorizados)
 
     consultas_por_horario = cursor.execute(
         "SELECT data_hora, COUNT(*) FROM consultas GROUP BY data_hora ORDER BY COUNT(*) DESC LIMIT 1"
@@ -219,7 +246,7 @@ def init_db():
     connection.commit()
     connection.close()
     print("Banco de dados inicializado com sucesso.")
-    print("Codigo de acesso padrao: 246810")
+    print("Logins de desenvolvimento: admin / 123456 e fernanda.calixto / Fer123")
 
 
 if __name__ == "__main__":

@@ -61,7 +61,7 @@
                                     <td>
                                         <div class="inline-actions">
                                             <a class="btn btn-secondary" href="{{ url_for('editar_consulta', consulta_id=consulta['id']) }}">Editar</a>
-                                            <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='consultas', registro_id=consulta['id']) }}">Histórico</a>
+                                            <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='consultas', registro_id=consulta['id']) }}">Histórico clínico</a>
                                             <form method="post" action="{{ url_for('excluir_consulta', consulta_id=consulta['id']) }}">
                                                 <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir esta consulta?')">Excluir</button>
                                             </form>

@@ -26,6 +26,7 @@
                                         <a class="btn btn-secondary" href="{{ url_for('editar_veterinario', veterinario_id=veterinario['id']) }}">Editar</a>
                                         <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='veterinarios', registro_id=veterinario['id']) }}">Histórico</a>
                                         <form method="post" action="{{ url_for('excluir_veterinario', veterinario_id=veterinario['id']) }}">
+                                            <input type="hidden" name="confirmar_exclusao" value="sim">
                                             <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este veterinário?')">Excluir</button>
                                         </form>
                                     </div>

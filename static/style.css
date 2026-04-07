@@ -188,6 +188,10 @@ th { color: var(--texto-secundario); background: rgba(255,255,255,0.72); font-si
     line-height: 1.5;
 }
 
+.highlight-row {
+    background: linear-gradient(135deg, rgba(255,182,193,0.20), rgba(255,218,185,0.20));
+}
+
 .welcome-body {
     display: flex; align-items: center; justify-content: center; padding: 24px;
 }

@@ -19,8 +19,8 @@
                     <span class="pill">Acesso seguro da clínica</span>
                     <h1>Bem-vinda ao UniVet</h1>
                     <p>
-                        O acesso agora é feito por código numérico da proprietária,
-                        deixando a entrada mais direta e objetiva para a rotina da clínica.
+                        Entre com usuário e senha para acessar a rotina clínica com
+                        permissões separadas para administração e operação veterinária.
                     </p>
                 </div>
             </div>
@@ -37,14 +37,19 @@
 
             <form method="post" class="welcome-form">
                 <div class="field-group">
-                    <label for="codigo_acesso">Código de acesso</label>
-                    <input type="password" id="codigo_acesso" name="codigo_acesso" inputmode="numeric" placeholder="Digite o código numérico da clínica" required>
+                    <label for="login">Usuário</label>
+                    <input type="text" id="login" name="login" placeholder="admin ou fernanda.calixto" required>
+                </div>
+                <div class="field-group">
+                    <label for="senha">Senha</label>
+                    <input type="password" id="senha" name="senha" placeholder="Digite sua senha" required>
                 </div>
                 <button class="btn" type="submit">Entrar na página inicial</button>
             </form>
 
             <div class="highlight-box">
-                Código inicial de desenvolvimento: <strong>246810</strong>
+                Acesso de testes: <strong>admin / 123456</strong><br>
+                Acesso da clínica: <strong>fernanda.calixto / Fer123</strong>
             </div>
         </section>
     </main>

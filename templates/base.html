@@ -22,7 +22,11 @@
             </a>
 
             <div class="topbar-side">
-                <span class="welcome">Sessão ativa: {{ session.get('usuario_login', 'Visitante') }}</span>
+                <span class="welcome">
+                    Sessão ativa:
+                    {{ (usuario_logado.nome if usuario_logado else 'Visitante') }}
+                    {% if usuario_logado and usuario_logado.perfil == 'admin' %}(Administrador){% endif %}
+                </span>
                 <a class="btn btn-secondary" href="{{ url_for('logout') }}">Sair</a>
             </div>
         </header>

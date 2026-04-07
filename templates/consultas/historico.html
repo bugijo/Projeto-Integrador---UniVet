@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Histórico clínico{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Histórico clínico</h1>
+            <p>Prontuário do paciente com dados da consulta selecionada e atendimentos anteriores.</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_consultas') }}">Voltar</a>
+    </section>
+
+    <section class="grid-cards">
+        <article class="card">
+            <div class="card-body">
+                <span class="metric-label">Paciente</span>
+                <strong class="metric-value">{{ consulta["pet_nome"] }}</strong>
+                <p>Tutor: {{ consulta["tutor_nome"] }}</p>
+            </div>
+        </article>
+        <article class="card">
+            <div class="card-body">
+                <span class="metric-label">Consulta selecionada</span>
+                <strong class="metric-value">{{ consulta["data_hora"]|data_hora_br }}</strong>
+                <p>{{ consulta["servico_nome"] }} com {{ consulta["veterinario_nome"] }}</p>
+            </div>
+        </article>
+        <article class="card">
+            <div class="card-body">
+                <span class="metric-label">Observações do cadastro</span>
+                <strong class="metric-value">Prontuário base</strong>
+                <p>{{ consulta["pet_historico"] or "Sem observações clínicas fixas no cadastro do animal." }}</p>
+            </div>
+        </article>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <h2>Linha do tempo do paciente</h2>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data e hora</th>
+                            <th>Serviço</th>
+                            <th>Veterinário</th>
+                            <th>Status</th>
+                            <th>Diagnóstico</th>
+                            <th>Tratamento</th>
+                            <th>Vacinas</th>
+                            <th>Observações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in historico_clinico %}
+                            <tr {% if item["id"] == consulta["id"] %}class="highlight-row"{% endif %}>
+                                <td>{{ item["data_hora"]|data_hora_br }}</td>
+                                <td>{{ item["servico_nome"] }}</td>
+                                <td>{{ item["veterinario_nome"] }}</td>
+                                <td><span class="status status-{{ item['status']|status_slug }}">{{ item["status"] }}</span></td>
+                                <td>{{ item["diagnostico"] or "Não informado." }}</td>
+                                <td>{{ item["tratamento"] or "Não informado." }}</td>
+                                <td>{{ item["vacinas"] or "Não informado." }}</td>
+                                <td>{{ item["observacoes"] or "Sem observações." }}</td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="8" class="empty-state">Ainda não há atendimentos anteriores para este paciente.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <h2>Histórico de modificações da consulta</h2>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data e hora</th>
+                            <th>Ação</th>
+                            <th>Usuária</th>
+                            <th>Registro</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in auditoria %}
+                            <tr>
+                                <td>{{ item["criado_em"]|data_hora_br }}</td>
+                                <td>{{ item["acao"] }}</td>
+                                <td>{{ item["usuario_nome"] }}</td>
+                                <td><pre class="history-pre">{{ item["dados_json"] }}</pre></td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="4" class="empty-state">Nenhuma modificação registrada para esta consulta.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}

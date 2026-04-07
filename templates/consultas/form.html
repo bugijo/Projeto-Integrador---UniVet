@@ -89,6 +89,21 @@
                     <textarea id="observacoes" name="observacoes" placeholder="Anotações sobre o atendimento ou preparação da consulta.">{{ consulta['observacoes'] if consulta else '' }}</textarea>
                 </div>
 
+                <div class="field-group">
+                    <label for="diagnostico">Diagnóstico</label>
+                    <textarea id="diagnostico" name="diagnostico" placeholder="Diagnóstico clínico ou hipótese principal.">{{ consulta['diagnostico'] if consulta else '' }}</textarea>
+                </div>
+
+                <div class="field-group">
+                    <label for="tratamento">Tratamento</label>
+                    <textarea id="tratamento" name="tratamento" placeholder="Medicamentos, condutas e orientações.">{{ consulta['tratamento'] if consulta else '' }}</textarea>
+                </div>
+
+                <div class="field-group" style="grid-column: 1 / -1;">
+                    <label for="vacinas">Vacinas e procedimentos preventivos</label>
+                    <textarea id="vacinas" name="vacinas" placeholder="Vacinas aplicadas, reforços ou procedimentos preventivos.">{{ consulta['vacinas'] if consulta else '' }}</textarea>
+                </div>
+
                 <div class="field-group field-feedback" style="grid-column: 1 / -1;">
                     <label>Disponibilidade</label>
                     <div id="feedback-disponibilidade" class="status status-pendente">Preencha os dados para validar o horário.</div>
