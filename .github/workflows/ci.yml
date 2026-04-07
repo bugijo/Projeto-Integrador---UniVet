@@ -40,16 +40,6 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger external deploy
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: |
-          if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
-            curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL"
-          else
-            echo "RENDER_DEPLOY_HOOK_URL não configurado. Pulando deploy externo."
-          fi
-
       - name: Smoke test
         env:
           PRODUCTION_BASE_URL: ${{ secrets.PRODUCTION_BASE_URL }}
@@ -57,5 +47,6 @@ jobs:
           if [ -n "$PRODUCTION_BASE_URL" ]; then
             curl -fsSL "$PRODUCTION_BASE_URL/login"
           else
-            echo "PRODUCTION_BASE_URL não configurado. Pulando smoke test."
+            echo "PRODUCTION_BASE_URL não configurado."
+            exit 1
           fi
