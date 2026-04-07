@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Serviços{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Serviços</h1>
+            <p>Procedimentos e tempos padrão utilizados pela agenda.</p>
+        </div>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr><th>Serviço</th><th>Duração</th><th>Ações</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for servico in servicos %}
+                            <tr>
+                                <td>{{ servico["nome"] }}</td>
+                                <td>{{ servico["duracao_minutos"] }} minutos</td>
+                                <td>
+                                    <div class="inline-actions">
+                                        <a class="btn btn-secondary" href="{{ url_for('editar_servico', servico_id=servico['id']) }}">Editar</a>
+                                        <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='servicos', registro_id=servico['id']) }}">Histórico</a>
+                                        <form method="post" action="{{ url_for('excluir_servico', servico_id=servico['id']) }}">
+                                            <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este serviço?')">Excluir</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}

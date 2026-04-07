@@ -6,7 +6,7 @@
     <section class="page-header">
         <div>
             <h1>Consultas</h1>
-            <p>Calendario mensal com contagem de atendimentos e acesso direto para a agenda diaria em grade.</p>
+            <p>Calendário mensal com contagem de atendimentos e acesso direto para a agenda diária em grade.</p>
         </div>
         <a class="btn" href="{{ url_for('criar_consulta') }}">Nova consulta</a>
     </section>
@@ -14,12 +14,12 @@
     <section class="card calendar-card">
         <div class="card-body">
             <div class="calendar-header">
-                <a class="btn btn-secondary" href="{{ url_for('listar_consultas', ano=ano_anterior, mes=mes_anterior) }}">Mes anterior</a>
+                <a class="btn btn-secondary" href="{{ url_for('listar_consultas', ano=ano_anterior, mes=mes_anterior) }}">Mês anterior</a>
                 <div>
                     <h2>{{ nome_mes }} de {{ ano }}</h2>
                     <p>Verde: com consultas | Cinza: sem expediente | Branco: sem atendimentos</p>
                 </div>
-                <a class="btn btn-secondary" href="{{ url_for('listar_consultas', ano=ano_proximo, mes=mes_proximo) }}">Proximo mes</a>
+                <a class="btn btn-secondary" href="{{ url_for('listar_consultas', ano=ano_proximo, mes=mes_proximo) }}">Próximo mês</a>
             </div>
 
             <div class="calendar-grid">
@@ -42,11 +42,11 @@
 
     <section class="card table-card">
         <div class="card-body">
-            <h2>Destaques do mes</h2>
+            <h2>Destaques do mês</h2>
             <div class="table-scroll">
                 <table>
                     <thead>
-                        <tr><th>Data e hora</th><th>Paciente</th><th>Servico</th><th>Veterinario</th><th>Tipo</th><th>Status</th></tr>
+                        <tr><th>Data e hora</th><th>Paciente</th><th>Serviço</th><th>Veterinário</th><th>Tipo</th><th>Status</th><th>Ações</th></tr>
                     </thead>
                     <tbody>
                         {% if consultas_mes %}
@@ -58,10 +58,19 @@
                                     <td>{{ consulta["veterinario_nome"] }}</td>
                                     <td>{{ consulta["tipo_atendimento"] }}</td>
                                     <td><span class="status status-{{ consulta['status']|status_slug }}">{{ consulta["status"] }}</span></td>
+                                    <td>
+                                        <div class="inline-actions">
+                                            <a class="btn btn-secondary" href="{{ url_for('editar_consulta', consulta_id=consulta['id']) }}">Editar</a>
+                                            <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='consultas', registro_id=consulta['id']) }}">Histórico</a>
+                                            <form method="post" action="{{ url_for('excluir_consulta', consulta_id=consulta['id']) }}">
+                                                <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir esta consulta?')">Excluir</button>
+                                            </form>
+                                        </div>
+                                    </td>
                                 </tr>
                             {% endfor %}
                         {% else %}
-                            <tr><td colspan="6" class="empty-state">Nenhuma consulta cadastrada para este mes.</td></tr>
+                            <tr><td colspan="7" class="empty-state">Nenhuma consulta cadastrada para este mês.</td></tr>
                         {% endif %}
                     </tbody>
                 </table>

@@ -17,12 +17,12 @@
                 <img src="{{ logo_url }}" alt="Logo da Clinica Veterinaria Fernanda Calixto">
                 <div>
                     <strong>UniVet</strong>
-                    <span>Clinica Veterinaria Fernanda Calixto</span>
+                    <span>Clínica Veterinária Fernanda Calixto</span>
                 </div>
             </a>
 
             <div class="topbar-side">
-                <span class="welcome">Sessao ativa: {{ session.get('usuario_login', 'Visitante') }}</span>
+                <span class="welcome">Sessão ativa: {{ session.get('usuario_login', 'Visitante') }}</span>
                 <a class="btn btn-secondary" href="{{ url_for('logout') }}">Sair</a>
             </div>
         </header>
@@ -30,10 +30,12 @@
         <div class="layout">
             <aside class="sidebar">
                 <nav class="menu">
-                    <a href="{{ url_for('pagina_inicial') }}" class="{% if secao == 'pagina_inicial' %}active{% endif %}">Pagina inicial</a>
+                    <a href="{{ url_for('pagina_inicial') }}" class="{% if secao == 'pagina_inicial' %}active{% endif %}">Página inicial</a>
                     <a href="{{ url_for('listar_tutores') }}" class="{% if secao == 'tutores' %}active{% endif %}">Tutores</a>
                     <a href="{{ url_for('listar_pets') }}" class="{% if secao == 'pets' %}active{% endif %}">Animais</a>
                     <a href="{{ url_for('listar_consultas') }}" class="{% if secao == 'consultas' %}active{% endif %}">Consultas</a>
+                    <a href="{{ url_for('listar_servicos_page') }}" class="{% if secao == 'configuracoes' %}active{% endif %}">Serviços</a>
+                    <a href="{{ url_for('listar_veterinarios_page') }}" class="{% if secao == 'configuracoes' %}active{% endif %}">Veterinários</a>
                 </nav>
             </aside>
 

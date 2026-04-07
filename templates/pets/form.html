@@ -6,7 +6,7 @@
     <section class="page-header">
         <div>
             <h1>{{ acao }}</h1>
-            <p>Selecione a especie e veja apenas as racas correspondentes em tempo real.</p>
+            <p>Selecione a espécie e veja apenas as raças correspondentes em tempo real.</p>
         </div>
         <a class="btn btn-secondary" href="{{ url_for('listar_pets') }}">Voltar</a>
     </section>
@@ -20,26 +20,26 @@
                 </div>
 
                 <div class="field-group">
-                    <label for="especie_busca">Especie</label>
-                    <input type="text" id="especie_busca" list="lista-especies" value="{% if pet and pet['especie'] %}{{ pet['especie'] }}{% endif %}" placeholder="Digite para localizar a especie" required>
+                    <label for="especie_busca">Espécie</label>
+                    <input type="text" id="especie_busca" list="lista-especies" value="{% if pet and pet['especie'] %}{{ pet['especie'] }}{% endif %}" placeholder="Digite para localizar a espécie" required>
                     <input type="hidden" id="especie_id" name="especie_id" value="{{ pet['especie_id'] if pet and pet['especie_id'] else '' }}">
                     <datalist id="lista-especies">
                         {% for especie in especies %}
                             <option value="{{ especie['nome'] }}" data-id="{{ especie['id'] }}"></option>
                         {% endfor %}
                     </datalist>
-                    <small class="field-help">Ao escolher a especie, a lista de racas sera filtrada automaticamente.</small>
+                    <small class="field-help">Ao escolher a espécie, a lista de raças será filtrada automaticamente.</small>
                 </div>
 
                 <div class="field-group">
-                    <label for="raca_id">Raca</label>
+                    <label for="raca_id">Raça</label>
                     <select id="raca_id" name="raca_id">
                         <option value="">Carregando racas...</option>
                     </select>
                 </div>
 
                 <div class="field-group" id="raca_personalizada_box">
-                    <label for="raca_personalizada">Outra raca</label>
+                    <label for="raca_personalizada">Outra raça</label>
                     <input type="text" id="raca_personalizada" name="raca_personalizada" value="{% if pet and pet['raca_id'] is none %}{{ pet['raca'] }}{% endif %}" placeholder="Preencha somente se escolher Outra">
                 </div>
 
@@ -59,8 +59,8 @@
                 </div>
 
                 <div class="field-group" style="grid-column: 1 / -1;">
-                    <label for="historico">Observacoes clinicas</label>
-                    <textarea id="historico" name="historico" placeholder="Alergias, cuidados ou observacoes importantes.">{{ pet['historico'] if pet else '' }}</textarea>
+                    <label for="historico">Observações clínicas</label>
+                    <textarea id="historico" name="historico" placeholder="Alergias, cuidados ou observações importantes.">{{ pet['historico'] if pet else '' }}</textarea>
                 </div>
 
                 <div class="actions" style="grid-column: 1 / -1;">
@@ -91,7 +91,7 @@
             especieId.value = encontrada ? encontrada.id : "";
 
             if (!especieId.value) {
-                racaSelect.innerHTML = '<option value="">Selecione primeiro uma especie valida</option>';
+                racaSelect.innerHTML = '<option value="">Selecione primeiro uma espécie válida</option>';
                 alternarOutraRaca();
                 return;
             }

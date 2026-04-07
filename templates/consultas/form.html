@@ -6,7 +6,7 @@
     <section class="page-header">
         <div>
             <h1>{{ acao }}</h1>
-            <p>O sistema calcula a duracao automaticamente e valida conflitos antes de salvar.</p>
+            <p>O sistema calcula a duração automaticamente e valida conflitos antes de salvar.</p>
         </div>
         <a class="btn btn-secondary" href="{{ url_for('listar_consultas') }}">Voltar</a>
     </section>
@@ -30,9 +30,9 @@
                 </div>
 
                 <div class="field-group">
-                    <label for="servico_id">Servico</label>
+                    <label for="servico_id">Serviço</label>
                     <select id="servico_id" name="servico_id" required>
-                        <option value="">Selecione um servico</option>
+                        <option value="">Selecione um serviço</option>
                         {% for servico in servicos %}
                             <option value="{{ servico['id'] }}" data-duracao="{{ servico['duracao_minutos'] }}" {% if consulta and consulta['servico_id']|string == servico['id']|string %}selected{% endif %}>{{ servico["nome"] }} ({{ servico["duracao_minutos"] }} min)</option>
                         {% endfor %}
@@ -40,9 +40,9 @@
                 </div>
 
                 <div class="field-group">
-                    <label for="veterinario_id">Veterinario</label>
+                    <label for="veterinario_id">Veterinário</label>
                     <select id="veterinario_id" name="veterinario_id" required>
-                        <option value="">Selecione um veterinario</option>
+                        <option value="">Selecione um veterinário</option>
                         {% for veterinario in veterinarios %}
                             <option value="{{ veterinario['id'] }}" {% if consulta and consulta['veterinario_id']|string == veterinario['id']|string %}selected{% endif %}>{{ veterinario["nome"] }}</option>
                         {% endfor %}
@@ -70,7 +70,7 @@
                 </div>
 
                 <div class="field-group">
-                    <label for="confirmacao_status">Confirmacao</label>
+                    <label for="confirmacao_status">Confirmação</label>
                     {% set confirmacao_atual = consulta['confirmacao_status'] if consulta and consulta['confirmacao_status'] else 'Pendente' %}
                     <select id="confirmacao_status" name="confirmacao_status" required>
                         {% for item in status_confirmacao %}
@@ -80,18 +80,18 @@
                 </div>
 
                 <div class="field-group">
-                    <label for="duracao_preview">Duracao total prevista</label>
+                    <label for="duracao_preview">Duração total prevista</label>
                     <input type="text" id="duracao_preview" value="{{ consulta['duracao_total_minutos'] if consulta and consulta['duracao_total_minutos'] else '' }}" readonly>
                 </div>
 
                 <div class="field-group" style="grid-column: 1 / -1;">
-                    <label for="observacoes">Observacoes</label>
-                    <textarea id="observacoes" name="observacoes" placeholder="Anotacoes sobre o atendimento ou preparacao da consulta.">{{ consulta['observacoes'] if consulta else '' }}</textarea>
+                    <label for="observacoes">Observações</label>
+                    <textarea id="observacoes" name="observacoes" placeholder="Anotações sobre o atendimento ou preparação da consulta.">{{ consulta['observacoes'] if consulta else '' }}</textarea>
                 </div>
 
                 <div class="field-group field-feedback" style="grid-column: 1 / -1;">
                     <label>Disponibilidade</label>
-                    <div id="feedback-disponibilidade" class="status status-pendente">Preencha os dados para validar o horario.</div>
+                    <div id="feedback-disponibilidade" class="status status-pendente">Preencha os dados para validar o horário.</div>
                 </div>
 
                 <div class="actions" style="grid-column: 1 / -1;">
@@ -114,7 +114,7 @@
             if (consultaId) params.append("consulta_id", consultaId);
 
             if ([...camposDisponibilidade].some((id) => !document.getElementById(id).value)) {
-                feedback.textContent = "Preencha os dados obrigatorios para validar o horario.";
+                feedback.textContent = "Preencha os dados obrigatórios para validar o horário.";
                 feedback.className = "status status-pendente";
                 duracaoPreview.value = "";
                 return;

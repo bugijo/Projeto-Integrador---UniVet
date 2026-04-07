@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}UniVet | Pagina Inicial{% endblock %}
+{% block title %}UniVet | Página Inicial{% endblock %}
 
 {% block content %}
     <section class="page-header">
         <div>
-            <h1>Pagina inicial</h1>
-            <p>Visao geral da clinica com agenda do dia, indicadores e proximos atendimentos.</p>
+            <h1>Página inicial</h1>
+            <p>Visão geral da clínica com agenda do dia, indicadores e próximos atendimentos.</p>
         </div>
         <a class="btn" href="{{ url_for('criar_consulta') }}">Agendar consulta</a>
     </section>
@@ -31,12 +31,13 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Horario</th>
+                            <th>Horário</th>
                             <th>Paciente</th>
                             <th>Tutor</th>
                             <th>Tipo</th>
                             <th>Status</th>
-                            <th>Confirmacao</th>
+                            <th>Confirmação</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -46,13 +47,19 @@
                                     <td>{{ consulta["data_hora"]|hora_br }}</td>
                                     <td>{{ consulta["pet_nome"] }}</td>
                                     <td>{{ consulta["tutor_nome"] }}</td>
-                                    <td>{{ consulta["tipo_consulta"] or "Consulta clinica" }}</td>
+                                    <td>{{ consulta["tipo_consulta"] or "Consulta clínica" }}</td>
                                     <td><span class="status status-{{ consulta['status']|status_slug }}">{{ consulta["status"] }}</span></td>
                                     <td><span class="status status-{{ consulta['confirmacao_status']|status_slug }}">{{ consulta["confirmacao_status"] }}</span></td>
+                                    <td>
+                                        <div class="inline-actions">
+                                            <a class="btn btn-secondary" href="{{ url_for('editar_consulta', consulta_id=consulta['id']) }}">Editar</a>
+                                            <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='consultas', registro_id=consulta['id']) }}">Histórico</a>
+                                        </div>
+                                    </td>
                                 </tr>
                             {% endfor %}
                         {% else %}
-                            <tr><td colspan="6" class="empty-state">Nao existem consultas marcadas para hoje.</td></tr>
+                            <tr><td colspan="7" class="empty-state">Não existem consultas marcadas para hoje.</td></tr>
                         {% endif %}
                     </tbody>
                 </table>
@@ -62,7 +69,7 @@
 
     <section class="card table-card">
         <div class="card-body">
-            <h2>Proximos atendimentos</h2>
+            <h2>Próximos atendimentos</h2>
             <div class="table-scroll">
                 <table>
                     <thead>
@@ -71,7 +78,8 @@
                             <th>Paciente</th>
                             <th>Tutor</th>
                             <th>Tipo</th>
-                            <th>Confirmacao</th>
+                            <th>Confirmação</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -81,12 +89,18 @@
                                     <td>{{ consulta["data_hora"]|data_hora_br }}</td>
                                     <td>{{ consulta["pet_nome"] }}</td>
                                     <td>{{ consulta["tutor_nome"] }}</td>
-                                    <td>{{ consulta["tipo_consulta"] or "Consulta clinica" }}</td>
+                                    <td>{{ consulta["tipo_consulta"] or "Consulta clínica" }}</td>
                                     <td><span class="status status-{{ consulta['confirmacao_status']|status_slug }}">{{ consulta["confirmacao_status"] }}</span></td>
+                                    <td>
+                                        <div class="inline-actions">
+                                            <a class="btn btn-secondary" href="{{ url_for('editar_consulta', consulta_id=consulta['id']) }}">Editar</a>
+                                            <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='consultas', registro_id=consulta['id']) }}">Histórico</a>
+                                        </div>
+                                    </td>
                                 </tr>
                             {% endfor %}
                         {% else %}
-                            <tr><td colspan="5" class="empty-state">Ainda nao existem atendimentos futuros cadastrados.</td></tr>
+                            <tr><td colspan="6" class="empty-state">Ainda não existem atendimentos futuros cadastrados.</td></tr>
                         {% endif %}
                     </tbody>
                 </table>

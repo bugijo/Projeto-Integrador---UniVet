@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | {{ titulo }}{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>{{ titulo }}</h1>
+            <p>Registro {{ registro_id }} com todas as alterações salvas no sistema.</p>
+        </div>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data e hora</th>
+                            <th>Ação</th>
+                            <th>Usuária</th>
+                            <th>Dados</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if historico %}
+                            {% for item in historico %}
+                                <tr>
+                                    <td>{{ item["criado_em"]|data_hora_br }}</td>
+                                    <td>{{ item["acao"] }}</td>
+                                    <td>{{ item["usuario_nome"] }}</td>
+                                    <td><pre class="history-pre">{{ item["dados_json"] }}</pre></td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="4" class="empty-state">Nenhum histórico registrado até o momento.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}

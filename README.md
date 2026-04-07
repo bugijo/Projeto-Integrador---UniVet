@@ -1,18 +1,18 @@
 # UniVet
 
-Sistema de gestao veterinaria desenvolvido para o Projeto Integrador I da UNIVESP.
+Sistema de gestão veterinária desenvolvido para o Projeto Integrador I da UNIVESP.
 
-## Visao geral
+## Visão geral
 
-O UniVet organiza a rotina da recepcao da Clinica Veterinaria Fernanda Calixto com foco em cadastro, agenda e praticidade.
+O UniVet organiza a rotina da recepção da Clínica Veterinária Fernanda Calixto com foco em cadastro, agenda e praticidade.
 
 ## Funcionalidades do MVP
 
-- acesso por codigo da proprietaria
-- pagina inicial com agenda do dia
+- acesso por código da proprietária
+- página inicial com agenda do dia
 - cadastro de tutores com CPF validado
 - cadastro de animais vinculados a tutores
-- calendario mensal de consultas
+- calendário mensal de consultas
 - agenda detalhada por dia
 
 ## Tecnologias utilizadas
@@ -79,13 +79,13 @@ http://127.0.0.1:5000
 
 ## Credenciais iniciais
 
-- Codigo de acesso: `246810`
+- Código de acesso: `246810`
 
 ## Regras implementadas
 
-- a pagina interna exige autenticacao por codigo
-- todo tutor precisa de CPF valido
+- a página interna exige autenticação por código
+- todo tutor precisa de CPF válido
 - todo animal precisa estar vinculado a um tutor
 - toda consulta precisa estar vinculada a um animal
-- um tutor com animais nao pode ser excluido
-- um animal com consultas nao pode ser excluido
+- um tutor com animais não pode ser excluído
+- um animal com consultas não pode ser excluído

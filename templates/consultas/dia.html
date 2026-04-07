@@ -5,8 +5,8 @@
 {% block content %}
     <section class="page-header">
         <div>
-            <h1>Agenda diaria</h1>
-            <p>Data selecionada: {{ data_iso|data_br }}. Clique em um horario para ver os detalhes daquele slot.</p>
+            <h1>Agenda diária</h1>
+            <p>Data selecionada: {{ data_iso|data_br }}. Clique em um horário para ver os detalhes daquele slot.</p>
         </div>
         <a class="btn btn-secondary" href="{{ url_for('listar_consultas') }}">Voltar ao calendario</a>
     </section>
@@ -17,7 +17,7 @@
                 {% for slot in grade %}
                     <a id="slot-{{ slot.horario|replace(':', '-') }}" href="{{ url_for('agenda_do_dia', data_iso=data_iso, hora=slot.horario) }}#detalhes-horario" class="agenda-slot {% if slot.ocupadas %}ocupado{% else %}livre{% endif %} {% if slot.ativo %}ativo{% endif %}">
                         <strong>{{ slot.horario }}</strong>
-                        <span>{% if slot.ocupadas %}{{ slot.ocupadas|length }} atendimento(s){% else %}Disponivel{% endif %}</span>
+                        <span>{% if slot.ocupadas %}{{ slot.ocupadas|length }} atendimento(s){% else %}Disponível{% endif %}</span>
                     </a>
                 {% endfor %}
             </div>
@@ -26,11 +26,11 @@
 
     <section class="card table-card" id="detalhes-horario">
         <div class="card-body">
-            <h2>{% if hora_selecionada %}Detalhes do horario {{ hora_selecionada }}{% else %}Agenda completa do dia{% endif %}</h2>
+            <h2>{% if hora_selecionada %}Detalhes do horário {{ hora_selecionada }}{% else %}Agenda completa do dia{% endif %}</h2>
             <div class="table-scroll">
                 <table>
                     <thead>
-                        <tr><th>Inicio</th><th>Fim</th><th>Paciente</th><th>Servico</th><th>Veterinario</th><th>Tipo</th><th>Status</th></tr>
+                        <tr><th>Início</th><th>Fim</th><th>Paciente</th><th>Serviço</th><th>Veterinário</th><th>Tipo</th><th>Status</th><th>Ações</th></tr>
                     </thead>
                     <tbody>
                         {% set lista = detalhes_horario if hora_selecionada else consultas %}
@@ -44,10 +44,19 @@
                                     <td>{{ consulta["veterinario_nome"] }}</td>
                                     <td>{{ consulta["tipo_atendimento"] }}</td>
                                     <td><span class="status status-{{ consulta['status']|status_slug }}">{{ consulta["status"] }}</span></td>
+                                    <td>
+                                        <div class="inline-actions">
+                                            <a class="btn btn-secondary" href="{{ url_for('editar_consulta', consulta_id=consulta['id']) }}">Editar</a>
+                                            <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='consultas', registro_id=consulta['id']) }}">Histórico</a>
+                                            <form method="post" action="{{ url_for('excluir_consulta', consulta_id=consulta['id']) }}">
+                                                <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir esta consulta?')">Excluir</button>
+                                            </form>
+                                        </div>
+                                    </td>
                                 </tr>
                             {% endfor %}
                         {% else %}
-                            <tr><td colspan="7" class="empty-state">Nenhum atendimento encontrado para este horario.</td></tr>
+                            <tr><td colspan="8" class="empty-state">Nenhum atendimento encontrado para este horário.</td></tr>
                         {% endif %}
                     </tbody>
                 </table>

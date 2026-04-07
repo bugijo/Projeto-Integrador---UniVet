@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Veterinários{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Veterinários</h1>
+            <p>Profissionais disponíveis para alocação na agenda.</p>
+        </div>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr><th>Nome</th><th>Ações</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for veterinario in veterinarios %}
+                            <tr>
+                                <td>{{ veterinario["nome"] }}</td>
+                                <td>
+                                    <div class="inline-actions">
+                                        <a class="btn btn-secondary" href="{{ url_for('editar_veterinario', veterinario_id=veterinario['id']) }}">Editar</a>
+                                        <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='veterinarios', registro_id=veterinario['id']) }}">Histórico</a>
+                                        <form method="post" action="{{ url_for('excluir_veterinario', veterinario_id=veterinario['id']) }}">
+                                            <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este veterinário?')">Excluir</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}

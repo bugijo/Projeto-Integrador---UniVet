@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | {{ acao }}{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>{{ acao }}</h1>
+            <p>Ajuste a duração do serviço mantendo o mínimo de 20 minutos.</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_servicos_page') }}">Voltar</a>
+    </section>
+
+    <section class="card form-card">
+        <div class="card-body">
+            <form method="post" class="form-grid">
+                <div class="field-group">
+                    <label for="nome">Nome do serviço</label>
+                    <input type="text" id="nome" name="nome" value="{{ servico['nome'] if servico else '' }}" required>
+                </div>
+                <div class="field-group">
+                    <label for="duracao_minutos">Duração em minutos</label>
+                    <input type="number" min="20" step="10" id="duracao_minutos" name="duracao_minutos" value="{{ servico['duracao_minutos'] if servico else 20 }}" required>
+                </div>
+                <div class="actions">
+                    <button class="btn" type="submit">Salvar serviço</button>
+                    <a class="btn btn-secondary" href="{{ url_for('listar_servicos_page') }}">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </section>
+{% endblock %}

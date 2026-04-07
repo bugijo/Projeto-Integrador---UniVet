@@ -57,6 +57,19 @@ def init_db():
     cursor.execute("CREATE TABLE IF NOT EXISTS servicos (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL UNIQUE, duracao_minutos INTEGER NOT NULL CHECK(duracao_minutos >= 20))")
     cursor.execute(
         """
+        CREATE TABLE IF NOT EXISTS historico_alteracoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entidade TEXT NOT NULL,
+            registro_id INTEGER NOT NULL,
+            acao TEXT NOT NULL,
+            usuario_nome TEXT NOT NULL,
+            dados_json TEXT NOT NULL,
+            criado_em TEXT NOT NULL
+        )
+        """
+    )
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS pets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
@@ -99,6 +112,9 @@ def init_db():
         garantir_coluna(cursor, tabela, coluna, definicao)
 
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tutores_cpf ON tutores (cpf)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_entidade_registro ON historico_alteracoes (entidade, registro_id, criado_em)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pets_tutor ON pets (tutor_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_consultas_pet ON consultas (pet_id)")
 
     cursor.executescript(
         """
@@ -146,17 +162,19 @@ def init_db():
                 (raca_id, especie_id, raca_nome),
             )
 
-    usuario = cursor.execute("SELECT id, senha_hash, access_code_hash FROM usuarios WHERE login = ?", ("admin",)).fetchone()
+    usuario = cursor.execute("SELECT id, senha_hash, access_code_hash FROM usuarios ORDER BY id ASC LIMIT 1").fetchone()
     if not usuario:
         cursor.execute(
             "INSERT INTO usuarios (login, senha_hash, access_code_hash) VALUES (?, ?, ?)",
-            ("admin", generate_password_hash("123456"), generate_password_hash("246810")),
+            ("Dra. Fernanda Calixto", generate_password_hash("123456"), generate_password_hash("246810")),
         )
     else:
+        cursor.execute("UPDATE usuarios SET login = ? WHERE id = ?", ("Dra. Fernanda Calixto", usuario[0]))
         if not str(usuario[1]).startswith("scrypt:"):
             cursor.execute("UPDATE usuarios SET senha_hash = ? WHERE id = ?", (generate_password_hash("123456"), usuario[0]))
         if not usuario[2]:
             cursor.execute("UPDATE usuarios SET access_code_hash = ? WHERE id = ?", (generate_password_hash("246810"), usuario[0]))
+        cursor.execute("DELETE FROM usuarios WHERE id != ?", (usuario[0],))
 
     consultas_por_horario = cursor.execute(
         "SELECT data_hora, COUNT(*) FROM consultas GROUP BY data_hora ORDER BY COUNT(*) DESC LIMIT 1"

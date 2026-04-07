@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | {{ acao }}{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>{{ acao }}</h1>
+            <p>Atualize o nome do profissional responsável pelos atendimentos.</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_veterinarios_page') }}">Voltar</a>
+    </section>
+
+    <section class="card form-card">
+        <div class="card-body">
+            <form method="post" class="form-grid">
+                <div class="field-group">
+                    <label for="nome">Nome do veterinário</label>
+                    <input type="text" id="nome" name="nome" value="{{ veterinario['nome'] if veterinario else '' }}" required>
+                </div>
+                <div class="actions">
+                    <button class="btn" type="submit">Salvar veterinário</button>
+                    <a class="btn btn-secondary" href="{{ url_for('listar_veterinarios_page') }}">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </section>
+{% endblock %}

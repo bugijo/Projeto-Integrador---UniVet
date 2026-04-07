@@ -6,7 +6,7 @@
     <section class="page-header">
         <div>
             <h1>Animais</h1>
-            <p>Gerencie os pacientes atendidos e mantenha o vinculo com cada tutor.</p>
+            <p>Gerencie os pacientes atendidos e mantenha o vínculo com cada tutor.</p>
         </div>
         <a class="btn" href="{{ url_for('criar_pet') }}">Novo animal</a>
     </section>
@@ -17,7 +17,7 @@
                 <form method="get">
                     <div class="field-group">
                         <label for="busca">Buscar animal</label>
-                        <input type="text" id="busca" name="busca" value="{{ busca or '' }}" placeholder="Nome do animal, especie, raca ou tutor">
+                        <input type="text" id="busca" name="busca" value="{{ busca or '' }}" placeholder="Nome do animal, espécie, raça ou tutor">
                     </div>
                     <button class="btn" type="submit">Filtrar</button>
                     <a class="btn btn-secondary" href="{{ url_for('listar_pets') }}">Limpar</a>
@@ -29,12 +29,12 @@
                     <thead>
                         <tr>
                             <th>Paciente</th>
-                            <th>Especie</th>
-                            <th>Raca</th>
+                            <th>Espécie</th>
+                            <th>Raça</th>
                             <th>Idade</th>
                             <th>Tutor</th>
-                            <th>Historico</th>
-                            <th>Acoes</th>
+                            <th>Histórico</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -44,12 +44,13 @@
                                         <td>{{ pet["nome"] }}</td>
                                     <td>{{ pet["especie"] }}</td>
                                     <td>{{ pet["raca"] }}</td>
-                                    <td>{{ pet["idade"] or "Nao informada" }}</td>
+                                    <td>{{ pet["idade"] or "Não informada" }}</td>
                                     <td>{{ pet["tutor_nome"] }}</td>
-                                    <td>{{ pet["historico"] or "Sem observacoes." }}</td>
+                                    <td>{{ pet["historico"] or "Sem observações." }}</td>
                                     <td>
                                         <div class="inline-actions">
                                             <a class="btn btn-secondary" href="{{ url_for('editar_pet', pet_id=pet['id']) }}">Editar</a>
+                                            <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='pets', registro_id=pet['id']) }}">Histórico</a>
                                             <form method="post" action="{{ url_for('excluir_pet', pet_id=pet['id']) }}">
                                                 <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este animal?')">Excluir</button>
                                             </form>
@@ -59,7 +60,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="7" class="empty-state">Nenhum animal cadastrado ate o momento.</td>
+                                <td colspan="7" class="empty-state">Nenhum animal cadastrado até o momento.</td>
                             </tr>
                         {% endif %}
                     </tbody>

@@ -6,7 +6,7 @@
     <section class="page-header">
         <div>
             <h1>Tutores</h1>
-            <p>Cadastre e mantenha os dados completos dos responsaveis pelos animais.</p>
+            <p>Cadastre e mantenha os dados completos dos responsáveis pelos animais.</p>
         </div>
         <a class="btn" href="{{ url_for('criar_tutor') }}">Novo tutor</a>
     </section>
@@ -17,7 +17,7 @@
                 <form method="get">
                     <div class="field-group">
                         <label for="busca">Buscar tutor</label>
-                        <input type="text" id="busca" name="busca" value="{{ busca or '' }}" placeholder="Nome, telefone, CPF ou endereco">
+                        <input type="text" id="busca" name="busca" value="{{ busca or '' }}" placeholder="Nome, telefone, CPF ou endereço">
                     </div>
                     <button class="btn" type="submit">Filtrar</button>
                     <a class="btn btn-secondary" href="{{ url_for('listar_tutores') }}">Limpar</a>
@@ -31,8 +31,8 @@
                             <th>Nome</th>
                             <th>CPF</th>
                             <th>Telefone</th>
-                            <th>Endereco</th>
-                            <th>Acoes</th>
+                            <th>Endereço</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -40,12 +40,13 @@
                             {% for tutor in tutores %}
                                 <tr>
                                     <td>{{ tutor["nome"] }}</td>
-                                    <td>{{ tutor["cpf"] or "Nao informado" }}</td>
+                                    <td>{{ tutor["cpf"] or "Não informado" }}</td>
                                     <td>{{ tutor["telefone"] }}</td>
-                                    <td>{{ tutor["endereco"] or "Nao informado" }}</td>
+                                    <td>{{ tutor["endereco"] or "Não informado" }}</td>
                                     <td>
                                         <div class="inline-actions">
                                             <a class="btn btn-secondary" href="{{ url_for('editar_tutor', tutor_id=tutor['id']) }}">Editar</a>
+                                            <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='tutores', registro_id=tutor['id']) }}">Histórico</a>
                                             <form method="post" action="{{ url_for('excluir_tutor', tutor_id=tutor['id']) }}">
                                                 <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este tutor?')">Excluir</button>
                                             </form>
@@ -55,7 +56,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="5" class="empty-state">Nenhum tutor cadastrado ate o momento.</td>
+                                <td colspan="5" class="empty-state">Nenhum tutor cadastrado até o momento.</td>
                             </tr>
                         {% endif %}
                     </tbody>
