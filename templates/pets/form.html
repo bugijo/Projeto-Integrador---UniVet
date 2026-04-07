@@ -6,7 +6,7 @@
     <section class="page-header">
         <div>
             <h1>{{ acao }}</h1>
-            <p>Todo animal deve estar vinculado a um tutor, com especie sugerida e raca assistida.</p>
+            <p>Selecione a especie e veja apenas as racas correspondentes em tempo real.</p>
         </div>
         <a class="btn btn-secondary" href="{{ url_for('listar_pets') }}">Voltar</a>
     </section>
@@ -20,31 +20,27 @@
                 </div>
 
                 <div class="field-group">
-                    <label for="especie">Especie</label>
-                    <input type="text" id="especie" name="especie" list="especies-lista" value="{{ pet['especie'] if pet else '' }}" placeholder="Comece a digitar a especie" required>
-                    <datalist id="especies-lista">
-                        {% for especie in especies_sugeridas %}
-                            <option value="{{ especie|title }}"></option>
+                    <label for="especie_busca">Especie</label>
+                    <input type="text" id="especie_busca" list="lista-especies" value="{% if pet and pet['especie'] %}{{ pet['especie'] }}{% endif %}" placeholder="Digite para localizar a especie" required>
+                    <input type="hidden" id="especie_id" name="especie_id" value="{{ pet['especie_id'] if pet and pet['especie_id'] else '' }}">
+                    <datalist id="lista-especies">
+                        {% for especie in especies %}
+                            <option value="{{ especie['nome'] }}" data-id="{{ especie['id'] }}"></option>
                         {% endfor %}
                     </datalist>
+                    <small class="field-help">Ao escolher a especie, a lista de racas sera filtrada automaticamente.</small>
                 </div>
 
                 <div class="field-group">
-                    <label for="raca_padrao">Raca</label>
-                    {% set raca_atual = pet['raca'] if pet else '' %}
-                    {% set raca_existe = raca_atual in racas_comuns %}
-                    <select id="raca_padrao" name="raca_padrao" required>
-                        <option value="">Selecione uma raca</option>
-                        {% for raca in racas_comuns %}
-                            <option value="{{ raca }}" {% if raca_atual == raca %}selected{% endif %}>{{ raca }}</option>
-                        {% endfor %}
-                        <option value="Outra" {% if pet and raca_atual and not raca_existe %}selected{% endif %}>Outra</option>
+                    <label for="raca_id">Raca</label>
+                    <select id="raca_id" name="raca_id">
+                        <option value="">Carregando racas...</option>
                     </select>
                 </div>
 
-                <div class="field-group" id="raca-personalizada-box" {% if not (pet and raca_atual and not raca_existe) %}style="display: none;"{% endif %}>
-                    <label for="raca_personalizada">Digite a raca</label>
-                    <input type="text" id="raca_personalizada" name="raca_personalizada" value="{% if pet and raca_atual and not raca_existe %}{{ raca_atual }}{% elif pet and pet['raca_personalizada'] %}{{ pet['raca_personalizada'] }}{% endif %}" placeholder="Informe a raca manualmente">
+                <div class="field-group" id="raca_personalizada_box">
+                    <label for="raca_personalizada">Outra raca</label>
+                    <input type="text" id="raca_personalizada" name="raca_personalizada" value="{% if pet and pet['raca_id'] is none %}{{ pet['raca'] }}{% endif %}" placeholder="Preencha somente se escolher Outra">
                 </div>
 
                 <div class="field-group">
@@ -57,9 +53,7 @@
                     <select id="tutor_id" name="tutor_id" required>
                         <option value="">Selecione um tutor</option>
                         {% for tutor in tutores %}
-                            <option value="{{ tutor['id'] }}" {% if pet and pet['tutor_id']|string == tutor['id']|string %}selected{% endif %}>
-                                {{ tutor["nome"] }} - {{ tutor["cpf"] }}
-                            </option>
+                            <option value="{{ tutor['id'] }}" {% if pet and pet['tutor_id']|string == tutor['id']|string %}selected{% endif %}>{{ tutor["nome"] }} - {{ tutor["cpf"] }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -78,22 +72,54 @@
     </section>
 
     <script>
-        const racaPadrao = document.getElementById("raca_padrao");
-        const racaBox = document.getElementById("raca-personalizada-box");
-        const racaPersonalizada = document.getElementById("raca_personalizada");
+        const especies = [{% for especie in especies %}{ id: {{ especie["id"] }}, nome: "{{ especie['nome'] }}" }{% if not loop.last %},{% endif %}{% endfor %}];
+        const especieBusca = document.getElementById("especie_busca");
+        const especieId = document.getElementById("especie_id");
+        const racaSelect = document.getElementById("raca_id");
+        const racaOutraBox = document.getElementById("raca_personalizada_box");
+        const racaOutraInput = document.getElementById("raca_personalizada");
+        const racaAtualId = "{{ pet['raca_id'] if pet and pet['raca_id'] else '' }}";
 
-        function alternarCampoRaca() {
-            const mostrar = racaPadrao.value === "Outra";
-            racaBox.style.display = mostrar ? "grid" : "none";
-            racaPersonalizada.required = mostrar;
-            if (!mostrar) {
-                racaPersonalizada.value = "";
+        function alternarOutraRaca() {
+            const mostrar = racaSelect.value === "outra";
+            racaOutraBox.style.display = mostrar ? "grid" : "none";
+            racaOutraInput.required = mostrar;
+        }
+
+        async function carregarRacas() {
+            const encontrada = especies.find((item) => item.nome.toLowerCase() === especieBusca.value.trim().toLowerCase());
+            especieId.value = encontrada ? encontrada.id : "";
+
+            if (!especieId.value) {
+                racaSelect.innerHTML = '<option value="">Selecione primeiro uma especie valida</option>';
+                alternarOutraRaca();
+                return;
             }
+
+            const resposta = await fetch(`/api/racas?especie_id=${especieId.value}`);
+            const dados = await resposta.json();
+            racaSelect.innerHTML = '<option value="">Selecione uma raca</option>';
+            dados.racas.forEach((raca) => {
+                const option = document.createElement("option");
+                option.value = raca.id;
+                option.textContent = raca.nome;
+                if (String(raca.id) === racaAtualId) {
+                    option.selected = true;
+                }
+                racaSelect.appendChild(option);
+            });
+            const outra = document.createElement("option");
+            outra.value = "outra";
+            outra.textContent = "Outra";
+            if (!racaAtualId && racaOutraInput.value) {
+                outra.selected = true;
+            }
+            racaSelect.appendChild(outra);
+            alternarOutraRaca();
         }
 
-        if (racaPadrao) {
-            racaPadrao.addEventListener("change", alternarCampoRaca);
-            alternarCampoRaca();
-        }
+        especieBusca.addEventListener("input", carregarRacas);
+        racaSelect.addEventListener("change", alternarOutraRaca);
+        carregarRacas();
     </script>
 {% endblock %}

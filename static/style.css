@@ -108,6 +108,7 @@ th { color: var(--texto-secundario); background: rgba(255,255,255,0.72); font-si
 .form-grid { display: grid; gap: 16px; }
 .field-group { display: grid; gap: 6px; }
 .field-group label { font-weight: 800; }
+.field-help { color: var(--texto-secundario); font-size: 0.88rem; }
 .field-group input, .field-group textarea, .field-group select {
     width: 100%; padding: 14px 16px; border-radius: 16px; font: inherit; color: var(--texto);
     border: 1px solid rgba(95,121,131,0.22); background: rgba(255,255,255,0.94); outline: none;
@@ -142,6 +143,33 @@ th { color: var(--texto-secundario); background: rgba(255,255,255,0.72); font-si
 .calendar-count {
     align-self: flex-end; min-width: 30px; padding: 4px 8px; text-align: center;
     border-radius: 999px; background: rgba(255,255,255,0.82); font-weight: 800;
+}
+
+.agenda-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px;
+    max-height: 68vh;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.agenda-slot {
+    display: grid;
+    gap: 6px;
+    padding: 14px;
+    border-radius: 18px;
+    border: 1px solid rgba(95,121,131,0.16);
+    background: rgba(255,255,255,0.95);
+    box-shadow: 0 10px 24px rgba(103, 93, 128, 0.08);
+}
+
+.agenda-slot.livre { background: rgba(255,255,255,0.96); }
+.agenda-slot.ocupado { background: rgba(152,251,152,0.30); }
+.agenda-slot.ativo { outline: 3px solid rgba(184,94,116,0.24); }
+
+.field-feedback .status {
+    width: fit-content;
 }
 
 .welcome-body {

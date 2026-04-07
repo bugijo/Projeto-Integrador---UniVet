@@ -5,44 +5,65 @@
 {% block content %}
     <section class="page-header">
         <div>
-            <h1>Agenda detalhada do dia</h1>
-            <p>Data selecionada: {{ data_iso|data_br }}</p>
+            <h1>Agenda diaria</h1>
+            <p>Data selecionada: {{ data_iso|data_br }}. Clique em um horario para ver os detalhes daquele slot.</p>
         </div>
         <a class="btn btn-secondary" href="{{ url_for('listar_consultas') }}">Voltar ao calendario</a>
     </section>
 
-    <section class="card table-card">
+    <section class="card">
         <div class="card-body">
+            <div class="agenda-grid" id="agenda-grid">
+                {% for slot in grade %}
+                    <a id="slot-{{ slot.horario|replace(':', '-') }}" href="{{ url_for('agenda_do_dia', data_iso=data_iso, hora=slot.horario) }}#detalhes-horario" class="agenda-slot {% if slot.ocupadas %}ocupado{% else %}livre{% endif %} {% if slot.ativo %}ativo{% endif %}">
+                        <strong>{{ slot.horario }}</strong>
+                        <span>{% if slot.ocupadas %}{{ slot.ocupadas|length }} atendimento(s){% else %}Disponivel{% endif %}</span>
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <section class="card table-card" id="detalhes-horario">
+        <div class="card-body">
+            <h2>{% if hora_selecionada %}Detalhes do horario {{ hora_selecionada }}{% else %}Agenda completa do dia{% endif %}</h2>
             <div class="table-scroll">
                 <table>
                     <thead>
-                        <tr>
-                            <th>Horario</th>
-                            <th>Paciente</th>
-                            <th>Tutor</th>
-                            <th>Tipo</th>
-                            <th>Status</th>
-                            <th>Confirmacao</th>
-                        </tr>
+                        <tr><th>Inicio</th><th>Fim</th><th>Paciente</th><th>Servico</th><th>Veterinario</th><th>Tipo</th><th>Status</th></tr>
                     </thead>
                     <tbody>
-                        {% if consultas %}
-                            {% for consulta in consultas %}
+                        {% set lista = detalhes_horario if hora_selecionada else consultas %}
+                        {% if lista %}
+                            {% for consulta in lista %}
                                 <tr>
                                     <td>{{ consulta["data_hora"]|hora_br }}</td>
+                                    <td>{{ consulta["data_fim"]|hora_br }}</td>
                                     <td>{{ consulta["pet_nome"] }}</td>
-                                    <td>{{ consulta["tutor_nome"] }}</td>
-                                    <td>{{ consulta["tipo_consulta"] or "Consulta clinica" }}</td>
+                                    <td>{{ consulta["servico_nome"] }}</td>
+                                    <td>{{ consulta["veterinario_nome"] }}</td>
+                                    <td>{{ consulta["tipo_atendimento"] }}</td>
                                     <td><span class="status status-{{ consulta['status']|status_slug }}">{{ consulta["status"] }}</span></td>
-                                    <td><span class="status status-{{ consulta['confirmacao_status']|status_slug }}">{{ consulta["confirmacao_status"] }}</span></td>
                                 </tr>
                             {% endfor %}
                         {% else %}
-                            <tr><td colspan="6" class="empty-state">Nenhuma consulta cadastrada para esta data.</td></tr>
+                            <tr><td colspan="7" class="empty-state">Nenhum atendimento encontrado para este horario.</td></tr>
                         {% endif %}
                     </tbody>
                 </table>
             </div>
         </div>
     </section>
+
+    <script>
+        const hoje = new Date();
+        const dataSelecionada = "{{ data_iso }}";
+        if (dataSelecionada === hoje.toISOString().slice(0, 10)) {
+            const horarioAtual = `${String(hoje.getHours()).padStart(2, "0")}-${String(Math.floor(hoje.getMinutes() / 20) * 20).padStart(2, "0")}`;
+            const alvo = document.getElementById(`slot-${horarioAtual}`);
+            if (alvo) {
+                alvo.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+        }
+    </script>
 {% endblock %}

@@ -6,7 +6,7 @@
     <section class="page-header">
         <div>
             <h1>Consultas</h1>
-            <p>Calendario mensal da clinica com indicacao visual de agendamentos e dias sem expediente.</p>
+            <p>Calendario mensal com contagem de atendimentos e acesso direto para a agenda diaria em grade.</p>
         </div>
         <a class="btn" href="{{ url_for('criar_consulta') }}">Nova consulta</a>
     </section>
@@ -17,20 +17,13 @@
                 <a class="btn btn-secondary" href="{{ url_for('listar_consultas', ano=ano_anterior, mes=mes_anterior) }}">Mes anterior</a>
                 <div>
                     <h2>{{ nome_mes }} de {{ ano }}</h2>
-                    <p>Verde claro: com consultas | Cinza: sem expediente | Branco: dia letivo sem consultas</p>
+                    <p>Verde: com consultas | Cinza: sem expediente | Branco: sem atendimentos</p>
                 </div>
                 <a class="btn btn-secondary" href="{{ url_for('listar_consultas', ano=ano_proximo, mes=mes_proximo) }}">Proximo mes</a>
             </div>
 
             <div class="calendar-grid">
-                <div class="calendar-weekday">Seg</div>
-                <div class="calendar-weekday">Ter</div>
-                <div class="calendar-weekday">Qua</div>
-                <div class="calendar-weekday">Qui</div>
-                <div class="calendar-weekday">Sex</div>
-                <div class="calendar-weekday">Sab</div>
-                <div class="calendar-weekday">Dom</div>
-
+                <div class="calendar-weekday">Seg</div><div class="calendar-weekday">Ter</div><div class="calendar-weekday">Qua</div><div class="calendar-weekday">Qui</div><div class="calendar-weekday">Sex</div><div class="calendar-weekday">Sab</div><div class="calendar-weekday">Dom</div>
                 {% for semana in calendario %}
                     {% for dia in semana %}
                         {% if dia.esta_no_mes %}
@@ -39,9 +32,7 @@
                                 <span class="calendar-count">{{ dia.total_consultas }}</span>
                             </a>
                         {% else %}
-                            <div class="calendar-day muted-day">
-                                <span class="calendar-number">{{ dia.numero }}</span>
-                            </div>
+                            <div class="calendar-day muted-day"><span class="calendar-number">{{ dia.numero }}</span></div>
                         {% endif %}
                     {% endfor %}
                 {% endfor %}
@@ -51,18 +42,11 @@
 
     <section class="card table-card">
         <div class="card-body">
-            <h2>Proximas consultas do mes</h2>
+            <h2>Destaques do mes</h2>
             <div class="table-scroll">
                 <table>
                     <thead>
-                        <tr>
-                            <th>Data e hora</th>
-                            <th>Paciente</th>
-                            <th>Tipo</th>
-                            <th>Status</th>
-                            <th>Confirmacao</th>
-                            <th>Acoes</th>
-                        </tr>
+                        <tr><th>Data e hora</th><th>Paciente</th><th>Servico</th><th>Veterinario</th><th>Tipo</th><th>Status</th></tr>
                     </thead>
                     <tbody>
                         {% if consultas_mes %}
@@ -70,17 +54,10 @@
                                 <tr>
                                     <td>{{ consulta["data_hora"]|data_hora_br }}</td>
                                     <td>{{ consulta["pet_nome"] }}</td>
-                                    <td>{{ consulta["tipo_consulta"] or "Consulta clinica" }}</td>
+                                    <td>{{ consulta["servico_nome"] }}</td>
+                                    <td>{{ consulta["veterinario_nome"] }}</td>
+                                    <td>{{ consulta["tipo_atendimento"] }}</td>
                                     <td><span class="status status-{{ consulta['status']|status_slug }}">{{ consulta["status"] }}</span></td>
-                                    <td><span class="status status-{{ consulta['confirmacao_status']|status_slug }}">{{ consulta["confirmacao_status"] }}</span></td>
-                                    <td>
-                                        <div class="inline-actions">
-                                            <a class="btn btn-secondary" href="{{ url_for('editar_consulta', consulta_id=consulta['id']) }}">Editar</a>
-                                            <form method="post" action="{{ url_for('excluir_consulta', consulta_id=consulta['id']) }}">
-                                                <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir esta consulta?')">Excluir</button>
-                                            </form>
-                                        </div>
-                                    </td>
                                 </tr>
                             {% endfor %}
                         {% else %}
