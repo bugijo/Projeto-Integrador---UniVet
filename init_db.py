@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from pathlib import Path
 import sqlite3
 
@@ -8,21 +9,42 @@ BASE_DIR = Path(__file__).resolve().parent
 DATABASE = BASE_DIR / "banco.db"
 
 ESPECIES = [
-    ("Cao", None), ("Gato", None), ("Ave", None), ("Reptil", None), ("Roedor", None),
-    ("Peixe", None), ("Equino", None), ("Bovino", None), ("Suino", None),
+    ("Cão", None), ("Gato", None), ("Ave", None), ("Réptil", None), ("Roedor", None),
+    ("Peixe", None), ("Equino", None), ("Bovino", None), ("Suíno", None),
 ]
 
 RACAS = {
-    "Cao": ["Labrador Retriever", "Golden Retriever", "Bulldog Frances", "Poodle", "Yorkshire Terrier", "Beagle", "Rottweiler", "Pastor Alemao", "SRD", "Shih Tzu"],
-    "Gato": ["Persa", "Siames", "Maine Coon", "Sphynx", "Ragdoll", "British Shorthair", "Bengal", "Scottish Fold", "Angora", "SRD"],
-    "Ave": ["Calopsita", "Periquito", "Canario", "Papagaio", "Cacatua", "Agapornis"],
-    "Reptil": ["Iguana", "Jiboia", "Tartaruga Tigre D'agua", "Gecko Leopardo", "Teiu"],
-    "Roedor": ["Hamster Sirio", "Porquinho da India", "Chinchila", "Twister", "Gerbil"],
+    "Cão": ["Labrador Retriever", "Golden Retriever", "Bulldog Francês", "Poodle", "Yorkshire Terrier", "Beagle", "Rottweiler", "Pastor Alemão", "SRD", "Shih Tzu"],
+    "Gato": ["Persa", "Siamês", "Maine Coon", "Sphynx", "Ragdoll", "British Shorthair", "Bengal", "Scottish Fold", "Angorá", "SRD"],
+    "Ave": ["Calopsita", "Periquito", "Canário", "Papagaio", "Cacatua", "Agapornis"],
+    "Réptil": ["Iguana", "Jiboia", "Tartaruga Tigre D'água", "Gecko Leopardo", "Teiú"],
+    "Roedor": ["Hamster Sírio", "Porquinho da Índia", "Chinchila", "Twister", "Gerbil"],
     "Peixe": ["Betta", "Kinguio", "Guppy", "Acará Bandeira"],
     "Equino": ["Mangalarga", "Quarto de Milha", "Crioulo"],
-    "Bovino": ["Nelore", "Girolando", "Holandes"],
-    "Suino": ["Mini Pig", "Landrace", "Large White"],
+    "Bovino": ["Nelore", "Girolando", "Holandês"],
+    "Suíno": ["Mini Pig", "Landrace", "Large White"],
 }
+
+# Dados fictícios para demonstração acadêmica
+TUTORES_FICTICIOS = [
+    ("Maria Aparecida Silva", "(11) 98765-4321", "529.982.247-25", "Rua das Flores, 123 - São Paulo/SP"),
+    ("João Carlos Pereira", "(21) 99876-5432", "111.444.777-35", "Av. Brasil, 456 - Rio de Janeiro/RJ"),
+    ("Ana Paula Costa Souza", "(31) 97654-3210", "987.654.321-00", "Rua Minas Gerais, 789 - Belo Horizonte/MG"),
+    ("Roberto Alves Lima", "(41) 96543-2109", "012.345.678-90", "Rua Curitiba, 321 - Curitiba/PR"),
+    ("Fernanda Oliveira Cruz", "(51) 95432-1098", "321.789.456-19", "Av. Porto Alegre, 654 - Porto Alegre/RS"),
+]
+
+PETS_FICTICIOS = [
+    # (nome, especie_texto, raca_texto, idx_tutor, historico, idade)
+    ("Rex",    "Cão",    "Labrador Retriever", 0, "Vacinação em dia. Sem alergias conhecidas.",    "4 anos"),
+    ("Mimi",   "Gato",   "Persa",              0, "Gata tranquila. Alérgica a ração com peixe.",  "2 anos"),
+    ("Bolinha","Cão",    "SRD",                1, "Resgatado de rua. Muito dócil.",                "3 anos"),
+    ("Luna",   "Gato",   "Siamês",             2, "Castrada. Histórico de cistite.",               "5 anos"),
+    ("Pipoca", "Ave",    "Periquito",           2, "Saudável. Sociável com outros animais.",        "1 ano"),
+    ("Thor",   "Cão",    "Rottweiler",          3, "Exige manejo cuidadoso. Vacinação em dia.",    "6 anos"),
+    ("Mel",    "Gato",   "SRD",                4, "Castrada. Sem histórico de doenças.",           "3 anos"),
+    ("Totó",   "Roedor", "Hamster Sírio",      4, "Roda de exercícios diária. Saudável.",          "1 ano"),
+]
 
 SERVICOS = [
     ("Vacinacao", 20),
@@ -243,10 +265,99 @@ def init_db():
 
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_consulta_inicio_vet ON consultas (veterinario_id, data_hora)")
 
+    seed_dados_ficticios(cursor, especies_map)
+
     connection.commit()
     connection.close()
     print("Banco de dados inicializado com sucesso.")
     print("Logins de desenvolvimento: admin / 123456 e fernanda.calixto / Fer123")
+
+
+def seed_dados_ficticios(cursor, especies_map):
+    """Insere tutores, pets e consultas fictícias apenas se o banco estiver vazio."""
+    if cursor.execute("SELECT COUNT(*) FROM tutores").fetchone()[0] > 0:
+        return
+
+    # Insere tutores
+    for nome, telefone, cpf, endereco in TUTORES_FICTICIOS:
+        cursor.execute(
+            "INSERT OR IGNORE INTO tutores (nome, telefone, cpf, endereco) VALUES (?, ?, ?, ?)",
+            (nome, telefone, cpf, endereco),
+        )
+
+    # Mapeia nome do tutor → id para vincular pets
+    tutores_ids = {
+        row[0]: row[1]
+        for row in cursor.execute("SELECT nome, id FROM tutores").fetchall()
+    }
+    tutor_nomes = [t[0] for t in TUTORES_FICTICIOS]
+
+    # Mapeia especie_nome → {raca_nome: raca_id} para vincular pets
+    racas_map = {}
+    for especie_nome, especie_id in especies_map.items():
+        racas_map[especie_nome] = {
+            row[0]: row[1]
+            for row in cursor.execute(
+                "SELECT nome, id FROM racas WHERE especie_id = ?", (especie_id,)
+            ).fetchall()
+        }
+
+    # Insere pets
+    for nome, especie_txt, raca_txt, idx_tutor, historico, idade in PETS_FICTICIOS:
+        tutor_id = tutores_ids.get(tutor_nomes[idx_tutor])
+        if not tutor_id:
+            continue
+        especie_id = especies_map.get(especie_txt)
+        raca_id = racas_map.get(especie_txt, {}).get(raca_txt)
+        cursor.execute(
+            """
+            INSERT INTO pets (nome, especie, raca, tutor_id, historico, idade, especie_id, raca_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (nome, especie_txt, raca_txt, tutor_id, historico, idade, especie_id, raca_id),
+        )
+
+    # Insere consultas de demonstração
+    vet_id = cursor.execute("SELECT id FROM veterinarios ORDER BY id LIMIT 1").fetchone()
+    servico = cursor.execute("SELECT id, nome, duracao_minutos FROM servicos ORDER BY id LIMIT 1").fetchone()
+    if not vet_id or not servico:
+        return
+    vet_id = vet_id[0]
+    servico_id, servico_nome, duracao = servico
+
+    pets_ids = [row[0] for row in cursor.execute("SELECT id FROM pets LIMIT 4").fetchall()]
+    hoje = datetime.now()
+
+    consultas_demo = [
+        # (data_hora_offset_h, pet_idx, status, confirmacao, observacoes)
+        (9,  0, "Agendada",  "Confirmada",    "Consulta de rotina anual."),
+        (11, 1, "Agendada",  "Pendente",      "Verificar alergia a ração."),
+        (14, 2, "Concluida", "Confirmada",    "Paciente se recuperou bem."),
+        (9,  3, "Agendada",  "Confirmada",    "Primeira consulta do paciente."),
+    ]
+    offsets_dias = [0, 0, -1, 1]
+
+    for i, (hora, pet_idx, status, confirmacao, obs) in enumerate(consultas_demo):
+        if pet_idx >= len(pets_ids):
+            continue
+        pet_id = pets_ids[pet_idx]
+        dia = hoje + timedelta(days=offsets_dias[i])
+        data_hora = dia.replace(hour=hora, minute=0, second=0, microsecond=0)
+        data_hora_str = data_hora.strftime("%Y-%m-%dT%H:%M")
+        data_fim_str = (data_hora + timedelta(minutes=duracao)).strftime("%Y-%m-%dT%H:%M")
+        cursor.execute(
+            """
+            INSERT INTO consultas
+              (data_hora, data_fim, pet_id, servico_id, veterinario_id,
+               tipo_consulta, tipo_atendimento, duracao_total_minutos,
+               observacoes, status, confirmacao_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data_hora_str, data_fim_str, pet_id, servico_id, vet_id,
+                servico_nome, "Presencial", duracao, obs, status, confirmacao,
+            ),
+        )
 
 
 if __name__ == "__main__":
