@@ -207,6 +207,51 @@ th { color: var(--texto-secundario); background: rgba(255,255,255,0.72); font-si
 .welcome-form { display: grid; gap: 16px; margin-top: 22px; }
 .pill { display: inline-flex; padding: 8px 14px; border-radius: 999px; font-weight: 800; background: rgba(221,160,221,0.22); color: #825b8a; }
 
+/* Hambúrguer — invisível por padrão (desktop) */
+.hamburger {
+    display: none; background: none; border: 1px solid var(--borda);
+    cursor: pointer; padding: 9px 11px; border-radius: 12px;
+    flex-direction: column; gap: 5px; flex-shrink: 0;
+}
+.hamburger span {
+    display: block; width: 22px; height: 2px; border-radius: 2px;
+    background: var(--texto); transition: transform .25s, opacity .25s;
+}
+.hamburger.ativo span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.ativo span:nth-child(2) { opacity: 0; }
+.hamburger.ativo span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* Backdrop — invisível por padrão */
+.sidebar-backdrop {
+    display: none; position: fixed; inset: 0; z-index: 150;
+    background: rgba(36, 51, 61, 0.42);
+}
+
+@media (max-width: 919px) {
+    .topbar { flex-direction: row; align-items: center; }
+    .welcome { display: none; }
+    .hamburger { display: flex; }
+
+    .sidebar {
+        position: fixed; top: 0; left: 0; bottom: 0; z-index: 200;
+        width: 270px; padding: 80px 20px 28px;
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(16px);
+        transform: translateX(-100%);
+        transition: transform .28s cubic-bezier(.4,0,.2,1), box-shadow .28s;
+        overflow-y: auto;
+    }
+
+    .layout.menu-aberto .sidebar {
+        transform: translateX(0);
+        box-shadow: 8px 0 40px rgba(103, 93, 128, 0.24);
+    }
+
+    .layout.menu-aberto .sidebar-backdrop { display: block; }
+
+    .content { padding: 8px 16px 28px; }
+}
+
 @media (min-width: 920px) {
     .layout { grid-template-columns: 270px 1fr; align-items: start; }
     .sidebar { padding: 28px 20px 28px 24px; }
@@ -215,7 +260,7 @@ th { color: var(--texto-secundario); background: rgba(255,255,255,0.72); font-si
 }
 
 @media (max-width: 760px) {
-    .topbar, .page-header, .calendar-header { flex-direction: column; align-items: stretch; }
+    .page-header, .calendar-header { flex-direction: column; align-items: stretch; }
     .brand { align-items: center; }
     .welcome-brand { grid-template-columns: 1fr; text-align: center; }
     .calendar-grid { gap: 8px; }

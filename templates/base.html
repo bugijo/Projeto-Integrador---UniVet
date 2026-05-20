@@ -21,6 +21,10 @@
                 </div>
             </a>
 
+            <button class="hamburger" id="hamburger-btn" aria-label="Abrir menu" onclick="toggleMenu()">
+                <span></span><span></span><span></span>
+            </button>
+
             <div class="topbar-side">
                 <span class="welcome">
                     Sessão ativa:
@@ -32,6 +36,7 @@
         </header>
 
         <div class="layout">
+            <div class="sidebar-backdrop" onclick="toggleMenu()"></div>
             <aside class="sidebar">
                 <nav class="menu">
                     <a href="{{ url_for('pagina_inicial') }}" class="{% if secao == 'pagina_inicial' %}active{% endif %}">Página inicial</a>
@@ -70,5 +75,17 @@
             </main>
         </div>
     </div>
+    <script>
+        function toggleMenu() {
+            document.querySelector('.layout').classList.toggle('menu-aberto');
+            document.getElementById('hamburger-btn').classList.toggle('ativo');
+        }
+        document.querySelectorAll('.menu a').forEach(function(a) {
+            a.addEventListener('click', function() {
+                document.querySelector('.layout').classList.remove('menu-aberto');
+                document.getElementById('hamburger-btn').classList.remove('ativo');
+            });
+        });
+    </script>
 </body>
 </html>
