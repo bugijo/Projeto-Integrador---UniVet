@@ -80,6 +80,11 @@
         const racaOutraInput = document.getElementById("raca_personalizada");
         const racaAtualId = "{{ pet['raca_id'] if pet and pet['raca_id'] else '' }}";
 
+        // Remove acentos e converte para minúsculas para comparação tolerante.
+        function normalizar(str) {
+            return str.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+        }
+
         function alternarOutraRaca() {
             const mostrar = racaSelect.value === "outra";
             racaOutraBox.style.display = mostrar ? "grid" : "none";
@@ -87,7 +92,7 @@
         }
 
         async function carregarRacas() {
-            const encontrada = especies.find((item) => item.nome.toLowerCase() === especieBusca.value.trim().toLowerCase());
+            const encontrada = especies.find((item) => normalizar(item.nome) === normalizar(especieBusca.value));
             especieId.value = encontrada ? encontrada.id : "";
 
             if (!especieId.value) {
