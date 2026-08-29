@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Entrada de Produtos{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Entrada de Produtos</h1>
+            <p>Informe o lote recebido. A quantidade será somada automaticamente ao estoque atual.</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_estoque') }}">Voltar ao estoque</a>
+    </section>
+
+    <section class="card form-card">
+        <div class="card-body">
+            <form method="post" class="form-grid two-columns" id="form-entrada" novalidate>
+                <div class="field-group">
+                    <label for="produto_id">Nome do produto <span aria-hidden="true">*</span></label>
+                    <select id="produto_id" name="produto_id" required aria-required="true">
+                        <option value="">Selecione o produto</option>
+                        {% for p in produtos %}
+                            <option value="{{ p['id'] }}" data-atual="{{ p['quantidade_atual'] }}" data-unidade="{{ p['unidade_medida'] }}">{{ p["nome"] }} — atual: {{ p["quantidade_atual"] }} {{ p["unidade_medida"] }} (mín: {{ p["quantidade_minima"] }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <label for="quantidade">Quantidade recebida <span aria-hidden="true">*</span></label>
+                    <input type="number" id="quantidade" name="quantidade" min="1" step="1" required aria-required="true" placeholder="Ex: 10">
+                </div>
+
+                <div class="field-group">
+                    <label for="data_validade">Validade do lote recebido</label>
+                    <input type="date" id="data_validade" name="data_validade">
+                    <span class="field-help">Se informado, atualiza a validade do produto.</span>
+                </div>
+
+                <div class="field-group">
+                    <label for="valor_compra">Valor da compra (R$)</label>
+                    <input type="number" id="valor_compra" name="valor_compra" min="0" step="0.01" placeholder="Ex: 45.50">
+                    <span class="field-help">Se informado, atualiza o valor de compra.</span>
+                </div>
+
+                <div class="field-group" style="grid-column: 1 / -1;">
+                    <label for="observacao">Observação</label>
+                    <input type="text" id="observacao" name="observacao" placeholder="Ex: lote 123, NF 456">
+                </div>
+
+                <div class="field-group field-feedback" style="grid-column: 1 / -1;">
+                    <div id="feedback-entrada" class="status status-pendente" role="status" aria-live="polite">Selecione o produto e informe a quantidade.</div>
+                </div>
+
+                <div class="actions" style="grid-column: 1 / -1;">
+                    <button class="btn" type="submit">Confirmar entrada</button>
+                    <a class="btn btn-secondary" href="{{ url_for('listar_estoque') }}">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <script>
+        const produtoSelect = document.getElementById("produto_id");
+        const qtdInput = document.getElementById("quantidade");
+        const feedback = document.getElementById("feedback-entrada");
+        const form = document.getElementById("form-entrada");
+
+        function atualizarFeedback() {
+            const opt = produtoSelect.options[produtoSelect.selectedIndex];
+            const atual = opt ? parseInt(opt.dataset.atual || "0", 10) : 0;
+            const unidade = opt ? opt.dataset.unidade : "";
+            const qtd = parseInt(qtdInput.value, 10);
+            if (!produtoSelect.value) {
+                feedback.textContent = "Selecione o produto.";
+                feedback.className = "status status-pendente";
+                return false;
+            }
+            if (!qtd || qtd <= 0) {
+                feedback.textContent = "Informe uma quantidade maior que zero.";
+                feedback.className = "status status-cancelada";
+                return false;
+            }
+            const novoSaldo = atual + qtd;
+            feedback.textContent = `Saldo atual: ${atual} ${unidade} → após entrada: ${novoSaldo} ${unidade}.`;
+            feedback.className = "status status-confirmada";
+            return true;
+        }
+
+        produtoSelect.addEventListener("change", atualizarFeedback);
+        qtdInput.addEventListener("input", atualizarFeedback);
+        form.addEventListener("submit", (e) => {
+            if (!atualizarFeedback()) e.preventDefault();
+        });
+        atualizarFeedback();
+    </script>
+{% endblock %}

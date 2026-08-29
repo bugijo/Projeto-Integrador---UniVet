@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Saída de Produtos{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Saída de Produtos</h1>
+            <p>Retirada do estoque com validação automática de saldo disponível.</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_estoque') }}">Voltar ao estoque</a>
+    </section>
+
+    <section class="card form-card">
+        <div class="card-body">
+            <form method="post" class="form-grid two-columns" id="form-saida" novalidate>
+                <div class="field-group">
+                    <label for="produto_id">Produto retirado <span aria-hidden="true">*</span></label>
+                    <select id="produto_id" name="produto_id" required aria-required="true">
+                        <option value="">Selecione o produto</option>
+                        {% for p in produtos %}
+                            <option value="{{ p['id'] }}" data-atual="{{ p['quantidade_atual'] }}" data-min="{{ p['quantidade_minima'] }}" data-unidade="{{ p['unidade_medida'] }}">{{ p["nome"] }} — disponível: {{ p["quantidade_atual"] }} {{ p["unidade_medida"] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <label for="quantidade">Quantidade <span aria-hidden="true">*</span></label>
+                    <input type="number" id="quantidade" name="quantidade" min="1" step="1" required aria-required="true" placeholder="Ex: 5">
+                </div>
+
+                <div class="field-group">
+                    <label for="cliente_tutor_id">Cliente / Tutor</label>
+                    <select id="cliente_tutor_id" name="cliente_tutor_id">
+                        <option value="">— sem vínculo —</option>
+                        {% for t in tutores %}
+                            <option value="{{ t['id'] }}">{{ t["nome"] }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="field-help">Opcional. Vincule a um tutor quando a saída for uso.</span>
+                </div>
+
+                <div class="field-group">
+                    <label for="motivo">Motivo da saída <span aria-hidden="true">*</span></label>
+                    <select id="motivo" name="motivo" required aria-required="true">
+                        <option value="">Selecione o motivo</option>
+                        {% for m in motivos %}
+                            <option value="{{ m }}">{{ m }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="field-group" style="grid-column: 1 / -1;">
+                    <label for="observacao">Observação</label>
+                    <input type="text" id="observacao" name="observacao" placeholder="Ex: lote vencido, uso em consulta">
+                </div>
+
+                <div class="field-group field-feedback" style="grid-column: 1 / -1;">
+                    <div id="feedback-saida" class="status status-pendente" role="status" aria-live="polite">Selecione o produto e informe a quantidade para validar o saldo.</div>
+                </div>
+
+                <div class="actions" style="grid-column: 1 / -1;">
+                    <button class="btn" type="submit" id="btn-confirmar">Confirmar saída</button>
+                    <a class="btn btn-secondary" href="{{ url_for('listar_estoque') }}">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <script>
+        const produtoSelect = document.getElementById("produto_id");
+        const qtdInput = document.getElementById("quantidade");
+        const motivoSelect = document.getElementById("motivo");
+        const feedback = document.getElementById("feedback-saida");
+        const form = document.getElementById("form-saida");
+        const btn = document.getElementById("btn-confirmar");
+
+        async function validarSaida() {
+            const produtoId = produtoSelect.value;
+            const qtd = parseInt(qtdInput.value, 10);
+            if (!produtoId) {
+                feedback.textContent = "Selecione o produto.";
+                feedback.className = "status status-pendente";
+                btn.disabled = false;
+                return false;
+            }
+            if (!qtd || qtd <= 0) {
+                feedback.textContent = "Informe uma quantidade maior que zero.";
+                feedback.className = "status status-cancelada";
+                btn.disabled = true;
+                return false;
+            }
+            // Validação local imediata
+            const opt = produtoSelect.options[produtoSelect.selectedIndex];
+            const atual = parseInt(opt.dataset.atual || "0", 10);
+            const minimo = parseInt(opt.dataset.min || "0", 10);
+            const unidade = opt.dataset.unidade;
+            if (qtd > atual) {
+                feedback.textContent = `Quantidade insuficiente. Disponível: ${atual} ${unidade}.`;
+                feedback.className = "status status-cancelada";
+                btn.disabled = true;
+                return false;
+            }
+            // Validação via API (fonte da verdade)
+            try {
+                const resp = await fetch(`/api/estoque/validar-saida?produto_id=${produtoId}&quantidade=${qtd}`);
+                const dados = await resp.json();
+                feedback.textContent = dados.mensagem + (dados.alerta_reposicao ? " Atenção: ficará em alerta de reposição." : "");
+                feedback.className = dados.valido ? (dados.alerta_reposicao ? "status status-pendente" : "status status-confirmada") : "status status-cancelada";
+                btn.disabled = !dados.valido;
+                return dados.valido;
+            } catch (e) {
+                // fallback para validação local
+                const apos = atual - qtd;
+                feedback.textContent = apos <= minimo ? `Saldo após saída: ${apos} ${unidade} — entrará em alerta de reposição.` : `Saldo após saída: ${apos} ${unidade}.`;
+                feedback.className = apos <= minimo ? "status status-pendente" : "status status-confirmada";
+                btn.disabled = false;
+                return true;
+            }
+        }
+
+        produtoSelect.addEventListener("change", validarSaida);
+        qtdInput.addEventListener("input", validarSaida);
+        motivoSelect.addEventListener("change", validarSaida);
+        qtdInput.addEventListener("blur", validarSaida);
+
+        form.addEventListener("submit", async (e) => {
+            const valido = await validarSaida();
+            if (!produtoSelect.value || !qtdInput.value || !motivoSelect.value) {
+                e.preventDefault();
+                feedback.textContent = "Preencha produto, quantidade e motivo.";
+                feedback.className = "status status-cancelada";
+                return;
+            }
+            if (!valido) e.preventDefault();
+        });
+        validarSaida();
+    </script>
+{% endblock %}

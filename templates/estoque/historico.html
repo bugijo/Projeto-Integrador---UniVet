@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Histórico Estoque{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Histórico — {{ produto["nome"] }}</h1>
+            <p>Categoria: {{ produto["categoria_nome"] }} • Fornecedor: {{ produto["fornecedor_nome"] }} • Saldo atual: {{ produto["quantidade_atual"] }} {{ produto["unidade_medida"] }}</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_estoque') }}">Voltar</a>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <h2>Movimentações (entradas e saídas)</h2>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Tipo</th>
+                            <th>Qtd.</th>
+                            <th>Validade lote</th>
+                            <th>Valor</th>
+                            <th>Tutor</th>
+                            <th>Motivo</th>
+                            <th>Usuário</th>
+                            <th>Consulta</th>
+                            <th>Obs.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if movimentacoes %}
+                            {% for m in movimentacoes %}
+                                <tr>
+                                    <td>{{ m["criado_em"]|data_hora_br if "T" in m["criado_em"] else m["criado_em"] }}</td>
+                                    <td><span class="status {% if m['tipo']=='entrada' %}status-confirmada{% else %}status-cancelada{% endif %}">{{ m["tipo"] }}</span></td>
+                                    <td>{{ m["quantidade"] }}</td>
+                                    <td>{{ m["data_validade"] or "—" }}</td>
+                                    <td>{% if m["valor_compra"] is not none %}R$ {{ "%.2f"|format(m["valor_compra"]) }}{% else %}—{% endif %}</td>
+                                    <td>{{ m["tutor_nome"] or "—" }}</td>
+                                    <td>{{ m["motivo"] or "—" }}</td>
+                                    <td>{{ m["usuario_nome"] }}</td>
+                                    <td>{% if m["consulta_id"] %}<a href="{{ url_for('visualizar_historico', entidade='consultas', registro_id=m['consulta_id']) }}">#{{ m["consulta_id"] }}</a>{% else %}—{% endif %}</td>
+                                    <td>{{ m["observacao"] or "—" }}</td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="10" class="empty-state">Nenhuma movimentação registrada.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <h2>Auditoria de alterações do cadastro</h2>
+            {% if auditoria %}
+                <div class="table-scroll">
+                    <table>
+                        <thead><tr><th>Data</th><th>Ação</th><th>Usuário</th><th>Dados</th></tr></thead>
+                        <tbody>
+                            {% for h in auditoria %}
+                                <tr>
+                                    <td>{{ h["criado_em"]|data_hora_br if "T" in h["criado_em"] else h["criado_em"] }}</td>
+                                    <td><span class="status status-pendente">{{ h["acao"] }}</span></td>
+                                    <td>{{ h["usuario_nome"] }}</td>
+                                    <td><pre class="history-pre">{{ h["dados_json"] }}</pre></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="empty-state">Nenhum registro de auditoria.</p>
+            {% endif %}
+        </div>
+    </section>
+{% endblock %}

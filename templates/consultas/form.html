@@ -104,6 +104,47 @@
                     <textarea id="vacinas" name="vacinas" placeholder="Vacinas aplicadas, reforços ou procedimentos preventivos.">{{ consulta['vacinas'] if consulta else '' }}</textarea>
                 </div>
 
+                <!-- Produtos utilizados (estoque) - desconto só ao concluir -->
+                <div class="field-group" style="grid-column: 1 / -1; border:1px solid var(--borda); border-radius:18px; padding:16px; background: rgba(255,255,255,0.6);">
+                    <label style="font-size:1.05rem;">Produtos utilizados (estoque)</label>
+                    <span class="field-help">Busque o produto, informe a quantidade e adicione. O estoque só será descontado quando a consulta for marcada como <strong>Concluída</strong> (motivo sempre <em>uso</em>). Se não houver estoque suficiente ao concluir, a ação será bloqueada.</span>
+                    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; align-items:end;">
+                        <div class="field-group" style="flex:2 1 220px; margin:0;">
+                            <label for="produto_estoque_select">Produto</label>
+                            <select id="produto_estoque_select" aria-label="Selecionar produto do estoque">
+                                <option value="">Selecione um produto</option>
+                                {% for p in produtos_estoque %}
+                                    <option value="{{ p['id'] }}" data-nome="{{ p['nome'] }}" data-estoque="{{ p['quantidade_atual'] }}" data-unidade="{{ p['unidade_medida'] }}">{{ p["nome"] }} — disp: {{ p["quantidade_atual"] }} {{ p["unidade_medida"] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field-group" style="flex:0 1 140px; margin:0;">
+                            <label for="produto_estoque_qtd_input">Qtd.</label>
+                            <input type="number" id="produto_estoque_qtd_input" min="1" step="1" placeholder="Ex: 2">
+                        </div>
+                        <button type="button" class="btn btn-secondary" id="btn-adicionar-produto" style="height:48px;">Adicionar</button>
+                    </div>
+                    <div id="feedback-produto-estoque" class="status status-pendente" style="margin-top:10px; display:none;" role="status" aria-live="polite"></div>
+                    <div class="table-scroll" style="margin-top:12px;">
+                        <table id="tabela-produtos-consulta">
+                            <thead><tr><th>Produto</th><th>Qtd.</th><th>Estoque atual</th><th>Ação</th></tr></thead>
+                            <tbody id="tbody-produtos-consulta">
+                                {% if produtos_vinculados %}
+                                    {% for pv in produtos_vinculados %}
+                                        <tr data-produto-id="{{ pv['produto_id'] }}">
+                                            <td>{{ pv.get('produto_nome', pv['produto_id']) }} {% if pv.get('unidade_medida') %}({{ pv['unidade_medida'] }}){% endif %}</td>
+                                            <td>{{ pv['quantidade'] }}<input type="hidden" name="produto_estoque_id" value="{{ pv['produto_id'] }}"><input type="hidden" name="produto_estoque_qtd" value="{{ pv['quantidade'] }}"></td>
+                                            <td>—</td>
+                                            <td><button type="button" class="btn btn-danger btn-remover-produto" style="padding:6px 10px;">Remover</button></td>
+                                        </tr>
+                                    {% endfor %}
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="lista-vazia-msg" class="empty-state" style="display:{% if produtos_vinculados %}none{% else %}block{% endif %}; padding:8px;">Nenhum produto vinculado a esta consulta.</div>
+                </div>
+
                 <div class="field-group field-feedback" style="grid-column: 1 / -1;">
                     <label>Disponibilidade</label>
                     <div id="feedback-disponibilidade" class="status status-pendente">Preencha os dados para validar o horário.</div>
@@ -147,5 +188,59 @@
             document.getElementById(id).addEventListener("blur", validarDisponibilidade);
         });
         validarDisponibilidade();
+
+        // --- Produtos utilizados (estoque) ---
+        const selectProd = document.getElementById("produto_estoque_select");
+        const qtdProdInput = document.getElementById("produto_estoque_qtd_input");
+        const btnAddProd = document.getElementById("btn-adicionar-produto");
+        const tbodyProd = document.getElementById("tbody-produtos-consulta");
+        const feedbackProd = document.getElementById("feedback-produto-estoque");
+        const listaVazia = document.getElementById("lista-vazia-msg");
+
+        function atualizarListaVazia() {
+            listaVazia.style.display = tbodyProd.children.length ? "none" : "block";
+        }
+
+        function mostrarFeedbackProd(msg, tipo) {
+            feedbackProd.style.display = "block";
+            feedbackProd.textContent = msg;
+            feedbackProd.className = tipo === "erro" ? "status status-cancelada" : tipo === "ok" ? "status status-confirmada" : "status status-pendente";
+        }
+
+        btnAddProd.addEventListener("click", () => {
+            const opt = selectProd.options[selectProd.selectedIndex];
+            const pid = selectProd.value;
+            const qtd = parseInt(qtdProdInput.value, 10);
+            if (!pid) { mostrarFeedbackProd("Selecione um produto.", "erro"); return; }
+            if (!qtd || qtd <= 0) { mostrarFeedbackProd("Informe quantidade > 0.", "erro"); return; }
+            if (tbodyProd.querySelector(`tr[data-produto-id="${pid}"]`)) { mostrarFeedbackProd("Produto já adicionado. Remova para alterar quantidade.", "erro"); return; }
+            const nome = opt.dataset.nome;
+            const estoque = opt.dataset.estoque;
+            const unidade = opt.dataset.unidade;
+            const tr = document.createElement("tr");
+            tr.dataset.produtoId = pid;
+            tr.innerHTML = `<td>${nome} (${unidade})</td><td>${qtd}<input type="hidden" name="produto_estoque_id" value="${pid}"><input type="hidden" name="produto_estoque_qtd" value="${qtd}"></td><td>${estoque} ${unidade}</td><td><button type="button" class="btn btn-danger btn-remover-produto" style="padding:6px 10px;">Remover</button></td>`;
+            tbodyProd.appendChild(tr);
+            tr.querySelector(".btn-remover-produto").addEventListener("click", () => { tr.remove(); atualizarListaVazia(); mostrarFeedbackProd(`Produto "${nome}" removido.`, "ok"); });
+            qtdProdInput.value = "";
+            selectProd.value = "";
+            atualizarListaVazia();
+            mostrarFeedbackProd(`Produto "${nome}" adicionado (pendente, só desconta ao concluir).`, "ok");
+        });
+
+        // delega remover para itens pré-carregados
+        tbodyProd.querySelectorAll(".btn-remover-produto").forEach(btn => {
+            btn.addEventListener("click", (e) => { e.target.closest("tr").remove(); atualizarListaVazia(); });
+        });
+
+        // Aviso ao tentar concluir com produtos
+        document.getElementById("consulta-form").addEventListener("submit", (e) => {
+            const status = document.getElementById("status").value;
+            if (status === "Concluida" && tbodyProd.children.length > 0) {
+                // deixa backend validar estoque; apenas avisa
+                const ok = confirm("Ao concluir, o estoque será descontado para os produtos vinculados. Se não houver estoque suficiente, a conclusão será bloqueada. Deseja continuar?");
+                if (!ok) e.preventDefault();
+            }
+        });
     </script>
 {% endblock %}

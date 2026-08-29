@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Fornecedores{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Fornecedores — Estoque</h1>
+            <p>Gerencie fornecedores. Exclusão bloqueada se houver produtos vinculados (evita órfãos).</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_estoque') }}">Voltar ao estoque</a>
+    </section>
+
+    <section class="card form-card">
+        <div class="card-body">
+            <h2>Novo fornecedor</h2>
+            <form id="form-novo-fornecedor" class="form-grid two-columns" onsubmit="return false;" novalidate>
+                <div class="field-group">
+                    <label for="novo_nome">Nome <span aria-hidden="true">*</span></label>
+                    <input type="text" id="novo_nome" required aria-required="true" placeholder="Ex: Nova Vet Distribuidora">
+                </div>
+                <div class="field-group">
+                    <label for="novo_contato">Contato</label>
+                    <input type="text" id="novo_contato" placeholder="Ex: (11) 99999-0000">
+                </div>
+                <div class="actions" style="grid-column:1/-1;">
+                    <button class="btn" id="btn-criar" type="button">Criar fornecedor</button>
+                </div>
+            </form>
+            <div id="feedback-criar" class="status status-pendente" style="display:none; margin-top:10px;" role="status" aria-live="polite"></div>
+        </div>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr><th scope="col">Fornecedor</th><th scope="col">Contato</th><th scope="col">Produtos vinculados</th><th scope="col">Ações</th></tr>
+                    </thead>
+                    <tbody id="tbody-fornecedores">
+                        {% for f in fornecedores %}
+                            <tr data-id="{{ f['id'] }}">
+                                <td>{{ f["nome"] }}</td>
+                                <td>{{ f["contato"] or "—" }}</td>
+                                <td><span class="status {% if f['total_produtos']>0 %}status-pendente{% else %}status-confirmada{% endif %}">{{ f["total_produtos"] }}</span></td>
+                                <td>
+                                    <form method="post" action="{{ url_for('excluir_fornecedor_estoque', fornecedor_id=f['id']) }}" onsubmit="return confirm('Excluir {{ f['nome'] }}? Bloqueado se houver produtos vinculados.')">
+                                        <button class="btn btn-danger" type="submit" {% if f['total_produtos']>0 %}title="Bloqueado: há produtos vinculados"{% endif %}>Excluir</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        const btnCriar = document.getElementById("btn-criar");
+        const feedback = document.getElementById("feedback-criar");
+        btnCriar.addEventListener("click", async () => {
+            const nome = document.getElementById("novo_nome").value.trim();
+            const contato = document.getElementById("novo_contato").value.trim();
+            if (!nome) {
+                feedback.style.display="block"; feedback.textContent="Informe o nome."; feedback.className="status status-cancelada"; return;
+            }
+            btnCriar.disabled=true;
+            try {
+                const resp = await fetch("{{ url_for('api_estoque_fornecedores') }}", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({nome, contato})});
+                const dados = await resp.json();
+                if (!resp.ok) { feedback.style.display="block"; feedback.textContent=dados.erro; feedback.className="status status-cancelada"; btnCriar.disabled=false; return;}
+                feedback.style.display="block"; feedback.textContent="Fornecedor criado. Recarregando..."; feedback.className="status status-confirmada";
+                setTimeout(()=> location.reload(), 800);
+            } catch(e){ feedback.style.display="block"; feedback.textContent="Erro de conexão."; feedback.className="status status-cancelada"; btnCriar.disabled=false; }
+        });
+    </script>
+{% endblock %}

@@ -17,6 +17,10 @@ DATABASE = BASE_DIR / "banco.db"
 STATUSS_CONSULTA = ("Agendada", "Concluida", "Cancelada")
 STATUSS_CONFIRMACAO = ("Pendente", "Confirmada", "Nao confirmada")
 TIPOS_ATENDIMENTO = ("Presencial", "Domiciliar")
+UNIDADES_MEDIDA_ESTOQUE = ("comprimido", "ml", "caixa", "frasco", "unidade", "mg", "g", "ampola")
+MOTIVOS_SAIDA_ESTOQUE = ("avaria", "validade", "uso")
+# Compatibilidade: aceita 'venda' legado como alias de 'uso' em leitura/validação
+MOTIVOS_SAIDA_ESTOQUE_TODOS = ("avaria", "validade", "venda", "uso")
 MESES_PT = {
     1: "Janeiro", 2: "Fevereiro", 3: "Marco", 4: "Abril", 5: "Maio", 6: "Junho",
     7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro",
@@ -154,6 +158,8 @@ def limpar_caches_referencia():
     listar_racas_por_especie.cache_clear()
     listar_servicos.cache_clear()
     listar_veterinarios.cache_clear()
+    listar_categorias_estoque.cache_clear()
+    listar_fornecedores_estoque.cache_clear()
 
 
 def serializar_row(row):
@@ -213,6 +219,139 @@ def listar_veterinarios():
     veterinarios = connection.execute("SELECT * FROM veterinarios ORDER BY nome ASC").fetchall()
     connection.close()
     return veterinarios
+
+
+@lru_cache(maxsize=1)
+def listar_categorias_estoque():
+    connection = get_db_connection()
+    categorias = connection.execute("SELECT * FROM estoque_categorias ORDER BY nome ASC").fetchall()
+    connection.close()
+    return categorias
+
+
+@lru_cache(maxsize=1)
+def listar_fornecedores_estoque():
+    connection = get_db_connection()
+    fornecedores = connection.execute("SELECT * FROM estoque_fornecedores ORDER BY nome ASC").fetchall()
+    connection.close()
+    return fornecedores
+
+
+def buscar_produtos_estoque(termo_busca="", categoria_id=None, alerta_apenas=False):
+    connection = get_db_connection()
+    sql = """
+        SELECT p.*, c.nome AS categoria_nome, f.nome AS fornecedor_nome
+        FROM estoque_produtos p
+        INNER JOIN estoque_categorias c ON c.id = p.categoria_id
+        INNER JOIN estoque_fornecedores f ON f.id = p.fornecedor_id
+        WHERE 1=1
+    """
+    params = []
+    if termo_busca:
+        filtro = f"%{termo_busca}%"
+        sql += " AND (p.nome LIKE ? OR c.nome LIKE ? OR f.nome LIKE ?)"
+        params.extend([filtro, filtro, filtro])
+    if categoria_id:
+        sql += " AND p.categoria_id = ?"
+        params.append(categoria_id)
+    if alerta_apenas:
+        sql += " AND p.quantidade_atual <= p.quantidade_minima"
+    sql += " ORDER BY p.nome ASC"
+    dados = connection.execute(sql, params).fetchall()
+    connection.close()
+    return dados
+
+
+def buscar_produto_estoque(produto_id):
+    connection = get_db_connection()
+    produto = connection.execute(
+        """
+        SELECT p.*, c.nome AS categoria_nome, f.nome AS fornecedor_nome
+        FROM estoque_produtos p
+        INNER JOIN estoque_categorias c ON c.id = p.categoria_id
+        INNER JOIN estoque_fornecedores f ON f.id = p.fornecedor_id
+        WHERE p.id = ?
+        """,
+        (produto_id,),
+    ).fetchone()
+    connection.close()
+    return produto
+
+
+def validar_dados_produto(nome, categoria_id, fornecedor_id, quantidade_atual, quantidade_minima, data_validade, valor_compra, unidade_medida):
+    if not nome or not categoria_id or not fornecedor_id or unidade_medida not in UNIDADES_MEDIDA_ESTOQUE:
+        return False, "Preencha nome, categoria, fornecedor e unidade de medida válida."
+    try:
+        qtd = int(quantidade_atual)
+        qtd_min = int(quantidade_minima)
+        valor = float(valor_compra)
+    except (ValueError, TypeError):
+        return False, "Quantidades e valor devem ser numéricos."
+    if qtd < 0 or qtd_min < 0:
+        return False, "Quantidades não podem ser negativas."
+    if valor < 0:
+        return False, "Valor de compra não pode ser negativo."
+    if data_validade:
+        try:
+            datetime.strptime(data_validade, "%Y-%m-%d")
+        except ValueError:
+            return False, "Data de validade inválida. Use o formato AAAA-MM-DD."
+    return True, ""
+
+
+def normalizar_motivo(motivo):
+    # Compatibilidade: 'venda' legado -> 'uso'
+    if motivo == "venda":
+        return "uso"
+    return motivo
+
+
+def registrar_movimentacao(produto_id, tipo, quantidade, data_validade=None, valor_compra=None, cliente_tutor_id=None, motivo=None, observacao="", consulta_id=None):
+    motivo = normalizar_motivo(motivo) if motivo else None
+    connection = get_db_connection()
+    # Detecta se coluna consulta_id existe (migração pendente)
+    colunas = [c[1] for c in connection.execute("PRAGMA table_info(estoque_movimentacoes)").fetchall()]
+    if "consulta_id" in colunas:
+        connection.execute(
+            """
+            INSERT INTO estoque_movimentacoes (produto_id, tipo, quantidade, data_validade, valor_compra, cliente_tutor_id, motivo, observacao, criado_em, usuario_nome, consulta_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                produto_id,
+                tipo,
+                quantidade,
+                data_validade,
+                valor_compra,
+                cliente_tutor_id,
+                motivo,
+                observacao,
+                datetime.now().strftime("%Y-%m-%dT%H:%M"),
+                session.get("usuario_nome") or session.get("usuario_login", "Sistema"),
+                consulta_id,
+            ),
+        )
+    else:
+        connection.execute(
+            """
+            INSERT INTO estoque_movimentacoes (produto_id, tipo, quantidade, data_validade, valor_compra, cliente_tutor_id, motivo, observacao, criado_em, usuario_nome)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                produto_id,
+                tipo,
+                quantidade,
+                data_validade,
+                valor_compra,
+                cliente_tutor_id,
+                motivo,
+                observacao,
+                datetime.now().strftime("%Y-%m-%dT%H:%M"),
+                session.get("usuario_nome") or session.get("usuario_login", "Sistema"),
+            ),
+        )
+    connection.commit()
+    connection.close()
 
 
 def buscar_tutores(termo_busca=""):
@@ -451,6 +590,17 @@ def pagina_inicial():
         "pets": connection.execute("SELECT COUNT(*) FROM pets").fetchone()[0],
         "consultas": connection.execute("SELECT COUNT(*) FROM consultas").fetchone()[0],
     }
+    # Estoque - evita erro se tabelas ainda não existem (migração pendente)
+    try:
+        totais["produtos_estoque"] = connection.execute("SELECT COUNT(*) FROM estoque_produtos").fetchone()[0]
+        totais["alertas_estoque"] = connection.execute("SELECT COUNT(*) FROM estoque_produtos WHERE quantidade_atual <= quantidade_minima").fetchone()[0]
+        estoque_alertas = connection.execute(
+            "SELECT p.nome, p.quantidade_atual, p.quantidade_minima FROM estoque_produtos p WHERE p.quantidade_atual <= p.quantidade_minima ORDER BY p.nome ASC LIMIT 5"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        totais["produtos_estoque"] = 0
+        totais["alertas_estoque"] = 0
+        estoque_alertas = []
     connection.close()
     resumo = {status: 0 for status in STATUSS_CONSULTA}
     for consulta in consultas_hoje:
@@ -461,6 +611,7 @@ def pagina_inicial():
         proximas_consultas=consultas_do_mes(datetime.now().year, datetime.now().month)[:5],
         resumo_hoje=resumo,
         totais=totais,
+        estoque_alertas=estoque_alertas,
         secao="pagina_inicial",
         breadcrumbs=[("Página inicial", None)],
     )
@@ -717,7 +868,100 @@ def contexto_form_consulta():
         "veterinarios": listar_veterinarios(),
         "status_confirmacao": STATUSS_CONFIRMACAO,
         "tipos_atendimento": TIPOS_ATENDIMENTO,
+        "produtos_estoque": buscar_produtos_estoque(),
     }
+
+
+def buscar_produtos_da_consulta(consulta_id):
+    connection = get_db_connection()
+    try:
+        dados = connection.execute(
+            """
+            SELECT cp.*, p.nome AS produto_nome, p.unidade_medida, p.quantidade_atual, p.quantidade_minima,
+                   c.nome AS categoria_nome
+            FROM consulta_produtos cp
+            INNER JOIN estoque_produtos p ON p.id = cp.produto_id
+            LEFT JOIN estoque_categorias c ON c.id = p.categoria_id
+            WHERE cp.consulta_id = ?
+            ORDER BY p.nome ASC
+            """,
+            (consulta_id,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        dados = []
+    connection.close()
+    return dados
+
+
+def salvar_produtos_da_consulta(connection, consulta_id, formulario):
+    # Remove vínculos antigos e insere novos a partir do form (produto_estoque_id[], produto_estoque_qtd[])
+    try:
+        connection.execute("DELETE FROM consulta_produtos WHERE consulta_id = ?", (consulta_id,))
+    except sqlite3.OperationalError:
+        return
+    ids = formulario.getlist("produto_estoque_id")
+    qtds = formulario.getlist("produto_estoque_qtd")
+    agora = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    for pid_raw, qtd_raw in zip(ids, qtds):
+        try:
+            pid = int(pid_raw)
+            qtd = int(qtd_raw)
+        except (ValueError, TypeError):
+            continue
+        if pid <= 0 or qtd <= 0:
+            continue
+        # valida produto existe
+        existe = connection.execute("SELECT id FROM estoque_produtos WHERE id = ?", (pid,)).fetchone()
+        if not existe:
+            continue
+        connection.execute(
+            "INSERT INTO consulta_produtos (consulta_id, produto_id, quantidade, criado_em) VALUES (?, ?, ?, ?)",
+            (consulta_id, pid, qtd, agora),
+        )
+
+
+def processar_saida_estoque_consulta(connection, consulta_id):
+    # Só executa se consulta status == Concluida e ainda não houve movimentação para esta consulta
+    consulta = connection.execute("SELECT * FROM consultas WHERE id = ?", (consulta_id,)).fetchone()
+    if not consulta or consulta["status"] != "Concluida":
+        return True, ""
+    # verifica se já processada
+    colunas = [c[1] for c in connection.execute("PRAGMA table_info(estoque_movimentacoes)").fetchall()]
+    if "consulta_id" in colunas:
+        ja = connection.execute("SELECT COUNT(*) FROM estoque_movimentacoes WHERE consulta_id = ?", (consulta_id,)).fetchone()[0]
+        if ja > 0:
+            return True, ""
+    else:
+        return True, ""
+    produtos = connection.execute(
+        "SELECT cp.produto_id, cp.quantidade, p.nome, p.quantidade_atual, p.unidade_medida FROM consulta_produtos cp INNER JOIN estoque_produtos p ON p.id = cp.produto_id WHERE cp.consulta_id = ?", (consulta_id,)
+    ).fetchall()
+    if not produtos:
+        return True, ""
+    insuficientes = []
+    for item in produtos:
+        if item["quantidade"] > item["quantidade_atual"]:
+            insuficientes.append(f"{item['nome']} (solicitado {item['quantidade']} {item['unidade_medida']}, disponível {item['quantidade_atual']})")
+    if insuficientes:
+        return False, "Estoque insuficiente para concluir: " + "; ".join(insuficientes) + ". Reponha o estoque ou ajuste as quantidades."
+    # Deduz estoque e registra movimentações
+    pet = connection.execute("SELECT tutor_id FROM pets WHERE id = ?", (consulta["pet_id"],)).fetchone()
+    tutor_id = pet["tutor_id"] if pet else None
+    for item in produtos:
+        connection.execute("UPDATE estoque_produtos SET quantidade_atual = quantidade_atual - ?, atualizado_em = ? WHERE id = ?", (item["quantidade"], datetime.now().strftime("%Y-%m-%dT%H:%M"), item["produto_id"]))
+        connection.execute(
+            "INSERT INTO estoque_movimentacoes (produto_id, tipo, quantidade, cliente_tutor_id, motivo, observacao, criado_em, usuario_nome, consulta_id) VALUES (?, 'saida', ?, ?, 'uso', ?, ?, ?, ?)",
+            (
+                item["produto_id"],
+                item["quantidade"],
+                tutor_id,
+                f"Uso em consulta #{consulta_id} - {consulta['tipo_consulta'] or 'Consulta'}",
+                datetime.now().strftime("%Y-%m-%dT%H:%M"),
+                session.get("usuario_nome") or session.get("usuario_login", "Sistema"),
+                consulta_id,
+            ),
+        )
+    return True, ""
 
 
 def obter_historico(entidade, registro_id):
@@ -843,6 +1087,7 @@ def salvar_consulta(formulario, consulta_id=None):
                     consulta_id,
                 ),
             )
+            consulta_db_id = consulta_id
         else:
             connection.execute(
                 """
@@ -866,17 +1111,29 @@ def salvar_consulta(formulario, consulta_id=None):
                     confirmacao_status,
                 ),
             )
+            consulta_db_id = connection.execute("SELECT last_insert_rowid()").fetchone()[0]
+        # Salva produtos vinculados (pendente, sem descontar ainda)
+        salvar_produtos_da_consulta(connection, consulta_db_id, formulario)
+        # Se status for Concluida, tenta descontar estoque
+        if status == "Concluida":
+            ok, msg_estoque = processar_saida_estoque_consulta(connection, consulta_db_id)
+            if not ok:
+                connection.rollback()
+                connection.close()
+                return False, msg_estoque, consulta, []
         connection.commit()
     except sqlite3.IntegrityError:
+        connection.rollback()
         connection.close()
         return False, "Horário inicial já utilizado para este veterinário.", consulta, []
     if consulta_id:
         registro = connection.execute("SELECT * FROM consultas WHERE id = ?", (consulta_id,)).fetchone()
+        connection.close()
         registrar_historico("consultas", consulta_id, "editado", serializar_row(registro))
     else:
-        registro = connection.execute("SELECT * FROM consultas ORDER BY id DESC LIMIT 1").fetchone()
+        registro = connection.execute("SELECT * FROM consultas WHERE id = ?", (consulta_db_id,)).fetchone()
+        connection.close()
         registrar_historico("consultas", registro["id"], "criado", serializar_row(registro))
-    connection.close()
     return True, "", consulta, []
 
 
@@ -912,10 +1169,17 @@ def criar_consulta():
         sucesso, mensagem, consulta, _ = salvar_consulta(request.form)
         if not sucesso:
             flash(mensagem, "erro")
-            return render_template("consultas/form.html", consulta=consulta, acao="Nova Consulta", secao="consultas", breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Nova consulta", None)), **contexto)
+            # preserva produtos digitados para re-render
+            produtos_vinculados = []
+            for pid, qtd in zip(request.form.getlist("produto_estoque_id"), request.form.getlist("produto_estoque_qtd")):
+                try:
+                    produtos_vinculados.append({"produto_id": int(pid), "quantidade": int(qtd)})
+                except:
+                    continue
+            return render_template("consultas/form.html", consulta=consulta, produtos_vinculados=produtos_vinculados, acao="Nova Consulta", secao="consultas", breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Nova consulta", None)), **contexto)
         flash("Consulta cadastrada com sucesso.", "sucesso")
         return redirect(url_for("listar_consultas"))
-    return render_template("consultas/form.html", consulta=None, acao="Nova Consulta", secao="consultas", breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Nova consulta", None)), **contexto)
+    return render_template("consultas/form.html", consulta=None, produtos_vinculados=[], acao="Nova Consulta", secao="consultas", breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Nova consulta", None)), **contexto)
 
 
 @app.route("/consultas/<int:consulta_id>/editar", methods=["GET", "POST"])
@@ -932,10 +1196,19 @@ def editar_consulta(consulta_id):
         sucesso, mensagem, consulta_form, _ = salvar_consulta(request.form, consulta_id)
         if not sucesso:
             flash(mensagem, "erro")
-            return render_template("consultas/form.html", consulta=consulta_form, acao="Editar Consulta", secao="consultas", breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Editar consulta", None)), **contexto)
+            produtos_vinculados = []
+            for pid, qtd in zip(request.form.getlist("produto_estoque_id"), request.form.getlist("produto_estoque_qtd")):
+                try:
+                    produtos_vinculados.append({"produto_id": int(pid), "quantidade": int(qtd)})
+                except:
+                    continue
+            return render_template("consultas/form.html", consulta=consulta_form, produtos_vinculados=produtos_vinculados, acao="Editar Consulta", secao="consultas", breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Editar consulta", None)), **contexto)
         flash("Consulta atualizada com sucesso.", "sucesso")
         return redirect(url_for("listar_consultas"))
-    return render_template("consultas/form.html", consulta=consulta, acao="Editar Consulta", secao="consultas", breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Editar consulta", None)), **contexto)
+    produtos_vinculados = buscar_produtos_da_consulta(consulta_id)
+    # normaliza para template
+    produtos_vinculados = [{"produto_id": p["produto_id"], "quantidade": p["quantidade"], "produto_nome": p["produto_nome"], "unidade_medida": p["unidade_medida"]} for p in produtos_vinculados]
+    return render_template("consultas/form.html", consulta=consulta, produtos_vinculados=produtos_vinculados, acao="Editar Consulta", secao="consultas", breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Editar consulta", None)), **contexto)
 
 
 @app.route("/consultas/<int:consulta_id>/excluir", methods=["POST"])
@@ -988,6 +1261,7 @@ def visualizar_historico(entidade, registro_id):
             consulta=consulta,
             historico_clinico=historico_clinico_pet(consulta["pet_id"]),
             auditoria=obter_historico(entidade, registro_id),
+            produtos_utilizados=buscar_produtos_da_consulta(registro_id),
             secao="consultas",
             breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Histórico clínico", None)),
         )
@@ -1162,6 +1436,477 @@ def excluir_veterinario(veterinario_id):
     else:
         flash("Veterinário excluído com sucesso.", "sucesso")
     return redirect(url_for("listar_veterinarios_page"))
+
+
+# ==================== MODULO ESTOQUE DE MEDICAMENTOS ====================
+
+@app.route("/estoque")
+@login_obrigatorio
+def listar_estoque():
+    busca = request.args.get("busca", "").strip()
+    categoria_id = request.args.get("categoria_id", type=int)
+    alerta_apenas = request.args.get("alerta") == "1"
+    produtos = buscar_produtos_estoque(busca, categoria_id, alerta_apenas)
+    total_alerta = len([p for p in buscar_produtos_estoque(alerta_apenas=True)])
+    # produtos vencidos
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    vencidos = [p for p in produtos if p["data_validade"] and p["data_validade"] < hoje]
+    return render_template(
+        "estoque/lista.html",
+        produtos=produtos,
+        busca=busca,
+        categoria_id=categoria_id,
+        alerta_apenas=alerta_apenas,
+        categorias=listar_categorias_estoque(),
+        total_alerta=total_alerta,
+        vencidos=vencidos,
+        secao="estoque",
+        breadcrumbs=breadcrumbs_padrao(("Estoque de Medicamentos", None)),
+    )
+
+
+@app.route("/estoque/novo", methods=["GET", "POST"])
+@login_obrigatorio
+def criar_produto_estoque():
+    categorias = listar_categorias_estoque()
+    fornecedores = listar_fornecedores_estoque()
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+        categoria_id = request.form.get("categoria_id", type=int)
+        fornecedor_id = request.form.get("fornecedor_id", type=int)
+        quantidade_atual = request.form.get("quantidade_atual", "0").strip()
+        quantidade_minima = request.form.get("quantidade_minima", "0").strip()
+        data_validade = request.form.get("data_validade", "").strip()
+        valor_compra = request.form.get("valor_compra", "0").strip()
+        unidade_medida = request.form.get("unidade_medida", "").strip()
+        valido, msg = validar_dados_produto(nome, categoria_id, fornecedor_id, quantidade_atual, quantidade_minima, data_validade, valor_compra, unidade_medida)
+        if not valido:
+            flash(msg, "erro")
+            return render_template(
+                "estoque/form.html",
+                produto=request.form,
+                categorias=categorias,
+                fornecedores=fornecedores,
+                unidades=UNIDADES_MEDIDA_ESTOQUE,
+                acao="Novo Produto",
+                secao="estoque",
+                breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Novo produto", None)),
+            )
+        agora = datetime.now().strftime("%Y-%m-%dT%H:%M")
+        try:
+            connection = get_db_connection()
+            connection.execute(
+                """
+                INSERT INTO estoque_produtos (nome, categoria_id, fornecedor_id, quantidade_atual, quantidade_minima, data_validade, valor_compra, unidade_medida, criado_em, atualizado_em)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (nome, categoria_id, fornecedor_id, int(quantidade_atual), int(quantidade_minima), data_validade or None, float(valor_compra), unidade_medida, agora, agora),
+            )
+            connection.commit()
+            novo = connection.execute("SELECT * FROM estoque_produtos WHERE nome = ?", (nome,)).fetchone()
+            connection.close()
+            if novo:
+                registrar_historico("estoque_produtos", novo["id"], "criado", serializar_row(novo))
+            flash("Produto cadastrado com sucesso.", "sucesso")
+            return redirect(url_for("listar_estoque"))
+        except sqlite3.IntegrityError:
+            connection.close()
+            flash("Já existe um produto com este nome.", "erro")
+            return render_template(
+                "estoque/form.html",
+                produto=request.form,
+                categorias=categorias,
+                fornecedores=fornecedores,
+                unidades=UNIDADES_MEDIDA_ESTOQUE,
+                acao="Novo Produto",
+                secao="estoque",
+                breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Novo produto", None)),
+            )
+    return render_template(
+        "estoque/form.html",
+        produto=None,
+        categorias=categorias,
+        fornecedores=fornecedores,
+        unidades=UNIDADES_MEDIDA_ESTOQUE,
+        acao="Novo Produto",
+        secao="estoque",
+        breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Novo produto", None)),
+    )
+
+
+@app.route("/estoque/<int:produto_id>/editar", methods=["GET", "POST"])
+@login_obrigatorio
+def editar_produto_estoque(produto_id):
+    connection = get_db_connection()
+    produto = connection.execute("SELECT * FROM estoque_produtos WHERE id = ?", (produto_id,)).fetchone()
+    connection.close()
+    if not produto:
+        flash("Produto não encontrado.", "erro")
+        return redirect(url_for("listar_estoque"))
+    categorias = listar_categorias_estoque()
+    fornecedores = listar_fornecedores_estoque()
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+        categoria_id = request.form.get("categoria_id", type=int)
+        fornecedor_id = request.form.get("fornecedor_id", type=int)
+        quantidade_atual = request.form.get("quantidade_atual", "0").strip()
+        quantidade_minima = request.form.get("quantidade_minima", "0").strip()
+        data_validade = request.form.get("data_validade", "").strip()
+        valor_compra = request.form.get("valor_compra", "0").strip()
+        unidade_medida = request.form.get("unidade_medida", "").strip()
+        valido, msg = validar_dados_produto(nome, categoria_id, fornecedor_id, quantidade_atual, quantidade_minima, data_validade, valor_compra, unidade_medida)
+        if not valido:
+            flash(msg, "erro")
+            dados = {"id": produto_id, "nome": nome, "categoria_id": categoria_id, "fornecedor_id": fornecedor_id, "quantidade_atual": quantidade_atual, "quantidade_minima": quantidade_minima, "data_validade": data_validade, "valor_compra": valor_compra, "unidade_medida": unidade_medida}
+            return render_template("estoque/form.html", produto=dados, categorias=categorias, fornecedores=fornecedores, unidades=UNIDADES_MEDIDA_ESTOQUE, acao="Editar Produto", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Editar produto", None)))
+        try:
+            connection = get_db_connection()
+            original = connection.execute("SELECT * FROM estoque_produtos WHERE id = ?", (produto_id,)).fetchone()
+            connection.execute(
+                """
+                UPDATE estoque_produtos SET nome=?, categoria_id=?, fornecedor_id=?, quantidade_atual=?, quantidade_minima=?, data_validade=?, valor_compra=?, unidade_medida=?, atualizado_em=?
+                WHERE id=?
+                """,
+                (nome, categoria_id, fornecedor_id, int(quantidade_atual), int(quantidade_minima), data_validade or None, float(valor_compra), unidade_medida, datetime.now().strftime("%Y-%m-%dT%H:%M"), produto_id),
+            )
+            connection.commit()
+            connection.close()
+        except sqlite3.IntegrityError:
+            connection.close()
+            flash("Já existe outro produto com este nome.", "erro")
+            dados = {"id": produto_id, "nome": nome, "categoria_id": categoria_id, "fornecedor_id": fornecedor_id, "quantidade_atual": quantidade_atual, "quantidade_minima": quantidade_minima, "data_validade": data_validade, "valor_compra": valor_compra, "unidade_medida": unidade_medida}
+            return render_template("estoque/form.html", produto=dados, categorias=categorias, fornecedores=fornecedores, unidades=UNIDADES_MEDIDA_ESTOQUE, acao="Editar Produto", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Editar produto", None)))
+        registrar_historico("estoque_produtos", produto_id, "editado", {"antes": serializar_row(original), "depois": {"nome": nome, "categoria_id": categoria_id, "fornecedor_id": fornecedor_id, "quantidade_atual": quantidade_atual, "quantidade_minima": quantidade_minima, "data_validade": data_validade, "valor_compra": valor_compra, "unidade_medida": unidade_medida}})
+        flash("Produto atualizado com sucesso.", "sucesso")
+        return redirect(url_for("listar_estoque"))
+    return render_template("estoque/form.html", produto=produto, categorias=categorias, fornecedores=fornecedores, unidades=UNIDADES_MEDIDA_ESTOQUE, acao="Editar Produto", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Editar produto", None)))
+
+
+@app.route("/estoque/<int:produto_id>/excluir", methods=["POST"])
+@login_obrigatorio
+def excluir_produto_estoque(produto_id):
+    connection = get_db_connection()
+    produto = connection.execute("SELECT * FROM estoque_produtos WHERE id = ?", (produto_id,)).fetchone()
+    if not produto:
+        connection.close()
+        flash("Produto não encontrado.", "erro")
+        return redirect(url_for("listar_estoque"))
+    connection.execute("DELETE FROM estoque_produtos WHERE id = ?", (produto_id,))
+    connection.commit()
+    connection.close()
+    registrar_historico("estoque_produtos", produto_id, "excluido", serializar_row(produto))
+    flash("Produto excluído com sucesso.", "sucesso")
+    return redirect(url_for("listar_estoque"))
+
+
+@app.route("/estoque/entrada", methods=["GET", "POST"])
+@login_obrigatorio
+def entrada_estoque():
+    produtos = buscar_produtos_estoque()
+    if request.method == "POST":
+        produto_id = request.form.get("produto_id", type=int)
+        quantidade = request.form.get("quantidade", type=int)
+        data_validade = request.form.get("data_validade", "").strip()
+        valor_compra = request.form.get("valor_compra", "").strip()
+        observacao = request.form.get("observacao", "").strip()
+        if not produto_id or not quantidade or quantidade <= 0:
+            flash("Informe o produto e uma quantidade válida maior que zero.", "erro")
+            return render_template("estoque/entrada.html", produtos=produtos, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Entrada de produtos", None)))
+        produto = buscar_produto_estoque(produto_id)
+        if not produto:
+            flash("Produto não encontrado.", "erro")
+            return redirect(url_for("listar_estoque"))
+        if data_validade:
+            try:
+                datetime.strptime(data_validade, "%Y-%m-%d")
+            except ValueError:
+                flash("Data de validade inválida.", "erro")
+                return render_template("estoque/entrada.html", produtos=produtos, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Entrada de produtos", None)))
+        try:
+            valor_float = float(valor_compra) if valor_compra else produto["valor_compra"]
+            if valor_float < 0:
+                raise ValueError
+        except ValueError:
+            flash("Valor de compra inválido.", "erro")
+            return render_template("estoque/entrada.html", produtos=produtos, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Entrada de produtos", None)))
+        connection = get_db_connection()
+        nova_qtd = produto["quantidade_atual"] + quantidade
+        connection.execute(
+            "UPDATE estoque_produtos SET quantidade_atual = ?, data_validade = COALESCE(?, data_validade), valor_compra = ?, atualizado_em = ? WHERE id = ?",
+            (nova_qtd, data_validade or None, valor_float, datetime.now().strftime("%Y-%m-%dT%H:%M"), produto_id),
+        )
+        connection.commit()
+        connection.close()
+        registrar_movimentacao(produto_id, "entrada", quantidade, data_validade or produto["data_validade"], valor_float, observacao=observacao)
+        registrar_historico("estoque_produtos", produto_id, "entrada", {"produto_id": produto_id, "quantidade": quantidade, "nova_quantidade": nova_qtd})
+        flash(f"Entrada de {quantidade} unidade(s) registrada. Novo saldo: {nova_qtd}.", "sucesso")
+        return redirect(url_for("listar_estoque"))
+    return render_template("estoque/entrada.html", produtos=produtos, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Entrada de produtos", None)))
+
+
+@app.route("/estoque/saida", methods=["GET", "POST"])
+@login_obrigatorio
+def saida_estoque():
+    produtos = buscar_produtos_estoque()
+    tutores = buscar_tutores()
+    if request.method == "POST":
+        produto_id = request.form.get("produto_id", type=int)
+        quantidade = request.form.get("quantidade", type=int)
+        cliente_tutor_id = request.form.get("cliente_tutor_id", type=int)
+        motivo = request.form.get("motivo", "").strip()
+        observacao = request.form.get("observacao", "").strip()
+        if not produto_id or not quantidade or quantidade <= 0:
+            flash("Informe o produto e uma quantidade válida maior que zero.", "erro")
+            return render_template("estoque/saida.html", produtos=produtos, tutores=tutores, motivos=MOTIVOS_SAIDA_ESTOQUE, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Saída de produtos", None)))
+        if motivo not in MOTIVOS_SAIDA_ESTOQUE_TODOS:
+            flash("Motivo da saída inválido. Selecione avaria, validade ou uso.", "erro")
+            return render_template("estoque/saida.html", produtos=produtos, tutores=tutores, motivos=MOTIVOS_SAIDA_ESTOQUE, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Saída de produtos", None)))
+        motivo = normalizar_motivo(motivo)
+        produto = buscar_produto_estoque(produto_id)
+        if not produto:
+            flash("Produto não encontrado.", "erro")
+            return redirect(url_for("listar_estoque"))
+        if quantidade > produto["quantidade_atual"]:
+            flash(f"Quantidade insuficiente em estoque. Disponível: {produto['quantidade_atual']} {produto['unidade_medida']}.", "erro")
+            return render_template("estoque/saida.html", produtos=produtos, tutores=tutores, motivos=MOTIVOS_SAIDA_ESTOQUE, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Saída de produtos", None)))
+        connection = get_db_connection()
+        nova_qtd = produto["quantidade_atual"] - quantidade
+        connection.execute("UPDATE estoque_produtos SET quantidade_atual = ?, atualizado_em = ? WHERE id = ?", (nova_qtd, datetime.now().strftime("%Y-%m-%dT%H:%M"), produto_id))
+        connection.commit()
+        connection.close()
+        registrar_movimentacao(produto_id, "saida", quantidade, cliente_tutor_id=cliente_tutor_id, motivo=motivo, observacao=observacao)
+        registrar_historico("estoque_produtos", produto_id, "saida", {"produto_id": produto_id, "quantidade": quantidade, "motivo": motivo, "nova_quantidade": nova_qtd})
+        flash(f"Saída de {quantidade} unidade(s) registrada. Novo saldo: {nova_qtd}.", "sucesso")
+        if nova_qtd <= produto["quantidade_minima"]:
+            flash(f"Alerta: {produto['nome']} atingiu ou ficou abaixo do estoque mínimo ({produto['quantidade_minima']}).", "erro")
+        return redirect(url_for("listar_estoque"))
+    return render_template("estoque/saida.html", produtos=produtos, tutores=tutores, motivos=MOTIVOS_SAIDA_ESTOQUE, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Saída de produtos", None)))
+
+
+@app.route("/estoque/<int:produto_id>/historico")
+@login_obrigatorio
+def historico_estoque(produto_id):
+    produto = buscar_produto_estoque(produto_id)
+    if not produto:
+        flash("Produto não encontrado.", "erro")
+        return redirect(url_for("listar_estoque"))
+    connection = get_db_connection()
+    movimentacoes = connection.execute(
+        """
+        SELECT m.*, t.nome AS tutor_nome
+        FROM estoque_movimentacoes m
+        LEFT JOIN tutores t ON t.id = m.cliente_tutor_id
+        WHERE m.produto_id = ?
+        ORDER BY m.criado_em DESC, m.id DESC
+        """,
+        (produto_id,),
+    ).fetchall()
+    connection.close()
+    auditoria = obter_historico("estoque_produtos", produto_id)
+    return render_template("estoque/historico.html", produto=produto, movimentacoes=movimentacoes, auditoria=auditoria, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Histórico", None)))
+
+
+# --- APIs REST para Estoque (seguindo padrão /api/* do projeto) ---
+@app.route("/api/estoque/produtos", methods=["GET", "POST"])
+@login_obrigatorio
+def api_estoque_produtos():
+    if request.method == "GET":
+        produtos = [dict(p) for p in buscar_produtos_estoque(request.args.get("busca", "").strip())]
+        return jsonify({"produtos": produtos})
+    dados = request.get_json(silent=True) or request.form
+    nome = (dados.get("nome") or "").strip()
+    categoria_id = int(dados.get("categoria_id") or 0) or None
+    fornecedor_id = int(dados.get("fornecedor_id") or 0) or None
+    qtd = dados.get("quantidade_atual", 0)
+    qtd_min = dados.get("quantidade_minima", 0)
+    validade = (dados.get("data_validade") or "").strip()
+    valor = dados.get("valor_compra", 0)
+    unidade = (dados.get("unidade_medida") or "").strip()
+    valido, msg = validar_dados_produto(nome, categoria_id, fornecedor_id, qtd, qtd_min, validade, valor, unidade)
+    if not valido:
+        return jsonify({"erro": msg}), 400
+    agora = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    try:
+        connection = get_db_connection()
+        connection.execute(
+            "INSERT INTO estoque_produtos (nome, categoria_id, fornecedor_id, quantidade_atual, quantidade_minima, data_validade, valor_compra, unidade_medida, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (nome, categoria_id, fornecedor_id, int(qtd), int(qtd_min), validade or None, float(valor), unidade, agora, agora),
+        )
+        connection.commit()
+        novo = connection.execute("SELECT * FROM estoque_produtos WHERE nome = ?", (nome,)).fetchone()
+        connection.close()
+        return jsonify({"mensagem": "Produto criado", "produto": dict(novo)}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({"erro": "Já existe produto com este nome"}), 409
+
+
+@app.route("/api/estoque/produtos/<int:produto_id>", methods=["GET", "PUT", "DELETE"])
+@login_obrigatorio
+def api_estoque_produto_detalhe(produto_id):
+    produto = buscar_produto_estoque(produto_id)
+    if not produto:
+        return jsonify({"erro": "Produto não encontrado"}), 404
+    if request.method == "GET":
+        return jsonify({"produto": dict(produto)})
+    if request.method == "DELETE":
+        connection = get_db_connection()
+        connection.execute("DELETE FROM estoque_produtos WHERE id = ?", (produto_id,))
+        connection.commit()
+        connection.close()
+        return jsonify({"mensagem": "Produto excluído"})
+    dados = request.get_json(silent=True) or request.form
+    nome = (dados.get("nome") or produto["nome"]).strip()
+    categoria_id = int(dados.get("categoria_id") or produto["categoria_id"])
+    fornecedor_id = int(dados.get("fornecedor_id") or produto["fornecedor_id"])
+    qtd = dados.get("quantidade_atual", produto["quantidade_atual"])
+    qtd_min = dados.get("quantidade_minima", produto["quantidade_minima"])
+    validade = (dados.get("data_validade") or produto["data_validade"] or "").strip()
+    valor = dados.get("valor_compra", produto["valor_compra"])
+    unidade = (dados.get("unidade_medida") or produto["unidade_medida"]).strip()
+    valido, msg = validar_dados_produto(nome, categoria_id, fornecedor_id, qtd, qtd_min, validade, valor, unidade)
+    if not valido:
+        return jsonify({"erro": msg}), 400
+    try:
+        connection = get_db_connection()
+        connection.execute(
+            "UPDATE estoque_produtos SET nome=?, categoria_id=?, fornecedor_id=?, quantidade_atual=?, quantidade_minima=?, data_validade=?, valor_compra=?, unidade_medida=?, atualizado_em=? WHERE id=?",
+            (nome, categoria_id, fornecedor_id, int(qtd), int(qtd_min), validade or None, float(valor), unidade, datetime.now().strftime("%Y-%m-%dT%H:%M"), produto_id),
+        )
+        connection.commit()
+        atualizado = connection.execute("SELECT * FROM estoque_produtos WHERE id = ?", (produto_id,)).fetchone()
+        connection.close()
+        return jsonify({"mensagem": "Produto atualizado", "produto": dict(atualizado)})
+    except sqlite3.IntegrityError:
+        return jsonify({"erro": "Já existe outro produto com este nome"}), 409
+
+
+@app.route("/api/estoque/categorias", methods=["GET", "POST"])
+@login_obrigatorio
+def api_estoque_categorias():
+    if request.method == "GET":
+        return jsonify({"categorias": [dict(c) for c in listar_categorias_estoque()]})
+    dados = request.get_json(silent=True) or request.form
+    nome = (dados.get("nome") or "").strip()
+    if not nome:
+        return jsonify({"erro": "Nome da categoria é obrigatório"}), 400
+    try:
+        connection = get_db_connection()
+        connection.execute("INSERT INTO estoque_categorias (nome) VALUES (?)", (nome,))
+        connection.commit()
+        novo = connection.execute("SELECT * FROM estoque_categorias WHERE nome = ?", (nome,)).fetchone()
+        connection.close()
+        limpar_caches_referencia()
+        return jsonify({"mensagem": "Categoria criada", "categoria": dict(novo)}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({"erro": "Categoria já existe"}), 409
+
+
+@app.route("/api/estoque/fornecedores", methods=["GET", "POST"])
+@login_obrigatorio
+def api_estoque_fornecedores():
+    if request.method == "GET":
+        return jsonify({"fornecedores": [dict(f) for f in listar_fornecedores_estoque()]})
+    dados = request.get_json(silent=True) or request.form
+    nome = (dados.get("nome") or "").strip()
+    contato = (dados.get("contato") or "").strip()
+    if not nome:
+        return jsonify({"erro": "Nome do fornecedor é obrigatório"}), 400
+    try:
+        connection = get_db_connection()
+        connection.execute("INSERT INTO estoque_fornecedores (nome, contato) VALUES (?, ?)", (nome, contato or None))
+        connection.commit()
+        novo = connection.execute("SELECT * FROM estoque_fornecedores WHERE nome = ?", (nome,)).fetchone()
+        connection.close()
+        limpar_caches_referencia()
+        return jsonify({"mensagem": "Fornecedor criado", "fornecedor": dict(novo)}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({"erro": "Fornecedor já existe"}), 409
+
+
+@app.route("/api/estoque/fornecedores/<int:fornecedor_id>", methods=["DELETE"])
+@login_obrigatorio
+def api_estoque_fornecedor_excluir(fornecedor_id):
+    connection = get_db_connection()
+    fornecedor = connection.execute("SELECT * FROM estoque_fornecedores WHERE id = ?", (fornecedor_id,)).fetchone()
+    if not fornecedor:
+        connection.close()
+        return jsonify({"erro": "Fornecedor não encontrado"}), 404
+    uso = connection.execute("SELECT COUNT(*) FROM estoque_produtos WHERE fornecedor_id = ?", (fornecedor_id,)).fetchone()[0]
+    if uso > 0:
+        connection.close()
+        return jsonify({"erro": f"Não é possível excluir: fornecedor em uso por {uso} produto(s). Remova ou reatribua os produtos antes."}), 400
+    connection.execute("DELETE FROM estoque_fornecedores WHERE id = ?", (fornecedor_id,))
+    connection.commit()
+    connection.close()
+    limpar_caches_referencia()
+    registrar_historico("estoque_fornecedores", fornecedor_id, "excluido", serializar_row(fornecedor))
+    return jsonify({"mensagem": "Fornecedor excluído"})
+
+
+@app.route("/estoque/fornecedores")
+@login_obrigatorio
+def listar_fornecedores_page():
+    connection = get_db_connection()
+    fornecedores = connection.execute(
+        """
+        SELECT f.*, COUNT(p.id) AS total_produtos
+        FROM estoque_fornecedores f
+        LEFT JOIN estoque_produtos p ON p.fornecedor_id = f.id
+        GROUP BY f.id
+        ORDER BY f.nome ASC
+        """
+    ).fetchall()
+    connection.close()
+    return render_template("estoque/fornecedores.html", fornecedores=fornecedores, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("listar_estoque")), ("Fornecedores", None)))
+
+
+@app.route("/estoque/fornecedores/<int:fornecedor_id>/excluir", methods=["POST"])
+@login_obrigatorio
+def excluir_fornecedor_estoque(fornecedor_id):
+    connection = get_db_connection()
+    fornecedor = connection.execute("SELECT * FROM estoque_fornecedores WHERE id = ?", (fornecedor_id,)).fetchone()
+    if not fornecedor:
+        connection.close()
+        flash("Fornecedor não encontrado.", "erro")
+        return redirect(url_for("listar_fornecedores_page"))
+    uso = connection.execute("SELECT COUNT(*) FROM estoque_produtos WHERE fornecedor_id = ?", (fornecedor_id,)).fetchone()[0]
+    if uso > 0:
+        connection.close()
+        flash(f"Não é possível excluir: fornecedor em uso por {uso} produto(s). Remova ou reatribua os produtos antes.", "erro")
+        return redirect(url_for("listar_fornecedores_page"))
+    connection.execute("DELETE FROM estoque_fornecedores WHERE id = ?", (fornecedor_id,))
+    connection.commit()
+    connection.close()
+    limpar_caches_referencia()
+    registrar_historico("estoque_fornecedores", fornecedor_id, "excluido", serializar_row(fornecedor))
+    flash("Fornecedor excluído com sucesso.", "sucesso")
+    return redirect(url_for("listar_fornecedores_page"))
+
+
+@app.route("/api/estoque/validar-saida")
+@login_obrigatorio
+def api_validar_saida():
+    produto_id = request.args.get("produto_id", type=int)
+    quantidade = request.args.get("quantidade", type=int)
+    if not produto_id or not quantidade:
+        return jsonify({"valido": False, "mensagem": "Informe produto e quantidade."})
+    produto = buscar_produto_estoque(produto_id)
+    if not produto:
+        return jsonify({"valido": False, "mensagem": "Produto não encontrado."})
+    if quantidade <= 0:
+        return jsonify({"valido": False, "mensagem": "Quantidade deve ser maior que zero."})
+    if quantidade > produto["quantidade_atual"]:
+        return jsonify({"valido": False, "mensagem": f"Estoque insuficiente. Disponível: {produto['quantidade_atual']} {produto['unidade_medida']}.", "disponivel": produto["quantidade_atual"]})
+    return jsonify({"valido": True, "mensagem": "Quantidade disponível.", "disponivel": produto["quantidade_atual"], "apos_saida": produto["quantidade_atual"] - quantidade, "alerta_reposicao": (produto["quantidade_atual"] - quantidade) <= produto["quantidade_minima"]})
+
+
+@app.route("/api/estoque/alertas")
+@login_obrigatorio
+def api_estoque_alertas():
+    alertas = [dict(p) for p in buscar_produtos_estoque(alerta_apenas=True)]
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    vencidos = [dict(p) for p in buscar_produtos_estoque() if p["data_validade"] and p["data_validade"] < hoje]
+    return jsonify({"alertas_reposicao": alertas, "vencidos": vencidos, "total_alertas": len(alertas)})
 
 
 @app.route("/logout")

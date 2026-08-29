@@ -19,6 +19,30 @@
     </section>
 
     <section class="grid-cards">
+        <article class="card soft-card"><div class="card-body"><span class="metric-label">Produtos em estoque</span><strong class="metric-value">{{ totais.produtos_estoque }}</strong></div></article>
+        <article class="card" style="background: {% if totais.alertas_estoque > 0 %}rgba(255,182,193,0.35){% else %}rgba(152,251,152,0.25){% endif %};"><div class="card-body"><span class="metric-label">Alertas de reposição</span><strong class="metric-value">{{ totais.alertas_estoque }}</strong><br><a href="{{ url_for('listar_estoque', alerta=1) }}" class="field-help">Ver produtos em alerta →</a></div></article>
+        <article class="card"><div class="card-body"><span class="metric-label">Acesso rápido</span><div class="inline-actions" style="margin-top:8px;"><a class="btn btn-secondary" href="{{ url_for('listar_estoque') }}">Estoque</a><a class="btn btn-secondary" href="{{ url_for('entrada_estoque') }}">Entrada</a><a class="btn btn-secondary" href="{{ url_for('saida_estoque') }}">Saída</a></div></div></article>
+    </section>
+
+    {% if estoque_alertas %}
+    <section class="card table-card">
+        <div class="card-body">
+            <h2>Alerta de reposição — estoque baixo</h2>
+            <div class="table-scroll">
+                <table>
+                    <thead><tr><th>Produto</th><th>Qtd. atual</th><th>Qtd. mínima</th><th>Ação</th></tr></thead>
+                    <tbody>
+                        {% for p in estoque_alertas %}
+                            <tr class="highlight-row"><td>{{ p["nome"] }}</td><td>{{ p["quantidade_atual"] }}</td><td>{{ p["quantidade_minima"] }}</td><td><a class="btn btn-secondary" href="{{ url_for('entrada_estoque') }}">Repor</a></td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="grid-cards">
         <article class="card soft-card"><div class="card-body"><span class="metric-label">Agendadas hoje</span><strong class="metric-value">{{ resumo_hoje["Agendada"] }}</strong></div></article>
         <article class="card soft-card"><div class="card-body"><span class="metric-label">Concluidas hoje</span><strong class="metric-value">{{ resumo_hoje["Concluida"] }}</strong></div></article>
         <article class="card soft-card"><div class="card-body"><span class="metric-label">Canceladas hoje</span><strong class="metric-value">{{ resumo_hoje["Cancelada"] }}</strong></div></article>

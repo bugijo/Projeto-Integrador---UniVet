@@ -63,6 +63,24 @@ USUARIOS_PADRAO = [
     ("fernanda.calixto", "Dra. Fernanda Calixto", "veterinaria", "Fer123"),
 ]
 
+# --- Modulo de Estoque de Medicamentos ---
+UNIDADES_MEDIDA_ESTOQUE = ("comprimido", "ml", "caixa", "frasco", "unidade", "mg", "g", "ampola")
+MOTIVOS_SAIDA_ESTOQUE = ("avaria", "validade", "uso")
+# Mantém 'venda' como alias legado para compatibilidade com dados antigos
+MOTIVOS_SAIDA_ESTOQUE_LEGADO = ("avaria", "validade", "venda", "uso")
+CATEGORIAS_ESTOQUE = ["Antibiotico", "Anti-inflamatorio", "Vermifugo", "Vacina", "Suplemento", "Anestesico", "Curativo"]
+FORNECEDORES_ESTOQUE = [
+    ("Distribuidora Vet Farma Ltda.", "(11) 3456-7890"),
+    ("AgroVet Distribuidora", "(19) 3222-4455"),
+    ("MedVet Atacado", "(11) 98888-1122"),
+]
+PRODUTOS_ESTOQUE_DEMO = [
+    # (nome, categoria, fornecedor, qtd_atual, qtd_minima, validade, valor_compra, unidade)
+    ("Amoxicilina 50mg", "Antibiotico", "Distribuidora Vet Farma Ltda.", 40, 10, "2027-06-30", 45.50, "comprimido"),
+    ("Dipirona 500mg", "Anti-inflamatorio", "MedVet Atacado", 8, 15, "2026-12-15", 22.00, "comprimido"),
+    ("Vermex Plus", "Vermifugo", "AgroVet Distribuidora", 25, 5, "2027-03-20", 38.90, "caixa"),
+]
+
 
 def garantir_coluna(cursor, tabela, coluna, definicao):
     colunas = cursor.execute(f"PRAGMA table_info({tabela})").fetchall()
@@ -99,6 +117,101 @@ def init_db():
     cursor = connection.cursor()
     cursor.execute("PRAGMA foreign_keys = ON;")
 
+    cursor.execute("CREATE TABLE IF NOT EXISTS estoque_categorias (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL UNIQUE)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS estoque_fornecedores (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL UNIQUE, contato TEXT)")
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS estoque_produtos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL UNIQUE,
+            categoria_id INTEGER NOT NULL,
+            fornecedor_id INTEGER NOT NULL,
+            quantidade_atual INTEGER NOT NULL DEFAULT 0 CHECK(quantidade_atual >= 0),
+            quantidade_minima INTEGER NOT NULL DEFAULT 0 CHECK(quantidade_minima >= 0),
+            data_validade TEXT,
+            valor_compra REAL NOT NULL DEFAULT 0 CHECK(valor_compra >= 0),
+            unidade_medida TEXT NOT NULL CHECK(unidade_medida IN ('comprimido','ml','caixa','frasco','unidade','mg','g','ampola')),
+            criado_em TEXT NOT NULL,
+            atualizado_em TEXT NOT NULL,
+            FOREIGN KEY (categoria_id) REFERENCES estoque_categorias(id),
+            FOREIGN KEY (fornecedor_id) REFERENCES estoque_fornecedores(id)
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS estoque_movimentacoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            produto_id INTEGER NOT NULL,
+            tipo TEXT NOT NULL CHECK(tipo IN ('entrada','saida')),
+            quantidade INTEGER NOT NULL CHECK(quantidade > 0),
+            data_validade TEXT,
+            valor_compra REAL,
+            cliente_tutor_id INTEGER,
+            motivo TEXT CHECK(motivo IN ('avaria','validade','venda','uso')),
+            observacao TEXT,
+            criado_em TEXT NOT NULL,
+            usuario_nome TEXT NOT NULL,
+            FOREIGN KEY (produto_id) REFERENCES estoque_produtos(id) ON DELETE CASCADE,
+            FOREIGN KEY (cliente_tutor_id) REFERENCES tutores(id) ON DELETE SET NULL
+        )
+        """
+    )
+    # --- Migração: renomeia 'venda' -> 'uso' (mantém compatibilidade de leitura) ---
+    # Se tabela já existia com CHECK antigo apenas com 'venda', garante que novos inserts com 'uso' funcionem
+    # e normaliza dados antigos. O CHECK acima já permite ambos, então basta atualizar dados.
+    try:
+        # Verifica se existe coluna motivo e se há registros legados
+        existente = cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='estoque_movimentacoes'").fetchone()
+        if existente and "'uso'" not in (existente[0] or "") and "'venda'" in (existente[0] or ""):
+            # Recria tabela com CHECK que permite ambos (caso antigo só tinha 'venda')
+            cursor.executescript(
+                """
+                ALTER TABLE estoque_movimentacoes RENAME TO _old_estoque_mov;
+                CREATE TABLE estoque_movimentacoes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    produto_id INTEGER NOT NULL,
+                    tipo TEXT NOT NULL CHECK(tipo IN ('entrada','saida')),
+                    quantidade INTEGER NOT NULL CHECK(quantidade > 0),
+                    data_validade TEXT,
+                    valor_compra REAL,
+                    cliente_tutor_id INTEGER,
+                    motivo TEXT CHECK(motivo IN ('avaria','validade','venda','uso')),
+                    observacao TEXT,
+                    criado_em TEXT NOT NULL,
+                    usuario_nome TEXT NOT NULL,
+                    FOREIGN KEY (produto_id) REFERENCES estoque_produtos(id) ON DELETE CASCADE,
+                    FOREIGN KEY (cliente_tutor_id) REFERENCES tutores(id) ON DELETE SET NULL
+                );
+                INSERT INTO estoque_movimentacoes SELECT * FROM _old_estoque_mov;
+                DROP TABLE _old_estoque_mov;
+                """
+            )
+    except sqlite3.OperationalError:
+        pass
+    # Normaliza dados históricos: 'venda' -> 'uso' para exibição unificada (mantém leitura de 'venda' como alias)
+    try:
+        cursor.execute("UPDATE estoque_movimentacoes SET motivo='uso' WHERE motivo='venda'")
+    except sqlite3.OperationalError:
+        pass
+    # Garante coluna consulta_id para rastreabilidade futura (item 3)
+    garantir_coluna(cursor, "estoque_movimentacoes", "consulta_id", "INTEGER REFERENCES consultas(id) ON DELETE SET NULL")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_estoque_mov_consulta ON estoque_movimentacoes (consulta_id)")
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS consulta_produtos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            consulta_id INTEGER NOT NULL,
+            produto_id INTEGER NOT NULL,
+            quantidade INTEGER NOT NULL CHECK(quantidade > 0),
+            criado_em TEXT NOT NULL,
+            FOREIGN KEY (consulta_id) REFERENCES consultas(id) ON DELETE CASCADE,
+            FOREIGN KEY (produto_id) REFERENCES estoque_produtos(id)
+        )
+        """
+    )
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_consulta_produtos_consulta ON consulta_produtos (consulta_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_consulta_produtos_produto ON consulta_produtos (produto_id)")
     cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, login TEXT NOT NULL UNIQUE, senha_hash TEXT NOT NULL)")
     cursor.execute("CREATE TABLE IF NOT EXISTS tutores (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, telefone TEXT NOT NULL)")
     cursor.execute("CREATE TABLE IF NOT EXISTS especies (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL UNIQUE, parent_id INTEGER, FOREIGN KEY(parent_id) REFERENCES especies(id))")
@@ -172,6 +285,9 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_pets_tutor ON pets (tutor_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_consultas_pet ON consultas (pet_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_consultas_veterinario_periodo ON consultas (veterinario_id, data_hora, data_fim)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_estoque_produto_nome ON estoque_produtos (nome)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_estoque_mov_produto ON estoque_movimentacoes (produto_id, criado_em)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_estoque_mov_tipo ON estoque_movimentacoes (tipo)")
 
     cursor.executescript(
         """
@@ -264,6 +380,26 @@ def init_db():
         )
 
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_consulta_inicio_vet ON consultas (veterinario_id, data_hora)")
+
+    # --- Seed do módulo de estoque (independente de tutores) ---
+    for categoria in CATEGORIAS_ESTOQUE:
+        cursor.execute("INSERT OR IGNORE INTO estoque_categorias (nome) VALUES (?)", (categoria,))
+    for fornecedor, contato in FORNECEDORES_ESTOQUE:
+        cursor.execute("INSERT OR IGNORE INTO estoque_fornecedores (nome, contato) VALUES (?, ?)", (fornecedor, contato))
+    # Produtos demo apenas se tabela estiver vazia
+    if cursor.execute("SELECT COUNT(*) FROM estoque_produtos").fetchone()[0] == 0:
+        cat_map = {row[1]: row[0] for row in cursor.execute("SELECT id, nome FROM estoque_categorias").fetchall()}
+        forn_map = {row[1]: row[0] for row in cursor.execute("SELECT id, nome FROM estoque_fornecedores").fetchall()}
+        agora = datetime.now().strftime("%Y-%m-%dT%H:%M")
+        for nome, cat_nome, forn_nome, qtd, qtd_min, validade, valor, unidade in PRODUTOS_ESTOQUE_DEMO:
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO estoque_produtos
+                  (nome, categoria_id, fornecedor_id, quantidade_atual, quantidade_minima, data_validade, valor_compra, unidade_medida, criado_em, atualizado_em)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (nome, cat_map.get(cat_nome), forn_map.get(forn_nome), qtd, qtd_min, validade, valor, unidade, agora, agora),
+            )
 
     seed_dados_ficticios(cursor, especies_map)
 

@@ -75,6 +75,27 @@
 
     <section class="card table-card">
         <div class="card-body">
+            <h2>Produtos utilizados (estoque)</h2>
+            {% if produtos_utilizados %}
+                <div class="table-scroll">
+                    <table>
+                        <thead><tr><th>Produto</th><th>Qtd.</th><th>Unidade</th><th>Categoria</th></tr></thead>
+                        <tbody>
+                            {% for p in produtos_utilizados %}
+                                <tr><td>{{ p["produto_nome"] }}</td><td>{{ p["quantidade"] }}</td><td>{{ p["unidade_medida"] }}</td><td>{{ p["categoria_nome"] or "—" }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="field-help" style="margin-top:8px;">Saída de estoque gerada apenas quando a consulta está <strong>Concluída</strong> (motivo <em>uso</em>), com rastreabilidade no histórico do produto.</p>
+            {% else %}
+                <p class="empty-state">Nenhum produto vinculado a esta consulta.</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
             <h2>Histórico de modificações da consulta</h2>
             <div class="table-scroll">
                 <table>

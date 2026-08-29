@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Estoque{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>Estoque de Medicamentos</h1>
+            <p>Controle de produtos, entradas, saídas e alertas de reposição e validade.</p>
+        </div>
+        <div class="inline-actions">
+            <a class="btn" href="{{ url_for('criar_produto_estoque') }}">Novo produto</a>
+            <a class="btn btn-secondary" href="{{ url_for('entrada_estoque') }}">Registrar entrada</a>
+            <a class="btn btn-secondary" href="{{ url_for('saida_estoque') }}">Registrar saída</a>
+        </div>
+    </section>
+
+    {% if total_alerta > 0 %}
+    <div class="highlight-box" role="alert" aria-live="polite">
+        <strong>{{ total_alerta }} produto(s) em alerta de reposição</strong> — quantidade atual igual ou abaixo do mínimo.
+        <a href="{{ url_for('listar_estoque', alerta=1) }}">Ver apenas alertas</a>
+    </div>
+    {% endif %}
+
+    {% if vencidos %}
+    <div class="flash-list" role="alert">
+        <div class="flash-item erro">Atenção: {{ vencidos|length }} produto(s) com validade vencida. Verifique a coluna Validade.</div>
+    </div>
+    {% endif %}
+
+    <section class="card table-card">
+        <div class="card-body">
+            <form method="get" class="toolbar" role="search" aria-label="Filtrar estoque">
+                <div class="field-group">
+                    <label for="busca">Buscar produto</label>
+                    <input type="text" id="busca" name="busca" value="{{ busca or '' }}" placeholder="Nome, categoria ou fornecedor" aria-describedby="busca-help">
+                    <span id="busca-help" class="field-help">Digite para filtrar por nome, categoria ou fornecedor.</span>
+                </div>
+                <div class="field-group">
+                    <label for="categoria_id">Categoria</label>
+                    <select id="categoria_id" name="categoria_id">
+                        <option value="">Todas as categorias</option>
+                        {% for cat in categorias %}
+                            <option value="{{ cat['id'] }}" {% if categoria_id and categoria_id|string == cat['id']|string %}selected{% endif %}>{{ cat["nome"] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field-group" style="flex: 0 0 auto; align-self: center; padding-top: 18px;">
+                    <label style="display:flex; gap:8px; align-items:center; font-weight:700;">
+                        <input type="checkbox" name="alerta" value="1" {% if alerta_apenas %}checked{% endif %}> Apenas alertas
+                    </label>
+                </div>
+                <button class="btn" type="submit">Filtrar</button>
+                <a class="btn btn-secondary" href="{{ url_for('listar_estoque') }}">Limpar</a>
+            </form>
+
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Produto</th>
+                            <th scope="col">Categoria</th>
+                            <th scope="col">Fornecedor</th>
+                            <th scope="col">Qtd. atual</th>
+                            <th scope="col">Qtd. mínima</th>
+                            <th scope="col">Unidade</th>
+                            <th scope="col">Validade</th>
+                            <th scope="col">Valor compra</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if produtos %}
+                            {% for p in produtos %}
+                                <tr class="{% if p['quantidade_atual'] <= p['quantidade_minima'] %}highlight-row{% endif %}">
+                                    <td>{{ p["nome"] }}</td>
+                                    <td>{{ p["categoria_nome"] }}</td>
+                                    <td>{{ p["fornecedor_nome"] }}</td>
+                                    <td><strong>{{ p["quantidade_atual"] }}</strong></td>
+                                    <td>{{ p["quantidade_minima"] }}</td>
+                                    <td>{{ p["unidade_medida"] }}</td>
+                                    <td>{% if p["data_validade"] %}{{ p["data_validade"]|data_br }}{% else %}—{% endif %}</td>
+                                    <td>R$ {{ "%.2f"|format(p["valor_compra"]) }}</td>
+                                    <td>
+                                        {% if p["quantidade_atual"] == 0 %}
+                                            <span class="status status-cancelada">Esgotado</span>
+                                        {% elif p["quantidade_atual"] <= p["quantidade_minima"] %}
+                                            <span class="status status-pendente">Reposição</span>
+                                        {% else %}
+                                            <span class="status status-confirmada">Normal</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="inline-actions">
+                                            <a class="btn btn-secondary" href="{{ url_for('editar_produto_estoque', produto_id=p['id']) }}" aria-label="Editar {{ p['nome'] }}">Editar</a>
+                                            <a class="btn btn-secondary" href="{{ url_for('historico_estoque', produto_id=p['id']) }}">Histórico</a>
+                                            <form method="post" action="{{ url_for('excluir_produto_estoque', produto_id=p['id']) }}">
+                                                <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir {{ p['nome'] }}? Esta ação remove também o histórico de movimentações.')">Excluir</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="10" class="empty-state">Nenhum produto encontrado. Cadastre o primeiro medicamento.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}

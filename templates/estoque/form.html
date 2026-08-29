@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | {{ acao }}{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <h1>{{ acao }}</h1>
+            <p>Cadastre o medicamento com categoria, fornecedor, quantidades e validade para controle de alertas.</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_estoque') }}">Voltar ao estoque</a>
+    </section>
+
+    <section class="card form-card">
+        <div class="card-body">
+            <form method="post" class="form-grid two-columns" id="form-estoque" novalidate>
+                <div class="field-group">
+                    <label for="nome">Nome do produto <span aria-hidden="true">*</span></label>
+                    <input type="text" id="nome" name="nome" value="{{ produto['nome'] if produto else '' }}" required aria-required="true" autocomplete="off">
+                </div>
+
+                <div class="field-group">
+                    <label for="categoria_id">Categoria <span aria-hidden="true">*</span></label>
+                    <select id="categoria_id" name="categoria_id" required aria-required="true">
+                        <option value="">Selecione uma categoria</option>
+                        {% for cat in categorias %}
+                            <option value="{{ cat['id'] }}" {% if produto and produto['categoria_id']|string == cat['id']|string %}selected{% endif %}>{{ cat["nome"] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <label for="fornecedor_id">Fornecedor <span aria-hidden="true">*</span></label>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <select id="fornecedor_id" name="fornecedor_id" required aria-required="true" style="flex:1;">
+                            <option value="">Selecione um fornecedor</option>
+                            {% for forn in fornecedores %}
+                                <option value="{{ forn['id'] }}" {% if produto and produto['fornecedor_id']|string == forn['id']|string %}selected{% endif %}>{{ forn["nome"] }}</option>
+                            {% endfor %}
+                            <option value="__novo__">+ Adicionar novo fornecedor</option>
+                        </select>
+                        <button type="button" id="btn-excluir-fornecedor" class="btn btn-danger" title="Excluir fornecedor selecionado" aria-label="Excluir fornecedor selecionado" style="padding:8px 10px; font-size:0.9rem;">🗑</button>
+                        <a href="{{ url_for('listar_fornecedores_page') }}" class="btn btn-secondary" title="Gerenciar fornecedores" style="padding:8px 10px; white-space:nowrap;">Gerenciar</a>
+                    </div>
+                    <div id="novo-fornecedor-campos" style="display:none; margin-top:10px; padding:12px; border:1px solid var(--borda); border-radius:16px; background: rgba(255,255,255,0.7);">
+                        <div class="field-group">
+                            <label for="novo_fornecedor_nome">Nome do novo fornecedor</label>
+                            <input type="text" id="novo_fornecedor_nome" placeholder="Ex: Nova Distribuidora Ltda.">
+                        </div>
+                        <div class="field-group">
+                            <label for="novo_fornecedor_contato">Contato (opcional)</label>
+                            <input type="text" id="novo_fornecedor_contato" placeholder="Ex: (11) 99999-0000">
+                        </div>
+                        <div class="inline-actions">
+                            <button type="button" id="btn-salvar-fornecedor" class="btn">Salvar fornecedor</button>
+                            <button type="button" id="btn-cancelar-fornecedor" class="btn btn-secondary">Cancelar</button>
+                        </div>
+                        <div id="feedback-fornecedor" class="status status-pendente" style="margin-top:8px; display:none;" role="status" aria-live="polite"></div>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label for="unidade_medida">Unidade de medida <span aria-hidden="true">*</span></label>
+                    <select id="unidade_medida" name="unidade_medida" required aria-required="true">
+                        <option value="">Selecione</option>
+                        {% for u in unidades %}
+                            <option value="{{ u }}" {% if produto and produto['unidade_medida'] == u %}selected{% endif %}>{{ u }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <label for="quantidade_atual">Quantidade atual <span aria-hidden="true">*</span></label>
+                    <input type="number" id="quantidade_atual" name="quantidade_atual" min="0" step="1" value="{{ produto['quantidade_atual'] if produto and produto['quantidade_atual'] is not none else 0 }}" required aria-required="true">
+                </div>
+
+                <div class="field-group">
+                    <label for="quantidade_minima">Quantidade mínima (alerta) <span aria-hidden="true">*</span></label>
+                    <input type="number" id="quantidade_minima" name="quantidade_minima" min="0" step="1" value="{{ produto['quantidade_minima'] if produto and produto['quantidade_minima'] is not none else 5 }}" required aria-required="true">
+                    <span class="field-help">Quando a quantidade atual for ≤ mínima, o sistema exibe alerta de reposição.</span>
+                </div>
+
+                <div class="field-group">
+                    <label for="data_validade">Data de validade</label>
+                    <input type="date" id="data_validade" name="data_validade" value="{{ produto['data_validade'] if produto and produto['data_validade'] else '' }}">
+                </div>
+
+                <div class="field-group">
+                    <label for="valor_compra">Valor de compra (R$) <span aria-hidden="true">*</span></label>
+                    <input type="number" id="valor_compra" name="valor_compra" min="0" step="0.01" value="{{ produto['valor_compra'] if produto and produto['valor_compra'] is not none else '0' }}" required aria-required="true">
+                </div>
+
+                <div class="field-group field-feedback" style="grid-column: 1 / -1;">
+                    <div id="feedback-validacao" class="status status-pendente" role="status" aria-live="polite">Preencha os campos obrigatórios.</div>
+                </div>
+
+                <div class="actions" style="grid-column: 1 / -1;">
+                    <button class="btn" type="submit">Salvar produto</button>
+                    <a class="btn btn-secondary" href="{{ url_for('listar_estoque') }}">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <script>
+        const form = document.getElementById("form-estoque");
+        const feedback = document.getElementById("feedback-validacao");
+        const campos = ["nome", "categoria_id", "fornecedor_id", "unidade_medida", "quantidade_atual", "quantidade_minima", "valor_compra"];
+
+        function validar() {
+            let msgs = [];
+            if (!document.getElementById("nome").value.trim()) msgs.push("Nome é obrigatório.");
+            if (!document.getElementById("categoria_id").value) msgs.push("Categoria é obrigatória.");
+            if (!document.getElementById("fornecedor_id").value) msgs.push("Fornecedor é obrigatório.");
+            if (!document.getElementById("unidade_medida").value) msgs.push("Unidade de medida é obrigatória.");
+            const qtd = parseInt(document.getElementById("quantidade_atual").value, 10);
+            const qtdMin = parseInt(document.getElementById("quantidade_minima").value, 10);
+            const valor = parseFloat(document.getElementById("valor_compra").value);
+            if (isNaN(qtd) || qtd < 0) msgs.push("Quantidade atual deve ser ≥ 0.");
+            if (isNaN(qtdMin) || qtdMin < 0) msgs.push("Quantidade mínima deve ser ≥ 0.");
+            if (isNaN(valor) || valor < 0) msgs.push("Valor de compra deve ser ≥ 0.");
+            if (msgs.length) {
+                feedback.textContent = msgs.join(" ");
+                feedback.className = "status status-cancelada";
+                return false;
+            }
+            if (qtd <= qtdMin) {
+                feedback.textContent = "Atenção: quantidade atual está em alerta de reposição (≤ mínima).";
+                feedback.className = "status status-pendente";
+            } else {
+                feedback.textContent = "Dados validados. Pronto para salvar.";
+                feedback.className = "status status-confirmada";
+            }
+            return true;
+        }
+
+        campos.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener("input", validar);
+                el.addEventListener("change", validar);
+                el.addEventListener("blur", validar);
+            }
+        });
+        // Bloqueia submit se select estiver em __novo__
+        form.addEventListener("submit", (e) => {
+            if (document.getElementById("fornecedor_id").value === "__novo__") {
+                e.preventDefault();
+                document.getElementById("feedback-fornecedor").style.display = "block";
+                document.getElementById("feedback-fornecedor").textContent = "Salve ou cancele o novo fornecedor antes de enviar.";
+                document.getElementById("feedback-fornecedor").className = "status status-cancelada";
+                return;
+            }
+            if (!validar()) {
+                e.preventDefault();
+            }
+        });
+        validar();
+
+        // --- Gerenciar fornecedores inline ---
+        const fornecedorSelect = document.getElementById("fornecedor_id");
+        const novoCampos = document.getElementById("novo-fornecedor-campos");
+        const nomeInput = document.getElementById("novo_fornecedor_nome");
+        const contatoInput = document.getElementById("novo_fornecedor_contato");
+        const btnSalvar = document.getElementById("btn-salvar-fornecedor");
+        const btnCancelar = document.getElementById("btn-cancelar-fornecedor");
+        const btnExcluir = document.getElementById("btn-excluir-fornecedor");
+        const feedbackForn = document.getElementById("feedback-fornecedor");
+        let anteriorFornecedor = fornecedorSelect.value;
+
+        fornecedorSelect.addEventListener("change", () => {
+            if (fornecedorSelect.value === "__novo__") {
+                novoCampos.style.display = "block";
+                nomeInput.focus();
+            } else {
+                novoCampos.style.display = "none";
+                anteriorFornecedor = fornecedorSelect.value;
+                feedbackForn.style.display = "none";
+            }
+        });
+
+        btnCancelar.addEventListener("click", () => {
+            novoCampos.style.display = "none";
+            fornecedorSelect.value = anteriorFornecedor;
+            nomeInput.value = "";
+            contatoInput.value = "";
+            feedbackForn.style.display = "none";
+            validar();
+        });
+
+        btnSalvar.addEventListener("click", async () => {
+            const nome = nomeInput.value.trim();
+            const contato = contatoInput.value.trim();
+            if (!nome) {
+                feedbackForn.style.display = "block";
+                feedbackForn.textContent = "Informe o nome do fornecedor.";
+                feedbackForn.className = "status status-cancelada";
+                return;
+            }
+            btnSalvar.disabled = true;
+            try {
+                const resp = await fetch("{{ url_for('api_estoque_fornecedores') }}", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({nome, contato})
+                });
+                const dados = await resp.json();
+                if (!resp.ok) {
+                    feedbackForn.style.display = "block";
+                    feedbackForn.textContent = dados.erro || "Erro ao criar fornecedor.";
+                    feedbackForn.className = "status status-cancelada";
+                    btnSalvar.disabled = false;
+                    return;
+                }
+                // adiciona e seleciona
+                const opt = document.createElement("option");
+                opt.value = dados.fornecedor.id;
+                opt.textContent = dados.fornecedor.nome;
+                opt.selected = true;
+                // insere antes da opção __novo__
+                const novoOpt = fornecedorSelect.querySelector('option[value="__novo__"]');
+                fornecedorSelect.insertBefore(opt, novoOpt);
+                fornecedorSelect.value = dados.fornecedor.id;
+                anteriorFornecedor = dados.fornecedor.id;
+                novoCampos.style.display = "none";
+                nomeInput.value = "";
+                contatoInput.value = "";
+                feedbackForn.style.display = "block";
+                feedbackForn.textContent = "Fornecedor criado e selecionado.";
+                feedbackForn.className = "status status-confirmada";
+                setTimeout(()=> feedbackForn.style.display="none", 2000);
+                validar();
+            } catch(e) {
+                feedbackForn.style.display = "block";
+                feedbackForn.textContent = "Erro de conexão.";
+                feedbackForn.className = "status status-cancelada";
+            }
+            btnSalvar.disabled = false;
+        });
+
+        btnExcluir.addEventListener("click", async () => {
+            const id = fornecedorSelect.value;
+            if (!id || id === "__novo__") {
+                alert("Selecione um fornecedor válido para excluir.");
+                return;
+            }
+            const nome = fornecedorSelect.options[fornecedorSelect.selectedIndex]?.textContent || "";
+            if (!confirm(`Excluir fornecedor "${nome}"? Esta ação será bloqueada se houver produtos vinculados.`)) return;
+            try {
+                const resp = await fetch(`/api/estoque/fornecedores/${id}`, {method: "DELETE"});
+                const dados = await resp.json();
+                if (!resp.ok) {
+                    alert(dados.erro || "Erro ao excluir.");
+                    return;
+                }
+                fornecedorSelect.querySelector(`option[value="${id}"]`)?.remove();
+                fornecedorSelect.value = "";
+                alert("Fornecedor excluído com sucesso.");
+                validar();
+            } catch(e) { alert("Erro de conexão."); }
+        });
+    </script>
+{% endblock %}
