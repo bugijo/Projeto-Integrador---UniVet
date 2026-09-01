@@ -11,15 +11,21 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
     <div class="app-shell">
         <header class="topbar">
-            <a href="{{ url_for('pagina_inicial') }}" class="brand">
+            <div class="topbar-leading">
+                <button class="sidebar-toggle" type="button" aria-label="Abrir menu principal" aria-controls="main-sidebar" aria-expanded="false">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+                </button>
+                <a href="{{ url_for('pagina_inicial') }}" class="brand">
                 <img src="{{ logo_url }}" alt="Logo da Clinica Veterinaria Fernanda Calixto">
                 <div>
                     <strong>UniVet</strong>
                     <span>Clínica Veterinária Fernanda Calixto</span>
                 </div>
-            </a>
+                </a>
+            </div>
 
             <div class="topbar-side">
                 <span class="welcome">
@@ -32,18 +38,50 @@
         </header>
 
         <div class="layout">
-            <aside class="sidebar">
-                <nav class="menu">
-                    <a href="{{ url_for('pagina_inicial') }}" class="{% if secao == 'pagina_inicial' %}active{% endif %}">Página inicial</a>
-                    <a href="{{ url_for('listar_tutores') }}" class="{% if secao == 'tutores' %}active{% endif %}">Tutores</a>
-                    <a href="{{ url_for('listar_pets') }}" class="{% if secao == 'pets' %}active{% endif %}">Animais</a>
-                    <a href="{{ url_for('listar_consultas') }}" class="{% if secao == 'consultas' %}active{% endif %}">Consultas</a>
-                    <a href="{{ url_for('listar_servicos_page') }}" class="{% if secao == 'configuracoes' %}active{% endif %}">Serviços</a>
-                    <a href="{{ url_for('listar_veterinarios_page') }}" class="{% if secao == 'configuracoes' %}active{% endif %}">Veterinários</a>
+            <aside class="sidebar" id="main-sidebar">
+                <nav class="menu" aria-label="Navegação principal">
+                    <span class="menu-heading">Visão geral</span>
+                    <a href="{{ url_for('pagina_inicial') }}" class="{% if secao == 'pagina_inicial' %}active{% endif %}">
+                        <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-3H4v3Zm10-12h6V4h-6v4Z" /></svg>
+                        <span>Dashboard</span>
+                    </a>
+
+                    <span class="menu-heading">Agenda</span>
+                    <a href="{{ url_for('listar_consultas') }}" class="{% if secao == 'consultas' %}active{% endif %}">
+                        <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M7 3v3m10-3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm3 8h2m2 0h2m-6 4h2m2 0h2" /></svg>
+                        <span>Consultas</span>
+                    </a>
+
+                    <span class="menu-heading">Pacientes</span>
+                    <a href="{{ url_for('listar_tutores') }}" class="{% if secao == 'tutores' %}active{% endif %}">
+                        <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1m6-9a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8-1v6m3-3h-6" /></svg>
+                        <span>Tutores</span>
+                    </a>
+                    <a href="{{ url_for('listar_pets') }}" class="{% if secao == 'pets' %}active{% endif %}">
+                        <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M8 11a3 3 0 1 0-3-3m11 3a3 3 0 1 0 3-3M9 17a3 3 0 1 1-6 0c0-2 2-3 3-3s3 1 3 3Zm12 0a3 3 0 1 1-6 0c0-2 2-3 3-3s3 1 3 3ZM12 13c-2.5 0-4 1.7-4 3.8C8 19 9.8 20 12 20s4-1 4-3.2c0-2.1-1.5-3.8-4-3.8Z" /></svg>
+                        <span>Animais</span>
+                    </a>
+
+                    <span class="menu-heading">Estoque</span>
+                    <span class="menu-link menu-link-disabled" aria-disabled="true">
+                        <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm-8 4.5 8 4.5 8-4.5M12 12v9" /></svg>
+                        <span>Em construção</span>
+                        <small>PI II</small>
+                    </span>
+
+                    <span class="menu-heading">Cadastros</span>
+                    <a href="{{ url_for('listar_servicos_page') }}" class="{% if secao == 'configuracoes' %}active{% endif %}">
+                        <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M4 6h16M4 12h16M4 18h16M8 4v4m8 2v4M8 16v4" /></svg>
+                        <span>Serviços</span>
+                    </a>
+                    <a href="{{ url_for('listar_veterinarios_page') }}" class="{% if secao == 'configuracoes' %}active{% endif %}">
+                        <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0M17 14l2 2 4-4" /></svg>
+                        <span>Veterinários</span>
+                    </a>
                 </nav>
             </aside>
 
-            <main class="content">
+            <main class="content" id="main-content" tabindex="-1">
                 {% if breadcrumbs %}
                     <nav class="breadcrumbs" aria-label="Breadcrumb">
                         {% for label, link in breadcrumbs %}
@@ -70,5 +108,6 @@
             </main>
         </div>
     </div>
+    <script src="{{ url_for('static', filename='js/navigation.js') }}" defer></script>
 </body>
 </html>
