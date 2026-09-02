@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Produtos{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div><span class="eyebrow">Estoque</span><h1>Produtos</h1><p>Cadastre os itens utilizados na rotina clínica.</p></div>
+        <a class="btn" href="{{ url_for('criar_produto') }}">Novo produto</a>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <form method="get" class="filter-bar" aria-label="Filtros de produtos">
+                <div class="field-group"><label for="busca">Buscar</label><input id="busca" name="busca" value="{{ filtros.busca }}" placeholder="Nome ou código"></div>
+                <div class="field-group"><label for="tipo">Tipo</label><select id="tipo" name="tipo"><option value="">Todos</option>{% for item in tipos_produto %}<option value="{{ item }}" {% if filtros.tipo == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+                <div class="field-group"><label for="categoria_id">Categoria</label><select id="categoria_id" name="categoria_id"><option value="">Todas</option>{% for categoria in categorias %}<option value="{{ categoria['id'] }}" {% if filtros.categoria_id == categoria['id'] %}selected{% endif %}>{{ categoria['nome'] }}</option>{% endfor %}</select></div>
+                <div class="field-group"><label for="situacao">Situação</label><select id="situacao" name="situacao"><option value="">Todas</option><option value="baixo" {% if filtros.situacao == 'baixo' %}selected{% endif %}>Abaixo do mínimo</option></select></div>
+                <div class="filter-actions"><button class="btn" type="submit">Filtrar</button><a class="btn btn-secondary" href="{{ url_for('listar_produtos_page') }}">Limpar</a></div>
+            </form>
+            <div class="table-scroll">
+                <table>
+                    <caption class="sr-only">Lista de produtos</caption>
+                    <thead><tr><th>Produto</th><th>Tipo</th><th>Categoria</th><th>Estoque</th><th>Lotes</th><th>Situação</th><th>Ações</th></tr></thead>
+                    <tbody>
+                        {% for produto in produtos %}
+                            {% set baixo = produto['estoque_total'] < produto['estoque_minimo'] and produto['estoque_minimo'] > 0 %}
+                            <tr><td><a class="table-link" href="{{ url_for('detalhar_produto', produto_id=produto['id']) }}">{{ produto['nome'] }}</a><small class="table-subtext">{{ produto['codigo'] or 'Sem código' }}</small></td><td>{{ produto['tipo'] }}</td><td>{{ produto['categoria_nome'] or 'Sem categoria' }}</td><td><strong>{{ produto['estoque_total']|round(2) }}</strong> {{ produto['unidade_medida'] }}</td><td>{{ produto['total_lotes'] }}</td><td><span class="state-badge {% if baixo %}state-critical{% else %}state-normal{% endif %}">{% if baixo %}Abaixo do mínimo{% else %}Normal{% endif %}</span></td><td><div class="inline-actions"><a class="btn btn-secondary" href="{{ url_for('detalhar_produto', produto_id=produto['id']) }}">Detalhes</a><a class="btn btn-secondary" href="{{ url_for('editar_produto', produto_id=produto['id']) }}">Editar</a><form method="post" action="{{ url_for('alternar_produto', produto_id=produto['id']) }}"><button class="btn btn-secondary" type="submit" data-confirm="Alterar o status deste produto?">{{ 'Desativar' if produto['ativo'] else 'Ativar' }}</button></form></div></td></tr>
+                        {% else %}<tr><td colspan="7" class="empty-state">Nenhum produto encontrado com os filtros informados.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}

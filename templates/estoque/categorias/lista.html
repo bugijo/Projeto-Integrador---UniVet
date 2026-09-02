@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Categorias{% endblock %}
+
+{% block content %}
+    <section class="page-header"><div><span class="eyebrow">Estoque</span><h1>Categorias</h1><p>Organize produtos para facilitar buscas e indicadores.</p></div></section>
+    <div class="split-layout">
+        <section class="card form-card"><div class="card-body"><h2>Nova categoria</h2><form method="post" class="form-grid"><div class="field-group"><label for="nome">Nome</label><input id="nome" name="nome" placeholder="Ex.: Medicamentos" required></div><div class="field-group"><label for="descricao">Descrição <span class="field-help">(opcional)</span></label><textarea id="descricao" name="descricao" class="compact-textarea" placeholder="Uso da categoria"></textarea></div><button class="btn" type="submit">Adicionar categoria</button></form></div></section>
+        <section class="card table-card"><div class="card-body"><form method="get" class="toolbar"><div class="field-group"><label for="busca">Buscar categoria</label><input id="busca" name="busca" value="{{ request.args.get('busca', '') }}" placeholder="Nome ou descrição"></div><button class="btn" type="submit">Filtrar</button></form><div class="table-scroll"><table><caption class="sr-only">Lista de categorias</caption><thead><tr><th>Categoria</th><th>Status</th><th>Ações</th></tr></thead><tbody>{% for categoria in categorias %}<tr><td><strong>{{ categoria['nome'] }}</strong><small class="table-subtext">{{ categoria['descricao'] or 'Sem descrição' }}</small></td><td><span class="state-badge {% if categoria['ativo'] %}state-normal{% else %}state-muted{% endif %}">{{ 'Ativa' if categoria['ativo'] else 'Inativa' }}</span></td><td><div class="inline-actions"><a class="btn btn-secondary" href="{{ url_for('editar_categoria', categoria_id=categoria['id']) }}">Editar</a><form method="post" action="{{ url_for('alternar_categoria', categoria_id=categoria['id']) }}"><button class="btn btn-secondary" type="submit" data-confirm="Alterar o status desta categoria?">{{ 'Desativar' if categoria['ativo'] else 'Ativar' }}</button></form></div></td></tr>{% else %}<tr><td colspan="3" class="empty-state">Nenhuma categoria cadastrada.</td></tr>{% endfor %}</tbody></table></div></div></section>
+    </div>
+{% endblock %}

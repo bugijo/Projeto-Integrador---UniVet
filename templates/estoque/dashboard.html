@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Dashboard de estoque{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <span class="eyebrow">Operação da clínica</span>
+            <h1>Dashboard de estoque</h1>
+            <p>Acompanhe saldo, validade e movimentações em um só lugar.</p>
+        </div>
+        <div class="actions">
+            <a class="btn btn-secondary" href="{{ url_for('registrar_saida_estoque') }}">Registrar saída</a>
+            <a class="btn btn-secondary" href="{{ url_for('listar_produtos_page') }}">Ver produtos</a>
+            <a class="btn" href="{{ url_for('registrar_entrada_estoque') }}">Registrar entrada</a>
+        </div>
+    </section>
+
+    <section class="grid-cards dashboard-metrics" aria-label="Indicadores do estoque">
+        <article class="card metric-card"><div class="card-body"><span class="metric-label">Produtos ativos</span><strong class="metric-value">{{ estoque.produtos }}</strong><span class="metric-context">Itens cadastrados</span></div></article>
+        <article class="card metric-card"><div class="card-body"><span class="metric-label">Unidades em estoque</span><strong class="metric-value">{{ estoque.unidades|round(2) }}</strong><span class="metric-context">Somatório dos lotes</span></div></article>
+        <article class="card metric-card metric-card-warning"><div class="card-body"><span class="metric-label">Abaixo do mínimo</span><strong class="metric-value">{{ estoque.baixo }}</strong><span class="metric-context">Requer atenção</span></div></article>
+        <article class="card metric-card metric-card-danger"><div class="card-body"><span class="metric-label">Vencendo em 30 dias</span><strong class="metric-value">{{ estoque.vencendo }}</strong><span class="metric-context">Lotes com saldo</span></div></article>
+    </section>
+
+    <div class="dashboard-columns">
+        <section class="card table-card">
+            <div class="card-body">
+                <div class="section-heading"><div><span class="eyebrow">Monitoramento</span><h2>Estoque crítico</h2></div><a class="text-link" href="{{ url_for('listar_produtos_page', situacao='baixo') }}">Ver todos</a></div>
+                <div class="table-scroll">
+                    <table>
+                        <caption class="sr-only">Produtos abaixo do estoque mínimo</caption>
+                        <thead><tr><th>Produto</th><th>Atual</th><th>Mínimo</th><th>Situação</th></tr></thead>
+                        <tbody>
+                            {% for produto in produtos_criticos %}
+                                <tr><td><a class="table-link" href="{{ url_for('detalhar_produto', produto_id=produto['id']) }}">{{ produto['nome'] }}</a><small class="table-subtext">{{ produto['tipo'] }}</small></td><td>{{ produto['estoque_total']|round(2) }} {{ produto['unidade_medida'] }}</td><td>{{ produto['estoque_minimo']|round(2) }}</td><td><span class="state-badge state-critical">Crítico</span></td></tr>
+                            {% else %}
+                                <tr><td colspan="4" class="empty-state">Nenhum produto abaixo do mínimo.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="card table-card">
+            <div class="card-body">
+                <div class="section-heading"><div><span class="eyebrow">Validade</span><h2>Próximos vencimentos</h2></div><a class="text-link" href="{{ url_for('listar_lotes_page', proximos='1') }}">Ver lotes</a></div>
+                <div class="table-scroll">
+                    <table>
+                        <caption class="sr-only">Lotes próximos do vencimento</caption>
+                        <thead><tr><th>Produto</th><th>Lote</th><th>Validade</th></tr></thead>
+                        <tbody>
+                            {% for lote in lotes_vencendo %}
+                                <tr><td>{{ lote['produto_nome'] }}</td><td>{{ lote['numero_lote'] }}</td><td><span class="state-badge state-attention">{{ lote['validade']|replace('-', '/') }}</span></td></tr>
+                            {% else %}
+                                <tr><td colspan="3" class="empty-state">Nenhum lote vencendo nos próximos 30 dias.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <div class="section-heading"><div><span class="eyebrow">Rastreabilidade</span><h2>Movimentações recentes</h2></div><a class="text-link" href="{{ url_for('listar_movimentacoes_page') }}">Ver histórico</a></div>
+            <div class="table-scroll">
+                <table>
+                    <caption class="sr-only">Movimentações recentes do estoque</caption>
+                    <thead><tr><th>Data</th><th>Produto</th><th>Tipo</th><th>Quantidade</th><th>Motivo</th><th>Usuário</th></tr></thead>
+                    <tbody>
+                        {% for item in movimentacoes_recentes %}
+                            <tr><td>{{ item['criado_em']|replace('T', ' ') }}</td><td>{{ item['produto_nome'] }}</td><td><span class="movement-badge movement-{{ item['tipo']|lower|replace('í', 'i') }}">{{ item['tipo'] }}</span></td><td>{{ item['quantidade']|round(2) }}</td><td>{{ item['motivo'] }}</td><td>{{ item['usuario_nome'] or 'Sistema' }}</td></tr>
+                        {% else %}
+                            <tr><td colspan="6" class="empty-state">Ainda não há movimentações registradas.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}

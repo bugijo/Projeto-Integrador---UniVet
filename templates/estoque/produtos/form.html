@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | {{ acao }}{% endblock %}
+
+{% block content %}
+    <section class="page-header"><div><span class="eyebrow">Estoque</span><h1>{{ acao }}</h1><p>Validade e quantidade são controladas nos lotes, não no cadastro do produto.</p></div><a class="btn btn-secondary" href="{{ url_for('listar_produtos_page') }}">Voltar</a></section>
+    <section class="card form-card"><div class="card-body"><form method="post" class="form-grid two-columns">
+        <div class="field-group"><label for="nome">Nome do produto</label><input id="nome" name="nome" value="{{ produto['nome'] if produto else '' }}" required></div>
+        <div class="field-group"><label for="codigo">Código interno <span class="field-help">(opcional)</span></label><input id="codigo" name="codigo" value="{{ produto['codigo'] if produto else '' }}" placeholder="Ex.: MED-001"></div>
+        <div class="field-group"><label for="tipo">Tipo</label><select id="tipo" name="tipo" required><option value="">Selecione</option>{% for item in tipos_produto %}<option value="{{ item }}" {% if produto and produto['tipo'] == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+        <div class="field-group"><label for="categoria_id">Categoria</label><select id="categoria_id" name="categoria_id"><option value="">Sem categoria</option>{% for categoria in categorias %}<option value="{{ categoria['id'] }}" {% if produto and produto['categoria_id'] == categoria['id'] %}selected{% endif %}>{{ categoria['nome'] }}</option>{% endfor %}</select></div>
+        <div class="field-group"><label for="unidade_medida">Unidade de medida</label><select id="unidade_medida" name="unidade_medida">{% for item in unidades %}<option value="{{ item }}" {% if produto and produto['unidade_medida'] == item %}selected{% endif %}>{{ item|capitalize }}</option>{% endfor %}</select></div>
+        <div class="field-group"><label for="estoque_minimo">Estoque mínimo</label><input id="estoque_minimo" name="estoque_minimo" type="number" min="0" step="0.01" value="{{ produto['estoque_minimo'] if produto else '0' }}" required><span class="field-help">O alerta será exibido quando o total dos lotes ficar abaixo deste valor.</span></div>
+        <div class="actions" style="grid-column: 1 / -1;"><button class="btn" type="submit">Salvar produto</button><a class="btn btn-secondary" href="{{ url_for('listar_produtos_page') }}">Cancelar</a></div>
+    </form></div></section>
+{% endblock %}
