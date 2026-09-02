@@ -16,6 +16,13 @@ O UniVet organiza a rotina da Clínica Veterinária Fernanda Calixto com foco em
 - agenda detalhada por dia
 - histórico clínico do paciente a partir da consulta
 - auditoria de alterações por registro
+- dashboard operacional de estoque
+- cadastro de produtos, categorias e fornecedores
+- controle de lotes, validade e entradas
+- saídas manuais e uso de produtos em consultas
+- rastreabilidade de movimentações, estornos e FEFO
+- alertas de estoque mínimo e vencimento
+- análise simples de consumo e sugestão transparente de reposição
 
 ## Tecnologias utilizadas
 
@@ -26,6 +33,7 @@ O UniVet organiza a rotina da Clínica Veterinária Fernanda Calixto com foco em
 - CSS3
 - Jinja2
 - unittest
+- JavaScript e SVG nativos, sem bibliotecas externas obrigatórias
 
 ## Estrutura do projeto
 
@@ -37,6 +45,10 @@ UniVet/
 |-- banco.db
 |-- tests/
 |   |-- test_app.py
+|   |-- test_estoque.py
+|-- estoque/
+|   |-- schema.py
+|   |-- services.py
 |-- .github/
 |   |-- workflows/
 |       |-- ci.yml
@@ -69,6 +81,13 @@ UniVet/
 pip install -r requirements.txt
 ```
 
+No ambiente deste projeto, também é possível preparar um ambiente isolado com `uv`:
+
+```bash
+uv venv .venv
+uv pip install --python .venv/bin/python -r requirements.txt
+```
+
 2. Crie ou atualize o banco:
 
 ```bash
@@ -97,6 +116,8 @@ http://127.0.0.1:5000
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+O projeto não depende de APIs pagas, serviços com cobrança por requisição ou bibliotecas comerciais. O protótipo utiliza Flask, SQLite, JavaScript, CSS e SVG próprios. O deploy descrito em `render.yaml` continua sujeito às limitações de persistência do SQLite em hospedagens gratuitas.
 
 ## Pipeline GitHub
 

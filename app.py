@@ -11,6 +11,28 @@ import unicodedata
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
 
+from estoque.services import (
+    EstoqueError,
+    EstoqueInsuficiente,
+    buscar_produto,
+    consumo_por_produto,
+    listar_categorias,
+    listar_fornecedores,
+    historico_consumo_diario,
+    listar_lotes,
+    listar_itens_consulta,
+    listar_movimentacoes,
+    listar_produtos,
+    relatorio_consumo,
+    registrar_entrada,
+    registrar_ajuste,
+    registrar_estorno,
+    registrar_saida_fefo,
+    registrar_uso_consulta,
+    resumo_estoque,
+    sugestao_reposicao,
+)
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE = BASE_DIR / "banco.db"
@@ -36,11 +58,11 @@ def garantir_banco_inicializado():
     connection = sqlite3.connect(DATABASE)
     try:
         tabela = connection.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'usuarios'"
-        ).fetchone()
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('usuarios', 'produtos')"
+        ).fetchall()
     finally:
         connection.close()
-    if tabela:
+    if len(tabela) == 2:
         return
     from init_db import init_db
 
@@ -451,6 +473,10 @@ def pagina_inicial():
         "pets": connection.execute("SELECT COUNT(*) FROM pets").fetchone()[0],
         "consultas": connection.execute("SELECT COUNT(*) FROM consultas").fetchone()[0],
     }
+    estoque = resumo_estoque(connection)
+    produtos_criticos = listar_produtos(connection, {"situacao": "baixo", "somente_ativos": True})[:5]
+    lotes_vencendo = listar_lotes(connection, {"proximos": True})[:5]
+    movimentacoes_recentes = listar_movimentacoes(connection, limite=5)
     connection.close()
     resumo = {status: 0 for status in STATUSS_CONSULTA}
     for consulta in consultas_hoje:
@@ -459,11 +485,440 @@ def pagina_inicial():
         "pagina_inicial.html",
         consultas_hoje=consultas_hoje,
         proximas_consultas=consultas_do_mes(datetime.now().year, datetime.now().month)[:5],
+        estoque=estoque,
+        produtos_criticos=produtos_criticos,
+        lotes_vencendo=lotes_vencendo,
+        movimentacoes_recentes=movimentacoes_recentes,
         resumo_hoje=resumo,
         totais=totais,
         secao="pagina_inicial",
         breadcrumbs=[("Página inicial", None)],
     )
+
+
+@app.route("/estoque")
+@login_obrigatorio
+def estoque_dashboard():
+    connection = get_db_connection()
+    dados = resumo_estoque(connection)
+    produtos_criticos = listar_produtos(connection, {"situacao": "baixo", "somente_ativos": True})[:10]
+    lotes_vencendo = listar_lotes(connection, {"proximos": True})[:10]
+    movimentacoes_recentes = listar_movimentacoes(connection, limite=10)
+    connection.close()
+    return render_template(
+        "estoque/dashboard.html",
+        estoque=dados,
+        produtos_criticos=produtos_criticos,
+        lotes_vencendo=lotes_vencendo,
+        movimentacoes_recentes=movimentacoes_recentes,
+        secao="estoque",
+        breadcrumbs=breadcrumbs_padrao(("Estoque", None)),
+    )
+
+
+@app.route("/estoque/produtos")
+@login_obrigatorio
+def listar_produtos_page():
+    filtros = {
+        "busca": request.args.get("busca", "").strip(),
+        "tipo": request.args.get("tipo", "").strip(),
+        "categoria_id": request.args.get("categoria_id", type=int),
+        "situacao": request.args.get("situacao", "").strip(),
+        "somente_ativos": request.args.get("inativos") != "1",
+    }
+    connection = get_db_connection()
+    produtos = listar_produtos(connection, filtros)
+    categorias = listar_categorias(connection)
+    connection.close()
+    return render_template(
+        "estoque/produtos/lista.html",
+        produtos=produtos,
+        categorias=categorias,
+        filtros=filtros,
+        tipos_produto=("Medicamento", "Vacina", "Material", "Produto"),
+        secao="estoque",
+        estoque_subsecao="produtos",
+        breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Produtos", None)),
+    )
+
+
+def _dados_form_produto(connection, produto=None):
+    return {
+        "produto": produto,
+        "categorias": listar_categorias(connection, somente_ativas=True),
+        "tipos_produto": ("Medicamento", "Vacina", "Material", "Produto"),
+        "unidades": ("unidade", "caixa", "frasco", "ampola", "kg", "litro"),
+    }
+
+
+@app.route("/estoque/produtos/novo", methods=["GET", "POST"])
+@login_obrigatorio
+def criar_produto():
+    connection = get_db_connection()
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+        codigo = request.form.get("codigo", "").strip() or None
+        tipo = request.form.get("tipo", "").strip()
+        categoria_id = request.form.get("categoria_id", type=int) or None
+        unidade = request.form.get("unidade_medida", "unidade").strip() or "unidade"
+        estoque_minimo = request.form.get("estoque_minimo", "0").strip().replace(",", ".")
+        produto_form = {"nome": nome, "codigo": codigo or "", "tipo": tipo, "categoria_id": categoria_id, "unidade_medida": unidade, "estoque_minimo": estoque_minimo}
+        try:
+            estoque_minimo = float(estoque_minimo)
+            if not nome or tipo not in ("Medicamento", "Vacina", "Material", "Produto") or estoque_minimo < 0:
+                raise ValueError
+            connection.execute(
+                "INSERT INTO produtos (nome, codigo, tipo, categoria_id, unidade_medida, estoque_minimo) VALUES (?, ?, ?, ?, ?, ?)",
+                (nome, codigo, tipo, categoria_id, unidade, estoque_minimo),
+            )
+            connection.commit()
+        except (ValueError, sqlite3.IntegrityError):
+            connection.close()
+            flash("Preencha corretamente os dados do produto. O código deve ser único.", "erro")
+            form_connection = get_db_connection()
+            dados = _dados_form_produto(form_connection, produto_form)
+            form_connection.close()
+            return render_template("estoque/produtos/form.html", acao="Novo produto", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Produtos", url_for("listar_produtos_page")), ("Novo produto", None)), **dados)
+        produto_id = connection.execute("SELECT last_insert_rowid()").fetchone()[0]
+        connection.close()
+        flash("Produto cadastrado com sucesso.", "sucesso")
+        return redirect(url_for("detalhar_produto", produto_id=produto_id))
+    dados = _dados_form_produto(connection)
+    connection.close()
+    return render_template("estoque/produtos/form.html", acao="Novo produto", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Produtos", url_for("listar_produtos_page")), ("Novo produto", None)), **dados)
+
+
+@app.route("/estoque/produtos/<int:produto_id>/editar", methods=["GET", "POST"])
+@login_obrigatorio
+def editar_produto(produto_id):
+    connection = get_db_connection()
+    produto = buscar_produto(connection, produto_id)
+    if not produto:
+        connection.close()
+        flash("Produto não encontrado.", "erro")
+        return redirect(url_for("listar_produtos_page"))
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+        codigo = request.form.get("codigo", "").strip() or None
+        tipo = request.form.get("tipo", "").strip()
+        categoria_id = request.form.get("categoria_id", type=int) or None
+        unidade = request.form.get("unidade_medida", "unidade").strip() or "unidade"
+        estoque_minimo = request.form.get("estoque_minimo", "0").strip().replace(",", ".")
+        produto_form = {"id": produto_id, "nome": nome, "codigo": codigo or "", "tipo": tipo, "categoria_id": categoria_id, "unidade_medida": unidade, "estoque_minimo": estoque_minimo}
+        try:
+            estoque_minimo = float(estoque_minimo)
+            if not nome or tipo not in ("Medicamento", "Vacina", "Material", "Produto") or estoque_minimo < 0:
+                raise ValueError
+            connection.execute(
+                "UPDATE produtos SET nome = ?, codigo = ?, tipo = ?, categoria_id = ?, unidade_medida = ?, estoque_minimo = ? WHERE id = ?",
+                (nome, codigo, tipo, categoria_id, unidade, estoque_minimo, produto_id),
+            )
+            connection.commit()
+        except (ValueError, sqlite3.IntegrityError):
+            connection.close()
+            flash("Preencha corretamente os dados do produto. O código deve ser único.", "erro")
+            form_connection = get_db_connection()
+            dados = _dados_form_produto(form_connection, produto_form)
+            form_connection.close()
+            return render_template("estoque/produtos/form.html", acao="Editar produto", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Produtos", url_for("listar_produtos_page")), ("Editar produto", None)), **dados)
+        connection.close()
+        flash("Produto atualizado com sucesso.", "sucesso")
+        return redirect(url_for("detalhar_produto", produto_id=produto_id))
+    dados = _dados_form_produto(connection, produto)
+    connection.close()
+    return render_template("estoque/produtos/form.html", acao="Editar produto", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Produtos", url_for("listar_produtos_page")), ("Editar produto", None)), **dados)
+
+
+@app.route("/estoque/produtos/<int:produto_id>")
+@login_obrigatorio
+def detalhar_produto(produto_id):
+    connection = get_db_connection()
+    produto = buscar_produto(connection, produto_id)
+    if not produto:
+        connection.close()
+        flash("Produto não encontrado.", "erro")
+        return redirect(url_for("listar_produtos_page"))
+    lotes = listar_lotes(connection, {"produto_id": produto_id})
+    movimentacoes = listar_movimentacoes(connection, {"produto_id": produto_id}, limite=20)
+    consumo = consumo_por_produto(connection, produto_id)
+    consumo_diario = historico_consumo_diario(connection, produto_id)
+    reposicao = sugestao_reposicao(produto, consumo)
+    connection.close()
+    dias_estimados = (float(produto["estoque_total"]) / consumo["medio_diario"]) if consumo["medio_diario"] else None
+    return render_template(
+        "estoque/produtos/detalhe.html",
+        produto=produto,
+        lotes=lotes,
+        movimentacoes=movimentacoes,
+        consumo=consumo,
+        consumo_diario=consumo_diario,
+        dias_estimados=dias_estimados,
+        reposicao=reposicao,
+        secao="estoque",
+        breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Produtos", url_for("listar_produtos_page")), (produto["nome"], None)),
+    )
+
+
+@app.route("/estoque/produtos/<int:produto_id>/alternar", methods=["POST"])
+@login_obrigatorio
+def alternar_produto(produto_id):
+    connection = get_db_connection()
+    connection.execute("UPDATE produtos SET ativo = CASE ativo WHEN 1 THEN 0 ELSE 1 END WHERE id = ?", (produto_id,))
+    connection.commit()
+    connection.close()
+    flash("Status do produto atualizado.", "sucesso")
+    return redirect(url_for("listar_produtos_page"))
+
+
+@app.route("/estoque/categorias", methods=["GET", "POST"])
+@login_obrigatorio
+def listar_categorias_page():
+    connection = get_db_connection()
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+        descricao = request.form.get("descricao", "").strip()
+        try:
+            if not nome:
+                raise ValueError
+            connection.execute("INSERT INTO categorias (nome, descricao) VALUES (?, ?)", (nome, descricao))
+            connection.commit()
+            flash("Categoria cadastrada com sucesso.", "sucesso")
+        except (ValueError, sqlite3.IntegrityError):
+            connection.rollback()
+            flash("Informe um nome de categoria único.", "erro")
+        connection.close()
+        return redirect(url_for("listar_categorias_page"))
+    categorias = listar_categorias(connection, busca=request.args.get("busca", "").strip())
+    connection.close()
+    return render_template("estoque/categorias/lista.html", categorias=categorias, secao="estoque", estoque_subsecao="categorias", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Categorias", None)))
+
+
+@app.route("/estoque/categorias/<int:categoria_id>/editar", methods=["GET", "POST"])
+@login_obrigatorio
+def editar_categoria(categoria_id):
+    connection = get_db_connection()
+    categoria = connection.execute("SELECT * FROM categorias WHERE id = ?", (categoria_id,)).fetchone()
+    if not categoria:
+        connection.close()
+        flash("Categoria não encontrada.", "erro")
+        return redirect(url_for("listar_categorias_page"))
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+        descricao = request.form.get("descricao", "").strip()
+        try:
+            if not nome:
+                raise ValueError
+            connection.execute("UPDATE categorias SET nome = ?, descricao = ? WHERE id = ?", (nome, descricao, categoria_id))
+            connection.commit()
+        except (ValueError, sqlite3.IntegrityError):
+            connection.close()
+            flash("Informe um nome de categoria único.", "erro")
+            return render_template("estoque/categorias/form.html", categoria={"id": categoria_id, "nome": nome, "descricao": descricao}, acao="Editar categoria", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Categorias", url_for("listar_categorias_page")), ("Editar categoria", None)))
+        connection.close()
+        flash("Categoria atualizada com sucesso.", "sucesso")
+        return redirect(url_for("listar_categorias_page"))
+    connection.close()
+    return render_template("estoque/categorias/form.html", categoria=categoria, acao="Editar categoria", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Categorias", url_for("listar_categorias_page")), ("Editar categoria", None)))
+
+
+@app.route("/estoque/categorias/<int:categoria_id>/alternar", methods=["POST"])
+@login_obrigatorio
+def alternar_categoria(categoria_id):
+    connection = get_db_connection()
+    connection.execute("UPDATE categorias SET ativo = CASE ativo WHEN 1 THEN 0 ELSE 1 END WHERE id = ?", (categoria_id,))
+    connection.commit()
+    connection.close()
+    flash("Status da categoria atualizado.", "sucesso")
+    return redirect(url_for("listar_categorias_page"))
+
+
+@app.route("/estoque/fornecedores", methods=["GET", "POST"])
+@login_obrigatorio
+def listar_fornecedores_page():
+    connection = get_db_connection()
+    if request.method == "POST":
+        dados = tuple(request.form.get(campo, "").strip() for campo in ("nome", "documento", "telefone", "email", "endereco"))
+        try:
+            if not dados[0]:
+                raise ValueError
+            connection.execute("INSERT INTO fornecedores (nome, documento, telefone, email, endereco) VALUES (?, ?, ?, ?, ?)", dados)
+            connection.commit()
+            flash("Fornecedor cadastrado com sucesso.", "sucesso")
+        except (ValueError, sqlite3.IntegrityError):
+            connection.rollback()
+            flash("Informe um nome de fornecedor único.", "erro")
+        connection.close()
+        return redirect(url_for("listar_fornecedores_page"))
+    fornecedores = listar_fornecedores(connection, busca=request.args.get("busca", "").strip())
+    connection.close()
+    return render_template("estoque/fornecedores/lista.html", fornecedores=fornecedores, secao="estoque", estoque_subsecao="fornecedores", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Fornecedores", None)))
+
+
+@app.route("/estoque/fornecedores/<int:fornecedor_id>/editar", methods=["GET", "POST"])
+@login_obrigatorio
+def editar_fornecedor(fornecedor_id):
+    connection = get_db_connection()
+    fornecedor = connection.execute("SELECT * FROM fornecedores WHERE id = ?", (fornecedor_id,)).fetchone()
+    if not fornecedor:
+        connection.close()
+        flash("Fornecedor não encontrado.", "erro")
+        return redirect(url_for("listar_fornecedores_page"))
+    if request.method == "POST":
+        dados = tuple(request.form.get(campo, "").strip() for campo in ("nome", "documento", "telefone", "email", "endereco"))
+        try:
+            if not dados[0]:
+                raise ValueError
+            connection.execute("UPDATE fornecedores SET nome = ?, documento = ?, telefone = ?, email = ?, endereco = ? WHERE id = ?", (*dados, fornecedor_id))
+            connection.commit()
+        except (ValueError, sqlite3.IntegrityError):
+            connection.close()
+            flash("Informe um nome de fornecedor único.", "erro")
+            return render_template("estoque/fornecedores/form.html", fornecedor=dict(zip(("nome", "documento", "telefone", "email", "endereco"), dados)), acao="Editar fornecedor", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Fornecedores", url_for("listar_fornecedores_page")), ("Editar fornecedor", None)))
+        connection.close()
+        flash("Fornecedor atualizado com sucesso.", "sucesso")
+        return redirect(url_for("listar_fornecedores_page"))
+    connection.close()
+    return render_template("estoque/fornecedores/form.html", fornecedor=fornecedor, acao="Editar fornecedor", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Fornecedores", url_for("listar_fornecedores_page")), ("Editar fornecedor", None)))
+
+
+@app.route("/estoque/fornecedores/<int:fornecedor_id>/alternar", methods=["POST"])
+@login_obrigatorio
+def alternar_fornecedor(fornecedor_id):
+    connection = get_db_connection()
+    connection.execute("UPDATE fornecedores SET ativo = CASE ativo WHEN 1 THEN 0 ELSE 1 END WHERE id = ?", (fornecedor_id,))
+    connection.commit()
+    connection.close()
+    flash("Status do fornecedor atualizado.", "sucesso")
+    return redirect(url_for("listar_fornecedores_page"))
+
+
+@app.route("/estoque/lotes/entrada", methods=["GET", "POST"])
+@login_obrigatorio
+def registrar_entrada_estoque():
+    connection = get_db_connection()
+    produtos = listar_produtos(connection, {"somente_ativos": True})
+    fornecedores = listar_fornecedores(connection, somente_ativos=True)
+    if request.method == "POST":
+        try:
+            lote_id, _ = registrar_entrada(
+                connection,
+                request.form.get("produto_id", type=int),
+                request.form.get("fornecedor_id", type=int),
+                request.form.get("numero_lote", ""),
+                request.form.get("quantidade", ""),
+                request.form.get("validade", ""),
+                request.form.get("valor_compra_unitario", ""),
+                session.get("usuario_id"),
+                request.form.get("motivo", "Compra"),
+            )
+        except (EstoqueError, sqlite3.IntegrityError) as erro:
+            connection.close()
+            flash(str(erro) or "Não foi possível registrar a entrada.", "erro")
+            return render_template("estoque/lotes/entrada.html", produtos=produtos, fornecedores=fornecedores, dados=request.form, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Entrada de lote", None)))
+        connection.close()
+        flash("Entrada registrada e lote criado com sucesso.", "sucesso")
+        return redirect(url_for("listar_lotes_page"))
+    connection.close()
+    return render_template("estoque/lotes/entrada.html", produtos=produtos, fornecedores=fornecedores, dados={}, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Entrada de lote", None)))
+
+
+@app.route("/estoque/saidas", methods=["GET", "POST"])
+@login_obrigatorio
+def registrar_saida_estoque():
+    connection = get_db_connection()
+    produtos = listar_produtos(connection, {"somente_ativos": True})
+    if request.method == "POST":
+        try:
+            alocacoes = registrar_saida_fefo(
+                connection,
+                request.form.get("produto_id", type=int),
+                request.form.get("quantidade", ""),
+                session.get("usuario_id"),
+                request.form.get("motivo", "Saída manual"),
+            )
+        except (EstoqueError, EstoqueInsuficiente, sqlite3.IntegrityError) as erro:
+            connection.close()
+            flash(str(erro) or "Não foi possível registrar a saída.", "erro")
+            return render_template("estoque/saidas/form.html", produtos=produtos, dados=request.form, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Saída manual", None)))
+        connection.close()
+        lotes = ", ".join(f"{item['numero_lote']} ({item['quantidade']:g})" for item in alocacoes)
+        flash(f"Saída registrada por FEFO. Lotes utilizados: {lotes}.", "sucesso")
+        return redirect(url_for("listar_movimentacoes_page"))
+    connection.close()
+    return render_template("estoque/saidas/form.html", produtos=produtos, dados={}, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Saída manual", None)))
+
+
+@app.route("/estoque/lotes")
+@login_obrigatorio
+def listar_lotes_page():
+    connection = get_db_connection()
+    filtros = {"produto_id": request.args.get("produto_id", type=int), "fornecedor_id": request.args.get("fornecedor_id", type=int), "proximos": request.args.get("proximos") == "1"}
+    lotes = listar_lotes(connection, filtros)
+    produtos = listar_produtos(connection, {"somente_ativos": True})
+    fornecedores = listar_fornecedores(connection, somente_ativos=True)
+    connection.close()
+    return render_template("estoque/lotes/lista.html", lotes=lotes, produtos=produtos, fornecedores=fornecedores, filtros=filtros, secao="estoque", estoque_subsecao="lotes", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Lotes", None)))
+
+
+@app.route("/estoque/lotes/<int:lote_id>/ajuste", methods=["GET", "POST"])
+@login_obrigatorio
+def ajustar_lote(lote_id):
+    connection = get_db_connection()
+    lote = connection.execute(
+        "SELECT lotes.*, produtos.nome AS produto_nome, produtos.unidade_medida FROM lotes INNER JOIN produtos ON produtos.id = lotes.produto_id WHERE lotes.id = ?",
+        (lote_id,),
+    ).fetchone()
+    if not lote:
+        connection.close()
+        flash("Lote não encontrado.", "erro")
+        return redirect(url_for("listar_lotes_page"))
+    if request.method == "POST":
+        try:
+            registrar_ajuste(connection, lote_id, request.form.get("nova_quantidade", ""), session.get("usuario_id"), request.form.get("motivo", ""))
+            flash("Ajuste registrado com sucesso.", "sucesso")
+        except (EstoqueError, sqlite3.IntegrityError) as erro:
+            flash(str(erro) or "Não foi possível registrar o ajuste.", "erro")
+        finally:
+            connection.close()
+        return redirect(url_for("listar_lotes_page", produto_id=lote["produto_id"]))
+    connection.close()
+    return render_template("estoque/lotes/ajuste.html", lote=lote, dados={}, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Lotes", url_for("listar_lotes_page")), ("Ajuste", None)))
+
+
+@app.route("/estoque/movimentacoes")
+@login_obrigatorio
+def listar_movimentacoes_page():
+    connection = get_db_connection()
+    filtros = {"produto_id": request.args.get("produto_id", type=int), "tipo": request.args.get("tipo", "").strip(), "data_inicio": request.args.get("data_inicio", "").strip(), "data_fim": request.args.get("data_fim", "").strip()}
+    movimentacoes = listar_movimentacoes(connection, filtros)
+    produtos = listar_produtos(connection, {"somente_ativos": True})
+    connection.close()
+    return render_template("estoque/movimentacoes/lista.html", movimentacoes=movimentacoes, produtos=produtos, filtros=filtros, tipos_movimentacao=("Entrada", "Saída", "Ajuste", "Estorno"), secao="estoque", estoque_subsecao="movimentacoes", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Movimentações", None)))
+
+
+@app.route("/estoque/relatorios")
+@login_obrigatorio
+def relatorios_estoque():
+    dias = request.args.get("dias", type=int) or 30
+    dias = min(max(dias, 7), 365)
+    connection = get_db_connection()
+    relatorio = relatorio_consumo(connection, dias)
+    connection.close()
+    return render_template("estoque/relatorios.html", relatorio=relatorio, dias=dias, secao="estoque", estoque_subsecao="relatorios", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Relatórios", None)))
+
+
+@app.route("/estoque/movimentacoes/<int:movimentacao_id>/estornar", methods=["POST"])
+@login_obrigatorio
+def estornar_movimentacao(movimentacao_id):
+    connection = get_db_connection()
+    try:
+        registrar_estorno(connection, movimentacao_id, session.get("usuario_id"))
+        flash("Movimentação estornada com sucesso.", "sucesso")
+    except EstoqueError as erro:
+        flash(str(erro), "erro")
+    finally:
+        connection.close()
+    return redirect(url_for("listar_movimentacoes_page"))
 
 
 @app.route("/api/racas")
@@ -938,6 +1393,23 @@ def editar_consulta(consulta_id):
     return render_template("consultas/form.html", consulta=consulta, acao="Editar Consulta", secao="consultas", breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Editar consulta", None)), **contexto)
 
 
+@app.route("/consultas/<int:consulta_id>/produtos", methods=["POST"])
+@login_obrigatorio
+def adicionar_produto_consulta(consulta_id):
+    produto_id = request.form.get("produto_id", type=int)
+    quantidade = request.form.get("quantidade", "")
+    motivo = request.form.get("motivo", "Uso em atendimento").strip()
+    connection = get_db_connection()
+    try:
+        registrar_uso_consulta(connection, consulta_id, produto_id, quantidade, session.get("usuario_id"), motivo)
+        flash("Produto utilizado registrado e estoque atualizado por FEFO.", "sucesso")
+    except (EstoqueError, EstoqueInsuficiente, sqlite3.IntegrityError) as erro:
+        flash(str(erro) or "Não foi possível registrar o produto utilizado.", "erro")
+    finally:
+        connection.close()
+    return redirect(url_for("visualizar_historico", entidade="consultas", registro_id=consulta_id))
+
+
 @app.route("/consultas/<int:consulta_id>/excluir", methods=["POST"])
 @login_obrigatorio
 def excluir_consulta(consulta_id):
@@ -983,11 +1455,17 @@ def visualizar_historico(entidade, registro_id):
         if not consulta:
             flash("Consulta não encontrada.", "erro")
             return redirect(url_for("listar_consultas"))
+        connection = get_db_connection()
+        itens = listar_itens_consulta(connection, registro_id)
+        produtos_estoque = listar_produtos(connection, {"somente_ativos": True})
+        connection.close()
         return render_template(
             "consultas/historico.html",
             consulta=consulta,
             historico_clinico=historico_clinico_pet(consulta["pet_id"]),
             auditoria=obter_historico(entidade, registro_id),
+            itens_consulta=itens,
+            produtos_estoque=produtos_estoque,
             secao="consultas",
             breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Histórico clínico", None)),
         )
@@ -1004,7 +1482,7 @@ def visualizar_historico(entidade, registro_id):
         titulo=titulos.get(entidade, "Histórico"),
         entidade=entidade,
         registro_id=registro_id,
-        secao=entidade if entidade in ("tutores", "pets", "consultas") else "configuracoes",
+        secao=entidade if entidade in ("tutores", "pets", "consultas", "servicos", "veterinarios") else "configuracoes",
         breadcrumbs=breadcrumbs_padrao((titulos.get(entidade, "Histórico"), None)),
     )
 
@@ -1012,13 +1490,13 @@ def visualizar_historico(entidade, registro_id):
 @app.route("/servicos")
 @login_obrigatorio
 def listar_servicos_page():
-    return render_template("servicos/lista.html", servicos=listar_servicos(), secao="configuracoes", breadcrumbs=breadcrumbs_padrao(("Serviços", None)))
+    return render_template("servicos/lista.html", servicos=listar_servicos(), secao="servicos", breadcrumbs=breadcrumbs_padrao(("Serviços", None)))
 
 
 @app.route("/veterinarios")
 @login_obrigatorio
 def listar_veterinarios_page():
-    return render_template("veterinarios/lista.html", veterinarios=listar_veterinarios(), secao="configuracoes", breadcrumbs=breadcrumbs_padrao(("Veterinários", None)))
+    return render_template("veterinarios/lista.html", veterinarios=listar_veterinarios(), secao="veterinarios", breadcrumbs=breadcrumbs_padrao(("Veterinários", None)))
 
 
 @app.route("/servicos/<int:servico_id>/editar", methods=["GET", "POST"])
@@ -1036,7 +1514,7 @@ def editar_servico(servico_id):
         dados = {"id": servico_id, "nome": nome, "duracao_minutos": duracao}
         if not nome or not duracao or duracao < 20:
             flash("Informe um nome e duração mínima de 20 minutos.", "erro")
-            return render_template("servicos/form.html", servico=dados, acao="Editar serviço", secao="configuracoes", breadcrumbs=breadcrumbs_padrao(("Serviços", url_for("listar_servicos_page")), ("Editar serviço", None)))
+            return render_template("servicos/form.html", servico=dados, acao="Editar serviço", secao="servicos", breadcrumbs=breadcrumbs_padrao(("Serviços", url_for("listar_servicos_page")), ("Editar serviço", None)))
         connection = get_db_connection()
         original = connection.execute("SELECT * FROM servicos WHERE id = ?", (servico_id,)).fetchone()
         connection.execute("UPDATE servicos SET nome = ?, duracao_minutos = ? WHERE id = ?", (nome, duracao, servico_id))
@@ -1046,7 +1524,7 @@ def editar_servico(servico_id):
         registrar_historico("servicos", servico_id, "editado", {"antes": serializar_row(original), "depois": dados})
         flash("Serviço atualizado com sucesso.", "sucesso")
         return redirect(url_for("listar_servicos_page"))
-    return render_template("servicos/form.html", servico=servico, acao="Editar serviço", secao="configuracoes", breadcrumbs=breadcrumbs_padrao(("Serviços", url_for("listar_servicos_page")), ("Editar serviço", None)))
+    return render_template("servicos/form.html", servico=servico, acao="Editar serviço", secao="servicos", breadcrumbs=breadcrumbs_padrao(("Serviços", url_for("listar_servicos_page")), ("Editar serviço", None)))
 
 
 @app.route("/servicos/<int:servico_id>/excluir", methods=["POST"])
@@ -1083,7 +1561,7 @@ def editar_veterinario(veterinario_id):
         dados = {"id": veterinario_id, "nome": nome}
         if not nome:
             flash("Informe o nome do veterinário.", "erro")
-            return render_template("veterinarios/form.html", veterinario=dados, acao="Editar veterinário", secao="configuracoes", breadcrumbs=breadcrumbs_padrao(("Veterinários", url_for("listar_veterinarios_page")), ("Editar veterinário", None)))
+            return render_template("veterinarios/form.html", veterinario=dados, acao="Editar veterinário", secao="veterinarios", breadcrumbs=breadcrumbs_padrao(("Veterinários", url_for("listar_veterinarios_page")), ("Editar veterinário", None)))
         connection = get_db_connection()
         original = connection.execute("SELECT * FROM veterinarios WHERE id = ?", (veterinario_id,)).fetchone()
         connection.execute("UPDATE veterinarios SET nome = ? WHERE id = ?", (nome, veterinario_id))
@@ -1093,7 +1571,7 @@ def editar_veterinario(veterinario_id):
         registrar_historico("veterinarios", veterinario_id, "editado", {"antes": serializar_row(original), "depois": dados})
         flash("Veterinário atualizado com sucesso.", "sucesso")
         return redirect(url_for("listar_veterinarios_page"))
-    return render_template("veterinarios/form.html", veterinario=veterinario, acao="Editar veterinário", secao="configuracoes", breadcrumbs=breadcrumbs_padrao(("Veterinários", url_for("listar_veterinarios_page")), ("Editar veterinário", None)))
+    return render_template("veterinarios/form.html", veterinario=veterinario, acao="Editar veterinário", secao="veterinarios", breadcrumbs=breadcrumbs_padrao(("Veterinários", url_for("listar_veterinarios_page")), ("Editar veterinário", None)))
 
 
 @app.route("/veterinarios/<int:veterinario_id>/excluir", methods=["POST"])

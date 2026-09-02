@@ -37,6 +37,28 @@
 
     <section class="card table-card">
         <div class="card-body">
+            <div class="section-heading">
+                <div><span class="eyebrow">Estoque integrado</span><h2>Produtos utilizados no atendimento</h2></div>
+                <span class="field-help">A baixa segue o lote com validade mais próxima.</span>
+            </div>
+            <form method="post" action="{{ url_for('adicionar_produto_consulta', consulta_id=consulta['id']) }}" class="filter-bar">
+                <div class="field-group"><label for="produto_id">Produto</label><select id="produto_id" name="produto_id" required><option value="">Selecione um produto</option>{% for produto in produtos_estoque %}<option value="{{ produto['id'] }}">{{ produto['nome'] }} · {{ produto['estoque_total']|round(2) }} {{ produto['unidade_medida'] }}</option>{% endfor %}</select></div>
+                <div class="field-group"><label for="quantidade">Quantidade</label><input id="quantidade" name="quantidade" type="number" min="0.01" step="0.01" required></div>
+                <div class="field-group"><label for="motivo">Motivo</label><input id="motivo" name="motivo" value="Uso em atendimento" required></div>
+                <div class="filter-actions"><button class="btn" type="submit">Adicionar e baixar</button></div>
+            </form>
+            <div class="table-scroll">
+                <table>
+                    <caption class="sr-only">Produtos utilizados nesta consulta</caption>
+                    <thead><tr><th>Produto</th><th>Lote</th><th>Quantidade</th><th>Movimentação</th><th>Data</th></tr></thead>
+                    <tbody>{% for item in itens_consulta %}<tr><td>{{ item['produto_nome'] }}</td><td>{{ item['numero_lote'] }}</td><td>{{ item['quantidade']|round(2) }} {{ item['unidade_medida'] }}</td><td><span class="movement-badge movement-saída">Saída</span></td><td>{{ item['criado_em']|replace('T', ' ') }}</td></tr>{% else %}<tr><td colspan="5" class="empty-state">Nenhum produto foi registrado nesta consulta.</td></tr>{% endfor %}</tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="card table-card">
+        <div class="card-body">
             <h2>Linha do tempo do paciente</h2>
             <div class="table-scroll">
                 <table>

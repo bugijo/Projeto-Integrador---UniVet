@@ -4,6 +4,8 @@ import sqlite3
 
 from werkzeug.security import generate_password_hash
 
+from estoque.schema import criar_tabelas_estoque
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE = BASE_DIR / "banco.db"
@@ -172,6 +174,8 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_pets_tutor ON pets (tutor_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_consultas_pet ON consultas (pet_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_consultas_veterinario_periodo ON consultas (veterinario_id, data_hora, data_fim)")
+
+    criar_tabelas_estoque(connection)
 
     cursor.executescript(
         """
