@@ -940,9 +940,14 @@ def api_disponibilidade():
     veterinario_id = request.args.get("veterinario_id", type=int)
     consulta_id = request.args.get("consulta_id", type=int)
     if not data_hora or not servico_id or not tipo_atendimento or not veterinario_id:
-        return jsonify({"disponivel": False, "mensagem": "Preencha data, serviço, tipo de atendimento e veterinário."})
+        return jsonify({"disponivel": False, "mensagem": "Preencha data, serviço, tipo de atendimento e veterinário."}), 400
     duracao, _ = calcular_duracao_total(servico_id, tipo_atendimento)
-    inicio_dt = parse_datetime_iso(data_hora)
+    if not duracao:
+        return jsonify({"disponivel": False, "mensagem": "O serviço informado não foi encontrado."}), 400
+    try:
+        inicio_dt = parse_datetime_iso(data_hora)
+    except ValueError:
+        return jsonify({"disponivel": False, "mensagem": "Informe uma data e hora válidas no formato solicitado."}), 400
     connection = get_db_connection()
     disponivel, sugestoes = verificar_disponibilidade(connection, veterinario_id, inicio_dt, duracao, consulta_id)
     connection.close()
@@ -1259,7 +1264,10 @@ def salvar_consulta(formulario, consulta_id=None):
     if not data_hora or not pet_id or not servico_id or not veterinario_id or tipo_atendimento not in TIPOS_ATENDIMENTO or confirmacao_status not in STATUSS_CONFIRMACAO or status not in STATUSS_CONSULTA:
         return False, "Preencha corretamente os campos obrigatórios da consulta.", consulta, []
     duracao, servico = calcular_duracao_total(servico_id, tipo_atendimento)
-    inicio_dt = parse_datetime_iso(data_hora)
+    try:
+        inicio_dt = parse_datetime_iso(data_hora)
+    except ValueError:
+        return False, "Informe uma data e hora válidas para a consulta.", consulta, []
     fim_dt = inicio_dt + timedelta(minutes=duracao)
     connection = get_db_connection()
     disponivel, sugestoes = verificar_disponibilidade(connection, veterinario_id, inicio_dt, duracao, consulta_id)
@@ -1341,6 +1349,9 @@ def listar_consultas():
     hoje = datetime.now()
     ano = request.args.get("ano", type=int) or hoje.year
     mes = request.args.get("mes", type=int) or hoje.month
+    if not 1900 <= ano <= 2100 or not 1 <= mes <= 12:
+        flash("O período informado não é válido. Exibindo o mês atual.", "erro")
+        ano, mes = hoje.year, hoje.month
     ano_anterior, mes_anterior_valor = mes_anterior(ano, mes)
     ano_proximo, mes_proximo_valor = proximo_mes(ano, mes)
     return render_template(
@@ -1428,10 +1439,19 @@ def excluir_consulta(consulta_id):
 @login_obrigatorio
 def agenda_do_dia(data_iso):
     hora = request.args.get("hora", "").strip()
+    try:
+        datetime.strptime(data_iso, "%Y-%m-%d")
+    except ValueError:
+        flash("A data informada não é válida.", "erro")
+        return redirect(url_for("listar_consultas"))
     consultas = consultas_do_dia(data_iso)
     detalhes = []
     if hora:
-        momento = datetime.strptime(f"{data_iso}T{hora}", "%Y-%m-%dT%H:%M")
+        try:
+            momento = datetime.strptime(f"{data_iso}T{hora}", "%Y-%m-%dT%H:%M")
+        except ValueError:
+            flash("O horário informado não é válido.", "erro")
+            return redirect(url_for("agenda_do_dia", data_iso=data_iso))
         for consulta in consultas:
             if parse_datetime_iso(consulta["data_hora"]) <= momento < parse_datetime_iso(consulta["data_fim"]):
                 detalhes.append(consulta)

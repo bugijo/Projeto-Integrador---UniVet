@@ -191,6 +191,37 @@ class UniVetAppTests(unittest.TestCase):
         self.assertIn("Retorno sem sinais de inflamação.", texto)
         self.assertIn("Boa resposta ao tratamento.", texto)
 
+    def test_api_disponibilidade_rejeita_data_invalida_sem_erro_500(self):
+        self._login("admin", "123456")
+        resposta = self.client.get(
+            "/api/disponibilidade?data_hora=invalida&servico_id=1&tipo_atendimento=Presencial&veterinario_id=1"
+        )
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn("data e hora válidas", resposta.get_json()["mensagem"])
+
+    def test_consultas_rejeita_mes_invalido_sem_erro_500(self):
+        self._login("admin", "123456")
+        resposta = self.client.get("/consultas?ano=2026&mes=13", follow_redirects=True)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("período informado não é válido", resposta.get_data(as_text=True))
+
+    def test_criacao_consulta_rejeita_data_invalida_sem_erro_500(self):
+        self._login("admin", "123456")
+        resposta = self.client.post(
+            "/consultas/nova",
+            data={
+                "data_hora": "invalida",
+                "pet_id": self._id_pet(),
+                "servico_id": self._id_servico(),
+                "veterinario_id": self._id_veterinario("Dra. Fernanda Calixto"),
+                "tipo_atendimento": "Presencial",
+                "status": "Agendada",
+                "confirmacao_status": "Pendente",
+            },
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("data e hora válidas", resposta.get_data(as_text=True))
+
 
 if __name__ == "__main__":
     unittest.main()

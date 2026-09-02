@@ -65,6 +65,18 @@ USUARIOS_PADRAO = [
     ("fernanda.calixto", "Dra. Fernanda Calixto", "veterinaria", "Fer123"),
 ]
 
+CATEGORIAS_ESTOQUE_DEMO = [
+    ("Medicamentos", "Medicamentos de uso clínico"),
+    ("Vacinas", "Vacinas e imunizantes"),
+    ("Materiais hospitalares", "Materiais de apoio aos atendimentos"),
+    ("Higiene", "Itens de higiene e limpeza"),
+]
+
+FORNECEDORES_ESTOQUE_DEMO = [
+    ("Distribuidora Vet Saúde", "00.000.000/0001-00", "(11) 0000-0001", "contato@vet-saude.example", "Rua da Clínica, 100"),
+    ("Laboratório Animal Demo", "11.111.111/0001-11", "(11) 0000-0002", "atendimento@lab-animal.example", "Avenida dos Bichos, 200"),
+]
+
 
 def garantir_coluna(cursor, tabela, coluna, definicao):
     colunas = cursor.execute(f"PRAGMA table_info({tabela})").fetchall()
@@ -270,6 +282,7 @@ def init_db():
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_consulta_inicio_vet ON consultas (veterinario_id, data_hora)")
 
     seed_dados_ficticios(cursor, especies_map)
+    seed_estoque_demo(cursor)
 
     connection.commit()
     connection.close()
@@ -362,6 +375,95 @@ def seed_dados_ficticios(cursor, especies_map):
                 servico_nome, "Presencial", duracao, obs, status, confirmacao,
             ),
         )
+
+
+def seed_estoque_demo(cursor):
+    """Garante um cenário fictício de estoque para apresentações acadêmicas."""
+    for nome, descricao in CATEGORIAS_ESTOQUE_DEMO:
+        cursor.execute("INSERT OR IGNORE INTO categorias (nome, descricao) VALUES (?, ?)", (nome, descricao))
+    categorias = {row[0]: row[1] for row in cursor.execute("SELECT nome, id FROM categorias").fetchall()}
+
+    for fornecedor in FORNECEDORES_ESTOQUE_DEMO:
+        cursor.execute(
+            "INSERT OR IGNORE INTO fornecedores (nome, documento, telefone, email, endereco) VALUES (?, ?, ?, ?, ?)",
+            fornecedor,
+        )
+    fornecedores = {row[0]: row[1] for row in cursor.execute("SELECT nome, id FROM fornecedores").fetchall()}
+
+    produtos = [
+        ("Vacina Antirrábica", "VAC-001", "Vacina", categorias["Vacinas"], "frasco", 10, "Laboratório Animal Demo"),
+        ("Dipirona", "MED-001", "Medicamento", categorias["Medicamentos"], "frasco", 10, "Distribuidora Vet Saúde"),
+        ("Amoxicilina", "MED-002", "Medicamento", categorias["Medicamentos"], "caixa", 12, "Distribuidora Vet Saúde"),
+        ("Soro Fisiológico", "MAT-001", "Material", categorias["Materiais hospitalares"], "frasco", 8, "Distribuidora Vet Saúde"),
+        ("Luvas descartáveis", "MAT-002", "Material", categorias["Materiais hospitalares"], "caixa", 20, "Distribuidora Vet Saúde"),
+    ]
+    hoje = datetime.now().date()
+    validade_proxima = (hoje + timedelta(days=18)).isoformat()
+    validade_media = (hoje + timedelta(days=35)).isoformat()
+    validade_longa = (hoje + timedelta(days=220)).isoformat()
+
+    produtos_ids = {}
+    for nome, codigo, tipo, categoria_id, unidade, estoque_minimo, fornecedor_nome in produtos:
+        produto = cursor.execute("SELECT id, nome FROM produtos WHERE codigo = ?", (codigo,)).fetchone()
+        if produto and produto[1] != nome:
+            # Bancos locais usados durante o desenvolvimento podem já conter o código.
+            # Mantemos o registro existente e usamos um código demonstrativo alternativo.
+            produto = cursor.execute("SELECT id, nome FROM produtos WHERE codigo = ?", (f"{codigo}-DEMO",)).fetchone()
+            if not produto:
+                cursor.execute(
+                    "INSERT INTO produtos (nome, codigo, tipo, categoria_id, unidade_medida, estoque_minimo) VALUES (?, ?, ?, ?, ?, ?)",
+                    (nome, f"{codigo}-DEMO", tipo, categoria_id, unidade, estoque_minimo),
+                )
+                produto = (cursor.lastrowid, nome)
+        elif not produto:
+            cursor.execute(
+                "INSERT INTO produtos (nome, codigo, tipo, categoria_id, unidade_medida, estoque_minimo) VALUES (?, ?, ?, ?, ?, ?)",
+                (nome, codigo, tipo, categoria_id, unidade, estoque_minimo),
+            )
+            produto = (cursor.lastrowid, nome)
+        produtos_ids[codigo] = produto[0]
+    lotes = [
+        ("VAC-001", "VAC-DEMO-A", 5, 5, validade_proxima, 38.0, "Laboratório Animal Demo"),
+        ("VAC-001", "VAC-DEMO-B", 25, 25, validade_longa, 36.0, "Laboratório Animal Demo"),
+        ("MED-001", "DIP-DEMO-01", 15, 8, validade_longa, 12.0, "Distribuidora Vet Saúde"),
+        ("MED-002", "AMO-DEMO-A", 10, 4, validade_media, 22.0, "Distribuidora Vet Saúde"),
+        ("MED-002", "AMO-DEMO-B", 20, 12, validade_longa, 21.0, "Distribuidora Vet Saúde"),
+        ("MAT-001", "SORO-DEMO-01", 40, 40, validade_longa, 5.5, "Distribuidora Vet Saúde"),
+        ("MAT-002", "LUV-DEMO-01", 6, 6, validade_longa, 18.0, "Distribuidora Vet Saúde"),
+    ]
+    usuario = cursor.execute("SELECT id FROM usuarios WHERE login = 'admin' LIMIT 1").fetchone()
+    usuario_id = usuario[0] if usuario else None
+    agora = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    for codigo, numero, inicial, atual, validade, valor, fornecedor_nome in lotes:
+        produto_id = produtos_ids[codigo]
+        cursor.execute("SELECT id FROM lotes WHERE produto_id = ? AND numero_lote = ?", (produto_id, numero))
+        lote = cursor.fetchone()
+        if lote:
+            continue
+        fornecedor_id = fornecedores[fornecedor_nome]
+        lote_id = cursor.execute(
+            """
+            INSERT INTO lotes (produto_id, fornecedor_id, numero_lote, quantidade_inicial, quantidade_atual, validade, valor_compra_unitario, data_entrada)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (produto_id, fornecedor_id, numero, inicial, atual, validade, valor, agora[:10]),
+        ).lastrowid
+        cursor.execute(
+            """
+            INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, motivo, usuario_id, criado_em)
+            VALUES (?, ?, 'Entrada', ?, ?, 'Entrada demonstrativa', ?, ?)
+            """,
+            (produto_id, lote_id, inicial, inicial, usuario_id, agora),
+        )
+        consumida = inicial - atual
+        if consumida > 0:
+            cursor.execute(
+                """
+                INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, motivo, usuario_id, criado_em)
+                VALUES (?, ?, 'Saída', ?, ?, 'Consumo demonstrativo', ?, ?)
+                """,
+                (produto_id, lote_id, consumida, -consumida, usuario_id, agora),
+            )
 
 
 if __name__ == "__main__":
