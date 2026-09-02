@@ -19,21 +19,29 @@
                     <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
                 </button>
                 <a href="{{ url_for('pagina_inicial') }}" class="brand">
-                <img src="{{ logo_url }}" alt="Logo da Clinica Veterinaria Fernanda Calixto">
-                <div>
-                    <strong>UniVet</strong>
-                    <span>Clínica Veterinária Fernanda Calixto</span>
-                </div>
+                    <img src="{{ logo_url }}" alt="Logo da Clinica Veterinaria Fernanda Calixto">
+                    <div>
+                        <strong>UniVet</strong>
+                        <span>Clínica Veterinária Fernanda Calixto</span>
+                    </div>
                 </a>
+                <div class="topbar-context" aria-label="Página atual">
+                    <span>Área de trabalho</span>
+                    <strong>{{ breadcrumbs[-1][0] if breadcrumbs else 'Visão geral' }}</strong>
+                </div>
             </div>
 
             <div class="topbar-side">
+                <div class="topbar-search" role="search" aria-label="Busca global em breve">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
+                    <span>Buscar no UniVet</span>
+                    <kbd aria-hidden="true">⌘ K</kbd>
+                </div>
                 <span class="welcome">
                     Sessão ativa:
                     {{ (usuario_logado.nome if usuario_logado else 'Visitante') }}
                     {% if usuario_logado and usuario_logado.perfil == 'admin' %}(Administrador){% endif %}
                 </span>
-                <a class="btn btn-secondary" href="{{ url_for('logout') }}">Sair</a>
             </div>
         </header>
 
@@ -86,6 +94,18 @@
                         <span>Veterinários</span>
                     </a>
                 </nav>
+                <div class="sidebar-footer">
+                    <div class="user-card">
+                        <span class="user-avatar" aria-hidden="true">{{ usuario_logado.nome[:1].upper() if usuario_logado else 'U' }}</span>
+                        <div class="user-meta">
+                            <strong>{{ usuario_logado.nome if usuario_logado else 'Visitante' }}</strong>
+                            <small>{{ 'Administrador' if usuario_logado and usuario_logado.perfil == 'admin' else 'Equipe clínica' }}</small>
+                        </div>
+                        <a class="logout-link" href="{{ url_for('logout') }}" aria-label="Sair do UniVet" title="Sair">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M14 8l4 4-4 4m4-4H9" /></svg>
+                        </a>
+                    </div>
+                </div>
             </aside>
 
             <main class="content" id="main-content" tabindex="-1">

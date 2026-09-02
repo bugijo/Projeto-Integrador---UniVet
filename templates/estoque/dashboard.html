@@ -17,10 +17,10 @@
     </section>
 
     <section class="grid-cards dashboard-metrics" aria-label="Indicadores do estoque">
-        <article class="card metric-card"><div class="card-body"><span class="metric-label">Produtos ativos</span><strong class="metric-value">{{ estoque.produtos }}</strong><span class="metric-context">Itens cadastrados</span></div></article>
-        <article class="card metric-card"><div class="card-body"><span class="metric-label">Unidades em estoque</span><strong class="metric-value">{{ estoque.unidades|round(2) }}</strong><span class="metric-context">Somatório dos lotes</span></div></article>
-        <article class="card metric-card metric-card-warning"><div class="card-body"><span class="metric-label">Abaixo do mínimo</span><strong class="metric-value">{{ estoque.baixo }}</strong><span class="metric-context">Requer atenção</span></div></article>
-        <article class="card metric-card metric-card-danger"><div class="card-body"><span class="metric-label">Vencendo em 30 dias</span><strong class="metric-value">{{ estoque.vencendo }}</strong><span class="metric-context">Lotes com saldo</span></div></article>
+        <article class="card metric-card"><div class="card-body"><span class="metric-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm-8 4.5 8 4.5 8-4.5M12 12v9"/></svg></span><span class="metric-label">Produtos ativos</span><strong class="metric-value">{{ estoque.produtos }}</strong><span class="metric-context">Itens cadastrados</span></div></article>
+        <article class="card metric-card"><div class="card-body"><span class="metric-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 7h14v13H5zM8 7V5a4 4 0 0 1 8 0v2M9 12h6m-3-3v6"/></svg></span><span class="metric-label">Unidades em estoque</span><strong class="metric-value">{{ estoque.unidades|round(2) }}</strong><span class="metric-context">Somatório dos lotes</span></div></article>
+        <article class="card metric-card metric-card-warning"><div class="card-body"><span class="metric-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 4 9 16H3L12 4Z"/><path d="M12 9v5m0 3h.01"/></svg></span><span class="metric-label">Abaixo do mínimo</span><strong class="metric-value">{{ estoque.baixo }}</strong><span class="metric-context">Requer atenção</span></div></article>
+        <article class="card metric-card metric-card-danger"><div class="card-body"><span class="metric-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4m8-4v4M4 10h16M8 14h3m2 0h3m-8 3h3"/></svg></span><span class="metric-label">Vencendo em 30 dias</span><strong class="metric-value">{{ estoque.vencendo }}</strong><span class="metric-context">Lotes com saldo</span></div></article>
     </section>
 
     <div class="dashboard-columns">
