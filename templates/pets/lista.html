@@ -60,7 +60,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="7" class="empty-state">Nenhum animal cadastrado até o momento.</td>
+                                <td colspan="7" class="empty-state"><div class="empty-state-content"><strong>Nenhum animal cadastrado</strong><span>Adicione um paciente para começar o histórico clínico.</span><a class="btn btn-secondary" href="{{ url_for('criar_pet') }}">Cadastrar primeiro animal</a></div></td>
                             </tr>
                         {% endif %}
                     </tbody>

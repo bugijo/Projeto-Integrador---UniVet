@@ -56,7 +56,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="5" class="empty-state">Nenhum tutor cadastrado até o momento.</td>
+                                <td colspan="5" class="empty-state"><div class="empty-state-content"><strong>Nenhum tutor cadastrado</strong><span>Comece criando o primeiro responsável pela clínica.</span><a class="btn btn-secondary" href="{{ url_for('criar_tutor') }}">Cadastrar primeiro tutor</a></div></td>
                             </tr>
                         {% endif %}
                     </tbody>

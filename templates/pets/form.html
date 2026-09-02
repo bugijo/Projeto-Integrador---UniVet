@@ -58,12 +58,12 @@
                     </select>
                 </div>
 
-                <div class="field-group" style="grid-column: 1 / -1;">
+                <div class="field-group full-width">
                     <label for="historico">Observações clínicas</label>
                     <textarea id="historico" name="historico" placeholder="Alergias, cuidados ou observações importantes.">{{ pet['historico'] if pet else '' }}</textarea>
                 </div>
 
-                <div class="actions" style="grid-column: 1 / -1;">
+                <div class="actions full-width">
                     <button class="btn" type="submit">Salvar animal</button>
                     <a class="btn btn-secondary" href="{{ url_for('listar_pets') }}">Cancelar</a>
                 </div>
