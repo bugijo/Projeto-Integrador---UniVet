@@ -51,7 +51,7 @@
                 <table>
                     <caption class="sr-only">Produtos utilizados nesta consulta</caption>
                     <thead><tr><th>Produto</th><th>Lote</th><th>Quantidade</th><th>Movimentação</th><th>Data</th></tr></thead>
-                    <tbody>{% for item in itens_consulta %}<tr><td>{{ item['produto_nome'] }}</td><td>{{ item['numero_lote'] }}</td><td>{{ item['quantidade']|round(2) }} {{ item['unidade_medida'] }}</td><td><span class="movement-badge movement-saída">Saída</span></td><td>{{ item['criado_em']|replace('T', ' ') }}</td></tr>{% else %}<tr><td colspan="5" class="empty-state">Nenhum produto foi registrado nesta consulta.</td></tr>{% endfor %}</tbody>
+                    <tbody>{% for item in itens_consulta %}<tr><td>{{ item['produto_nome'] }}</td><td>{{ item['numero_lote'] }}</td><td>{{ item['quantidade']|round(2) }} {{ item['unidade_medida'] }}</td><td><span class="movement-badge movement-saída">Saída</span></td><td>{{ item['criado_em']|data_hora_br }}</td></tr>{% else %}<tr><td colspan="5" class="empty-state">Nenhum produto foi registrado nesta consulta.</td></tr>{% endfor %}</tbody>
                 </table>
             </div>
         </div>

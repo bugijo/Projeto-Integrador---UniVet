@@ -52,7 +52,7 @@
                         <thead><tr><th>Produto</th><th>Lote</th><th>Validade</th></tr></thead>
                         <tbody>
                             {% for lote in lotes_vencendo %}
-                                <tr><td>{{ lote['produto_nome'] }}</td><td>{{ lote['numero_lote'] }}</td><td><span class="state-badge state-attention">{{ lote['validade']|replace('-', '/') }}</span></td></tr>
+                                <tr><td>{{ lote['produto_nome'] }}</td><td>{{ lote['numero_lote'] }}</td><td><span class="state-badge state-attention">{{ lote['validade']|data_br }}</span></td></tr>
                             {% else %}
                                 <tr><td colspan="3" class="empty-state">Nenhum lote vencendo nos próximos 30 dias.</td></tr>
                             {% endfor %}
@@ -72,7 +72,7 @@
                     <thead><tr><th>Data</th><th>Produto</th><th>Tipo</th><th>Quantidade</th><th>Motivo</th><th>Usuário</th></tr></thead>
                     <tbody>
                         {% for item in movimentacoes_recentes %}
-                            <tr><td>{{ item['criado_em']|replace('T', ' ') }}</td><td>{{ item['produto_nome'] }}</td><td><span class="movement-badge movement-{{ item['tipo']|lower|replace('í', 'i') }}">{{ item['tipo'] }}</span></td><td>{{ item['quantidade']|round(2) }}</td><td>{{ item['motivo'] }}</td><td>{{ item['usuario_nome'] or 'Sistema' }}</td></tr>
+                            <tr><td>{{ item['criado_em']|data_hora_br }}</td><td>{{ item['produto_nome'] }}</td><td><span class="movement-badge movement-{{ item['tipo']|lower|replace('í', 'i') }}">{{ item['tipo'] }}</span></td><td>{{ item['quantidade']|round(2) }}</td><td>{{ item['motivo'] }}</td><td>{{ item['usuario_nome'] or 'Sistema' }}</td></tr>
                         {% else %}
                             <tr><td colspan="6" class="empty-state">Ainda não há movimentações registradas.</td></tr>
                         {% endfor %}
