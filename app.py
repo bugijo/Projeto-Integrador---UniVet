@@ -123,11 +123,21 @@ def parse_datetime_iso(valor):
 
 
 def formatar_data_hora_br(valor):
-    return parse_datetime_iso(valor).strftime("%d/%m/%Y %H:%M") if valor else ""
+    if not valor:
+        return ""
+    try:
+        return datetime.fromisoformat(str(valor)).strftime("%d/%m/%Y %H:%M")
+    except ValueError:
+        return str(valor)
 
 
 def formatar_hora_br(valor):
-    return parse_datetime_iso(valor).strftime("%H:%M") if valor else ""
+    if not valor:
+        return ""
+    try:
+        return datetime.fromisoformat(str(valor)).strftime("%H:%M")
+    except ValueError:
+        return str(valor)
 
 
 def formatar_data_br(valor):
@@ -903,8 +913,41 @@ def relatorios_estoque():
     dias = min(max(dias, 7), 365)
     connection = get_db_connection()
     relatorio = relatorio_consumo(connection, dias)
+    # Indicadores de apresentação derivados das mesmas movimentações já usadas no relatório.
+    hoje = datetime.now().date()
+    inicio = (hoje - timedelta(days=dias - 1)).isoformat()
+    consumo_diario = connection.execute(
+        """
+        SELECT date(criado_em) AS dia, COALESCE(SUM(quantidade), 0) AS quantidade
+        FROM movimentacoes_estoque
+        WHERE tipo = 'Saída' AND date(criado_em) >= date(?)
+        GROUP BY date(criado_em)
+        ORDER BY dia ASC
+        """,
+        (inicio,),
+    ).fetchall()
+    consumo_por_dia = {item["dia"]: float(item["quantidade"]) for item in consumo_diario}
+    dias_consumo = []
+    for indice in range(dias):
+        dia = (hoje - timedelta(days=dias - 1 - indice)).isoformat()
+        dias_consumo.append({"dia": dia, "quantidade": consumo_por_dia.get(dia, 0)})
+    produtos_reposicao = []
+    for item in relatorio:
+        produto = buscar_produto(connection, item["id"])
+        consumo = consumo_por_produto(connection, item["id"], dias)
+        if produto and sugestao_reposicao(produto, consumo)["disponivel"]:
+            produtos_reposicao.append(item)
     connection.close()
-    return render_template("estoque/relatorios.html", relatorio=relatorio, dias=dias, secao="estoque", estoque_subsecao="relatorios", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Relatórios", None)))
+    return render_template(
+        "estoque/relatorios.html",
+        relatorio=relatorio,
+        dias=dias,
+        consumo_diario=dias_consumo,
+        produtos_reposicao=produtos_reposicao,
+        secao="estoque",
+        estoque_subsecao="relatorios",
+        breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Relatórios", None)),
+    )
 
 
 @app.route("/estoque/movimentacoes/<int:movimentacao_id>/estornar", methods=["POST"])
