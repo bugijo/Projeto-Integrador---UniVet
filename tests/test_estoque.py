@@ -8,6 +8,8 @@ from estoque.services import (
     EstoqueInsuficiente,
     consumo_por_produto,
     listar_produtos,
+    listar_lotes,
+    listar_movimentacoes,
     registrar_entrada,
     registrar_estorno,
     registrar_saida_fefo,
@@ -25,8 +27,10 @@ class EstoqueServicesTests(unittest.TestCase):
         self.connection.executescript(
             """
             CREATE TABLE usuarios (id INTEGER PRIMARY KEY, nome TEXT);
-            CREATE TABLE consultas (id INTEGER PRIMARY KEY, pet_id INTEGER);
+            CREATE TABLE pets (id INTEGER PRIMARY KEY, nome TEXT);
+            CREATE TABLE consultas (id INTEGER PRIMARY KEY, pet_id INTEGER, data_hora TEXT);
             INSERT INTO usuarios (id, nome) VALUES (1, 'Usuário teste');
+            INSERT INTO pets (id, nome) VALUES (1, 'Pet teste');
             INSERT INTO consultas (id, pet_id) VALUES (1, 1);
             """
         )
@@ -147,6 +151,22 @@ class EstoqueServicesTests(unittest.TestCase):
         consumo = consumo_por_produto(self.connection, self.produto_id, dias=30)
         self.assertEqual(consumo["quantidade"], 2)
         self.assertGreater(consumo["medio_diario"], 0)
+
+    def test_paginacao_e_valor_total_do_estoque(self):
+        self.entrada("L-001", 3, "2027-12-31")
+        resultado = listar_produtos(self.connection, {"paginado": True, "pagina": 1, "por_pagina": 1})
+        self.assertEqual(resultado["total"], 1)
+        self.assertEqual(len(resultado["itens"]), 1)
+        self.assertEqual(resumo_estoque(self.connection)["valor_estoque"], 30)
+
+    def test_filtros_de_lote_e_movimentacao(self):
+        self.entrada("VENCIDO", 2, "2020-01-01")
+        self.entrada("VALIDO", 4, "2027-12-31")
+        vencidos = listar_lotes(self.connection, {"vencidos": True})
+        self.assertEqual([item["numero_lote"] for item in vencidos], ["VENCIDO"])
+        movimentacoes = listar_movimentacoes(self.connection, {"paginado": True, "pagina": 1, "por_pagina": 1})
+        self.assertEqual(movimentacoes["total"], 2)
+        self.assertEqual(len(movimentacoes["itens"]), 1)
 
 
 if __name__ == "__main__":

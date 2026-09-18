@@ -13,7 +13,7 @@
 
     <section class="card table-card report-controls">
         <div class="card-body">
-            <form method="get" class="toolbar" aria-label="Período do relatório">
+            <form method="get" class="toolbar" aria-label="Filtros do relatório">
                 <div class="field-group">
                     <label for="dias">Período analisado</label>
                     <select id="dias" name="dias">
@@ -23,7 +23,10 @@
                         <option value="365" {% if dias == 365 %}selected{% endif %}>Último ano</option>
                     </select>
                 </div>
+                <div class="field-group"><label for="produto_id">Produto</label><select id="produto_id" name="produto_id"><option value="">Todos</option>{% for produto in produtos_filtro %}<option value="{{ produto['id'] }}" {% if filtros.produto_id == produto['id'] %}selected{% endif %}>{{ produto['nome'] }}</option>{% endfor %}</select></div>
+                <div class="field-group"><label for="categoria_id">Categoria</label><select id="categoria_id" name="categoria_id"><option value="">Todas</option>{% for categoria in categorias %}<option value="{{ categoria['id'] }}" {% if filtros.categoria_id == categoria['id'] %}selected{% endif %}>{{ categoria['nome'] }}</option>{% endfor %}</select></div>
                 <button class="btn" type="submit">Atualizar relatório</button>
+                <a class="btn btn-secondary" href="{{ url_for('exportar_consumo_csv', dias=dias, produto_id=filtros.produto_id, categoria_id=filtros.categoria_id) }}">Exportar CSV</a>
             </form>
         </div>
     </section>
@@ -36,6 +39,9 @@
                 <strong class="metric-value">{{ relatorio|sum(attribute='consumo')|round(2) }}</strong>
                 <span class="metric-context">Unidades no período</span>
             </div>
+        </article>
+        <article class="card metric-card">
+            <div class="card-body"><span class="metric-label">Valor em estoque</span><strong class="metric-value">R$ {{ '%.2f'|format(relatorio|sum(attribute='valor_estoque')) }}</strong><span class="metric-context">Custo dos lotes ativos</span></div>
         </article>
         <article class="card metric-card">
             <div class="card-body">

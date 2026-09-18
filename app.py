@@ -1,14 +1,16 @@
 from calendar import Calendar
+import csv
 from datetime import datetime, timedelta
 from functools import lru_cache
 from functools import wraps
 import os
+from io import StringIO
 from pathlib import Path
 import json
 import sqlite3
 import unicodedata
 
-from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
 
 from estoque.services import (
@@ -94,6 +96,35 @@ def login_obrigatorio(view_function):
 def slugify_status(texto):
     texto = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
     return texto.lower().replace(" ", "-")
+
+
+def paginacao_args(default=20):
+    """Normaliza paginação de URLs sem deixar parâmetros inválidos causarem erro."""
+    try:
+        pagina = max(1, int(request.args.get("pagina", 1)))
+    except (TypeError, ValueError):
+        pagina = 1
+    try:
+        por_pagina = min(100, max(1, int(request.args.get("por_pagina", default))))
+    except (TypeError, ValueError):
+        por_pagina = default
+    return pagina, por_pagina
+
+
+def csv_response(nome, cabecalho, linhas):
+    saida = StringIO()
+    escritor = csv.writer(saida, delimiter=";", lineterminator="\r\n")
+    escritor.writerow(cabecalho)
+    escritor.writerows(linhas)
+    conteudo = "\ufeff" + saida.getvalue()
+    return Response(conteudo, mimetype="text/csv", headers={"Content-Disposition": f"attachment; filename={nome}"})
+
+
+@app.template_global("url_pagina")
+def url_pagina(pagina):
+    parametros = request.args.to_dict()
+    parametros["pagina"] = pagina
+    return url_for(request.endpoint, **parametros)
 
 
 def limpar_cpf(cpf):
@@ -516,6 +547,14 @@ def estoque_dashboard():
     produtos_criticos = listar_produtos(connection, {"situacao": "baixo", "somente_ativos": True})[:10]
     lotes_vencendo = listar_lotes(connection, {"proximos": True})[:10]
     movimentacoes_recentes = listar_movimentacoes(connection, limite=10)
+    relatorio = relatorio_consumo(connection, 30)
+    consumo_30d = sum(float(item["consumo"] or 0) for item in relatorio)
+    reposicao_recomendada = []
+    for item in relatorio:
+        produto = buscar_produto(connection, item["id"])
+        consumo = consumo_por_produto(connection, item["id"], 30)
+        if produto and sugestao_reposicao(produto, consumo)["disponivel"]:
+            reposicao_recomendada.append(item)
     connection.close()
     return render_template(
         "estoque/dashboard.html",
@@ -523,6 +562,8 @@ def estoque_dashboard():
         produtos_criticos=produtos_criticos,
         lotes_vencendo=lotes_vencendo,
         movimentacoes_recentes=movimentacoes_recentes,
+        consumo_30d=consumo_30d,
+        reposicao_recomendada=reposicao_recomendada,
         secao="estoque",
         breadcrumbs=breadcrumbs_padrao(("Estoque", None)),
     )
@@ -531,20 +572,25 @@ def estoque_dashboard():
 @app.route("/estoque/produtos")
 @login_obrigatorio
 def listar_produtos_page():
+    pagina, por_pagina = paginacao_args()
     filtros = {
         "busca": request.args.get("busca", "").strip(),
         "tipo": request.args.get("tipo", "").strip(),
         "categoria_id": request.args.get("categoria_id", type=int),
         "situacao": request.args.get("situacao", "").strip(),
         "somente_ativos": request.args.get("inativos") != "1",
+        "paginado": True,
+        "pagina": pagina,
+        "por_pagina": por_pagina,
     }
     connection = get_db_connection()
-    produtos = listar_produtos(connection, filtros)
+    pagina_resultado = listar_produtos(connection, filtros)
     categorias = listar_categorias(connection)
     connection.close()
     return render_template(
         "estoque/produtos/lista.html",
-        produtos=produtos,
+        produtos=pagina_resultado["itens"],
+        pagina_resultado=pagina_resultado,
         categorias=categorias,
         filtros=filtros,
         tipos_produto=("Medicamento", "Vacina", "Material", "Produto"),
@@ -765,9 +811,12 @@ def listar_fornecedores_page():
             flash("Informe um nome de fornecedor único.", "erro")
         connection.close()
         return redirect(url_for("listar_fornecedores_page"))
-    fornecedores = listar_fornecedores(connection, busca=request.args.get("busca", "").strip())
+    pagina, por_pagina = paginacao_args()
+    busca = request.args.get("busca", "").strip()
+    status = request.args.get("status", "").strip()
+    pagina_resultado = listar_fornecedores(connection, busca=busca, status=status, filtros={"paginado": True, "pagina": pagina, "por_pagina": por_pagina})
     connection.close()
-    return render_template("estoque/fornecedores/lista.html", fornecedores=fornecedores, secao="estoque", estoque_subsecao="fornecedores", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Fornecedores", None)))
+    return render_template("estoque/fornecedores/lista.html", fornecedores=pagina_resultado["itens"], pagina_resultado=pagina_resultado, secao="estoque", estoque_subsecao="fornecedores", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Fornecedores", None)))
 
 
 @app.route("/estoque/fornecedores/<int:fornecedor_id>/editar", methods=["GET", "POST"])
@@ -869,12 +918,13 @@ def registrar_saida_estoque():
 @login_obrigatorio
 def listar_lotes_page():
     connection = get_db_connection()
-    filtros = {"produto_id": request.args.get("produto_id", type=int), "fornecedor_id": request.args.get("fornecedor_id", type=int), "proximos": request.args.get("proximos") == "1"}
-    lotes = listar_lotes(connection, filtros)
+    pagina, por_pagina = paginacao_args()
+    filtros = {"produto_id": request.args.get("produto_id", type=int), "fornecedor_id": request.args.get("fornecedor_id", type=int), "proximos": request.args.get("proximos") == "1", "vencidos": request.args.get("vencidos") == "1", "paginado": True, "pagina": pagina, "por_pagina": por_pagina}
+    pagina_resultado = listar_lotes(connection, filtros)
     produtos = listar_produtos(connection, {"somente_ativos": True})
     fornecedores = listar_fornecedores(connection, somente_ativos=True)
     connection.close()
-    return render_template("estoque/lotes/lista.html", lotes=lotes, produtos=produtos, fornecedores=fornecedores, filtros=filtros, secao="estoque", estoque_subsecao="lotes", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Lotes", None)))
+    return render_template("estoque/lotes/lista.html", lotes=pagina_resultado["itens"], pagina_resultado=pagina_resultado, produtos=produtos, fornecedores=fornecedores, filtros=filtros, secao="estoque", estoque_subsecao="lotes", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Lotes", None)))
 
 
 @app.route("/estoque/lotes/<int:lote_id>/ajuste", methods=["GET", "POST"])
@@ -905,12 +955,15 @@ def ajustar_lote(lote_id):
 @app.route("/estoque/movimentacoes")
 @login_obrigatorio
 def listar_movimentacoes_page():
+    pagina, por_pagina = paginacao_args()
     connection = get_db_connection()
-    filtros = {"produto_id": request.args.get("produto_id", type=int), "tipo": request.args.get("tipo", "").strip(), "data_inicio": request.args.get("data_inicio", "").strip(), "data_fim": request.args.get("data_fim", "").strip()}
-    movimentacoes = listar_movimentacoes(connection, filtros)
+    filtros = {"produto_id": request.args.get("produto_id", type=int), "tipo": request.args.get("tipo", "").strip(), "usuario_id": request.args.get("usuario_id", type=int), "consulta_id": request.args.get("consulta_id", type=int), "data_inicio": request.args.get("data_inicio", "").strip(), "data_fim": request.args.get("data_fim", "").strip(), "paginado": True, "pagina": pagina, "por_pagina": por_pagina}
+    pagina_resultado = listar_movimentacoes(connection, filtros)
     produtos = listar_produtos(connection, {"somente_ativos": True})
+    usuarios = connection.execute("SELECT id, nome FROM usuarios ORDER BY nome").fetchall()
+    consultas = connection.execute("SELECT consultas.id, consultas.data_hora, pets.nome AS pet_nome FROM consultas LEFT JOIN pets ON pets.id = consultas.pet_id ORDER BY consultas.data_hora DESC LIMIT 100").fetchall()
     connection.close()
-    return render_template("estoque/movimentacoes/lista.html", movimentacoes=movimentacoes, produtos=produtos, filtros=filtros, tipos_movimentacao=("Entrada", "Saída", "Ajuste", "Estorno"), secao="estoque", estoque_subsecao="movimentacoes", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Movimentações", None)))
+    return render_template("estoque/movimentacoes/lista.html", movimentacoes=pagina_resultado["itens"], pagina_resultado=pagina_resultado, produtos=produtos, usuarios=usuarios, consultas=consultas, filtros=filtros, tipos_movimentacao=("Entrada", "Saída", "Ajuste", "Estorno"), secao="estoque", estoque_subsecao="movimentacoes", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Movimentações", None)))
 
 
 @app.route("/estoque/relatorios")
@@ -918,8 +971,12 @@ def listar_movimentacoes_page():
 def relatorios_estoque():
     dias = request.args.get("dias", type=int) or 30
     dias = min(max(dias, 7), 365)
+    produto_id = request.args.get("produto_id", type=int)
+    categoria_id = request.args.get("categoria_id", type=int)
     connection = get_db_connection()
-    relatorio = relatorio_consumo(connection, dias)
+    relatorio = relatorio_consumo(connection, dias, produto_id, categoria_id)
+    categorias = listar_categorias(connection)
+    produtos_filtro = listar_produtos(connection, {"somente_ativos": True})
     # Indicadores de apresentação derivados das mesmas movimentações já usadas no relatório.
     hoje = datetime.now().date()
     inicio = (hoje - timedelta(days=dias - 1)).isoformat()
@@ -951,10 +1008,44 @@ def relatorios_estoque():
         dias=dias,
         consumo_diario=dias_consumo,
         produtos_reposicao=produtos_reposicao,
+        categorias=categorias,
+        produtos_filtro=produtos_filtro,
+        filtros={"produto_id": produto_id, "categoria_id": categoria_id},
         secao="estoque",
         estoque_subsecao="relatorios",
         breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Relatórios", None)),
     )
+
+
+@app.route("/estoque/exportar/movimentacoes.csv")
+@login_obrigatorio
+def exportar_movimentacoes_csv():
+    connection = get_db_connection()
+    filtros = {"produto_id": request.args.get("produto_id", type=int), "tipo": request.args.get("tipo", "").strip(), "usuario_id": request.args.get("usuario_id", type=int), "consulta_id": request.args.get("consulta_id", type=int), "data_inicio": request.args.get("data_inicio", "").strip(), "data_fim": request.args.get("data_fim", "").strip()}
+    dados = listar_movimentacoes(connection, filtros)
+    connection.close()
+    return csv_response("movimentacoes.csv", ["Data", "Produto", "Lote", "Tipo", "Quantidade", "Valor sugerido", "Valor praticado", "Motivo", "Consulta", "Usuário"], [[item["criado_em"], item["produto_nome"], item["numero_lote"], item["tipo"], item["quantidade"], item["valor_unitario_sugerido"], item["valor_unitario_praticado"], item["motivo"], item["pet_nome"] or "", item["usuario_nome"] or ""] for item in dados])
+
+
+@app.route("/estoque/exportar/posicao.csv")
+@login_obrigatorio
+def exportar_posicao_csv():
+    connection = get_db_connection()
+    filtros = {"busca": request.args.get("busca", "").strip(), "tipo": request.args.get("tipo", "").strip(), "categoria_id": request.args.get("categoria_id", type=int), "situacao": request.args.get("situacao", "").strip(), "somente_ativos": True}
+    dados = listar_produtos(connection, filtros)
+    connection.close()
+    return csv_response("posicao-estoque.csv", ["Produto", "Código", "Tipo", "Categoria", "Estoque", "Mínimo", "Valor estimado"], [[item["nome"], item["codigo"] or "", item["tipo"], item["categoria_nome"] or "", item["estoque_total"], item["estoque_minimo"], round(float(item["valor_estoque"] or 0), 2)] for item in dados])
+
+
+@app.route("/estoque/exportar/consumo.csv")
+@login_obrigatorio
+def exportar_consumo_csv():
+    dias = request.args.get("dias", type=int) or 30
+    dias = min(max(dias, 7), 365)
+    connection = get_db_connection()
+    dados = relatorio_consumo(connection, dias, request.args.get("produto_id", type=int), request.args.get("categoria_id", type=int))
+    connection.close()
+    return csv_response("consumo-estoque.csv", ["Produto", "Tipo", "Categoria", "Consumo", "Estoque atual", "Valor do estoque"], [[item["nome"], item["tipo"], item["categoria_nome"] or "", item["consumo"], item["estoque_atual"], item["valor_estoque"]] for item in dados])
 
 
 @app.route("/estoque/movimentacoes/<int:movimentacao_id>/estornar", methods=["POST"])

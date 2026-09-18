@@ -5,7 +5,7 @@
 {% block content %}
     <section class="page-header">
         <div><span class="eyebrow">Estoque</span><h1>Produtos</h1><p>Cadastre os itens utilizados na rotina clínica.</p></div>
-        <a class="btn" href="{{ url_for('criar_produto') }}">Novo produto</a>
+        <div class="actions"><a class="btn btn-secondary" href="{{ url_for('exportar_posicao_csv', **request.args.to_dict()) }}">Exportar CSV</a><a class="btn" href="{{ url_for('criar_produto') }}">Novo produto</a></div>
     </section>
 
     <section class="card table-card">
@@ -29,6 +29,7 @@
                     </tbody>
                 </table>
             </div>
+            {% include "_paginacao.html" %}
         </div>
     </section>
 {% endblock %}

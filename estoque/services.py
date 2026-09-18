@@ -64,16 +64,45 @@ def listar_categorias(connection, somente_ativas=False, busca=""):
     return connection.execute(sql + " ORDER BY nome ASC", params).fetchall()
 
 
-def listar_fornecedores(connection, somente_ativos=False, busca=""):
+def listar_fornecedores(connection, somente_ativos=False, busca="", filtros=None, status=""):
+    filtros = filtros or {}
     sql = "SELECT * FROM fornecedores WHERE 1 = 1"
     params = []
     if somente_ativos:
         sql += " AND ativo = 1"
+    if status in ("ativo", "inativo"):
+        sql += " AND ativo = ?"
+        params.append(1 if status == "ativo" else 0)
     if busca:
         sql += " AND (nome LIKE ? OR coalesce(documento, '') LIKE ? OR coalesce(email, '') LIKE ?)"
         filtro = f"%{busca}%"
         params.extend((filtro, filtro, filtro))
-    return connection.execute(sql + " ORDER BY nome ASC", params).fetchall()
+    return _paginacao(connection, sql, params, filtros, " ORDER BY nome ASC")
+
+
+def _paginacao(connection, sql, params, filtros, ordem, chave="id"):
+    """Executa uma consulta paginada somente quando o chamador solicita."""
+    if not filtros.get("paginado"):
+        return connection.execute(sql + ordem, params).fetchall()
+    try:
+        pagina = max(1, int(filtros.get("pagina", 1)))
+    except (TypeError, ValueError):
+        pagina = 1
+    try:
+        por_pagina = min(100, max(1, int(filtros.get("por_pagina", 20))))
+    except (TypeError, ValueError):
+        por_pagina = 20
+    total = connection.execute(f"SELECT COUNT(*) FROM ({sql}) AS consulta", params).fetchone()[0]
+    dados = connection.execute(
+        sql + ordem + " LIMIT ? OFFSET ?", [*params, por_pagina, (pagina - 1) * por_pagina]
+    ).fetchall()
+    return {
+        "itens": dados,
+        "pagina": pagina,
+        "por_pagina": por_pagina,
+        "total": total,
+        "total_paginas": max(1, (total + por_pagina - 1) // por_pagina),
+    }
 
 
 def listar_produtos(connection, filtros=None):
@@ -81,6 +110,7 @@ def listar_produtos(connection, filtros=None):
     sql = """
         SELECT produtos.*, categorias.nome AS categoria_nome,
                COALESCE(SUM(CASE WHEN lotes.ativo = 1 THEN lotes.quantidade_atual ELSE 0 END), 0) AS estoque_total,
+               COALESCE(SUM(CASE WHEN lotes.ativo = 1 THEN lotes.quantidade_atual * lotes.valor_compra_unitario ELSE 0 END), 0) AS valor_estoque,
                COUNT(DISTINCT CASE WHEN lotes.ativo = 1 THEN lotes.id END) AS total_lotes,
                MIN(CASE WHEN lotes.ativo = 1 AND lotes.quantidade_atual > 0 AND lotes.validade IS NOT NULL THEN lotes.validade END) AS proxima_validade,
                COALESCE(MIN(CASE WHEN lotes.ativo = 1 AND lotes.quantidade_atual > 0 THEN lotes.valor_venda_sugerido_unitario END), 0) AS valor_venda_sugerido
@@ -104,11 +134,10 @@ def listar_produtos(connection, filtros=None):
         sql += " AND produtos.estoque_minimo > 0"
     if filtros.get("somente_ativos"):
         sql += " AND produtos.ativo = 1"
-    sql += " GROUP BY produtos.id ORDER BY produtos.ativo DESC, produtos.nome ASC"
-    dados = connection.execute(sql, params).fetchall()
+    sql += " GROUP BY produtos.id"
     if filtros.get("situacao") == "baixo":
-        dados = [item for item in dados if item["estoque_total"] < item["estoque_minimo"]]
-    return dados
+        sql += " HAVING estoque_total < produtos.estoque_minimo"
+    return _paginacao(connection, sql, params, filtros, " ORDER BY produtos.ativo DESC, produtos.nome ASC")
 
 
 def buscar_produto(connection, produto_id):
@@ -147,8 +176,15 @@ def listar_lotes(connection, filtros=None):
         params.append(filtros["fornecedor_id"])
     if filtros.get("proximos"):
         sql += " AND lotes.validade IS NOT NULL AND date(lotes.validade) <= date('now', '+30 day') AND date(lotes.validade) >= date('now')"
-    sql += " ORDER BY CASE WHEN lotes.quantidade_atual > 0 AND lotes.validade IS NOT NULL THEN 0 ELSE 1 END, date(lotes.validade), lotes.id DESC"
-    return connection.execute(sql, params).fetchall()
+    if filtros.get("vencidos"):
+        sql += " AND lotes.validade IS NOT NULL AND date(lotes.validade) < date('now') AND lotes.quantidade_atual > 0"
+    return _paginacao(
+        connection,
+        sql,
+        params,
+        filtros,
+        " ORDER BY CASE WHEN lotes.quantidade_atual > 0 AND lotes.validade IS NOT NULL THEN 0 ELSE 1 END, date(lotes.validade), lotes.id DESC",
+    )
 
 
 def listar_movimentacoes(connection, filtros=None, limite=None):
@@ -169,6 +205,12 @@ def listar_movimentacoes(connection, filtros=None, limite=None):
     if filtros.get("produto_id"):
         sql += " AND movimentacoes_estoque.produto_id = ?"
         params.append(filtros["produto_id"])
+    if filtros.get("usuario_id"):
+        sql += " AND movimentacoes_estoque.usuario_id = ?"
+        params.append(filtros["usuario_id"])
+    if filtros.get("consulta_id"):
+        sql += " AND movimentacoes_estoque.consulta_id = ?"
+        params.append(filtros["consulta_id"])
     if filtros.get("tipo") in TIPOS_MOVIMENTACAO:
         sql += " AND movimentacoes_estoque.tipo = ?"
         params.append(filtros["tipo"])
@@ -179,6 +221,8 @@ def listar_movimentacoes(connection, filtros=None, limite=None):
         sql += " AND date(movimentacoes_estoque.criado_em) <= date(?)"
         params.append(filtros["data_fim"])
     sql += " ORDER BY movimentacoes_estoque.criado_em DESC, movimentacoes_estoque.id DESC"
+    if filtros.get("paginado"):
+        return _paginacao(connection, sql.removesuffix(" ORDER BY movimentacoes_estoque.criado_em DESC, movimentacoes_estoque.id DESC"), params, filtros, " ORDER BY movimentacoes_estoque.criado_em DESC, movimentacoes_estoque.id DESC")
     if limite:
         sql += " LIMIT ?"
         params.append(limite)
@@ -188,6 +232,7 @@ def listar_movimentacoes(connection, filtros=None, limite=None):
 def resumo_estoque(connection):
     produtos = connection.execute("SELECT COUNT(*) FROM produtos WHERE ativo = 1").fetchone()[0]
     estoque = connection.execute("SELECT COALESCE(SUM(quantidade_atual), 0) FROM lotes WHERE ativo = 1").fetchone()[0]
+    valor_estoque = connection.execute("SELECT COALESCE(SUM(quantidade_atual * valor_compra_unitario), 0) FROM lotes WHERE ativo = 1").fetchone()[0]
     baixo = connection.execute(
         """
         SELECT COUNT(*) FROM (
@@ -207,7 +252,7 @@ def resumo_estoque(connection):
           AND date(validade) BETWEEN date('now') AND date('now', '+30 day')
         """
     ).fetchone()[0]
-    return {"produtos": produtos, "unidades": estoque, "baixo": baixo, "vencendo": vencendo}
+    return {"produtos": produtos, "unidades": estoque, "valor_estoque": float(valor_estoque or 0), "baixo": baixo, "vencendo": vencendo}
 
 
 def registrar_entrada(connection, produto_id, fornecedor_id, numero_lote, quantidade, validade, valor, usuario_id, motivo="Compra"):
@@ -484,21 +529,28 @@ def historico_consumo_diario(connection, produto_id, dias=7):
     return [{"dia": (hoje.fromordinal(hoje.toordinal() - (dias - 1 - indice))).strftime("%d/%m"), "quantidade": por_dia.get((hoje.fromordinal(hoje.toordinal() - (dias - 1 - indice))).isoformat(), 0)} for indice in range(dias)]
 
 
-def relatorio_consumo(connection, dias=30):
-    return connection.execute(
-        """
+def relatorio_consumo(connection, dias=30, produto_id=None, categoria_id=None):
+    sql = """
         SELECT produtos.id, produtos.nome, produtos.tipo, produtos.unidade_medida,
+               categorias.nome AS categoria_nome,
                COALESCE(SUM(CASE WHEN movimentacoes_estoque.tipo = 'Saída' THEN movimentacoes_estoque.quantidade ELSE 0 END), 0) AS consumo,
-               COALESCE((SELECT SUM(lotes.quantidade_atual) FROM lotes WHERE lotes.produto_id = produtos.id AND lotes.ativo = 1), 0) AS estoque_atual
+               COALESCE((SELECT SUM(lotes.quantidade_atual) FROM lotes WHERE lotes.produto_id = produtos.id AND lotes.ativo = 1), 0) AS estoque_atual,
+               COALESCE((SELECT SUM(lotes.quantidade_atual * lotes.valor_compra_unitario) FROM lotes WHERE lotes.produto_id = produtos.id AND lotes.ativo = 1), 0) AS valor_estoque
         FROM produtos
+        LEFT JOIN categorias ON categorias.id = produtos.categoria_id
         LEFT JOIN movimentacoes_estoque ON movimentacoes_estoque.produto_id = produtos.id
           AND date(movimentacoes_estoque.criado_em) >= date('now', ?)
         WHERE produtos.ativo = 1
-        GROUP BY produtos.id
-        ORDER BY consumo DESC, produtos.nome ASC
-        """,
-        (f"-{int(dias)} day",),
-    ).fetchall()
+    """
+    params = [f"-{int(dias)} day"]
+    if produto_id:
+        sql += " AND produtos.id = ?"
+        params.append(produto_id)
+    if categoria_id:
+        sql += " AND produtos.categoria_id = ?"
+        params.append(categoria_id)
+    sql += " GROUP BY produtos.id ORDER BY consumo DESC, produtos.nome ASC"
+    return connection.execute(sql, params).fetchall()
 
 
 def sugestao_reposicao(produto, consumo, semanas_cobertura=4):

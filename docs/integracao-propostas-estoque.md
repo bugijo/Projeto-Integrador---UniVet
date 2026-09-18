@@ -101,3 +101,23 @@ Executar testes automatizados, checklist de acessibilidade, testes em viewport d
 
 Uma entrega futura só será considerada concluída quando houver: funcionalidade implementada na stack atual; teste automatizado ou evidência manual adequada; regressão executada; documentação da origem e adaptação; revisão visual desktop/celular; verificação de acessibilidade; e commit separado com mensagem clara.
 
+## 7. Execução — primeira etapa integrada
+
+Commit: `feat: integrar filtros paginacao e exportacoes do estoque`.
+
+| Funcionalidade | Origem | Situação anterior | Adaptação realizada | Arquivos principais | Testes | Resultado |
+|---|---|---|---|---|---|---|
+| Filtros de produtos, lotes e fornecedores | Propostas 1 e 2 | Produtos tinham filtros básicos; lotes não separavam vencidos; fornecedores não filtravam status | Filtros foram adicionados no backend e preservados nas telas | `estoque/services.py`, `app.py`, templates de produtos/lotes/fornecedores | Filtros inválidos e telas renderizadas | Integrado |
+| Filtros de movimentações | Proposta 2 | Havia produto, tipo e período | Adicionados usuário e consulta, mantendo histórico clínico | `estoque/services.py`, `app.py`, template de movimentações | Teste de filtros e regressão | Integrado |
+| Paginação | Propostas 1 e 2 | Listagens carregavam todos os registros | Paginação opcional com limite seguro, anterior/próxima e preservação da querystring | `estoque/services.py`, `app.py`, `templates/_paginacao.html` | Paginação, parâmetros inválidos e smoke HTTP | Integrado |
+| Exportação CSV | Propostas 1 e 2; Plano de Ação | Não havia exportação consolidada | Criados CSV local de movimentações, posição e consumo, com BOM UTF-8 e separador `;` | `app.py`, templates de produtos/movimentações/relatórios | Três endpoints autenticados | Integrado |
+| Valor estimado do estoque | Propostas 1 e 2; briefing aprovado | Havia valor por lote/produto, mas não indicador consolidado | Soma `quantidade_atual × valor_compra_unitario` dos lotes ativos no dashboard, relatório e CSV | `estoque/services.py`, dashboard, relatório | Teste de valor do estoque e smoke | Integrado |
+| Indicadores de consumo e reposição | Base atual; Plano de Ação | Existiam no relatório | Reapresentados no dashboard sem criar nova regra de negócio | `app.py`, `templates/estoque/dashboard.html` | Smoke do dashboard e suíte completa | Integrado |
+
+### Validação desta etapa
+
+- Sintaxe Python validada com `py_compile`.
+- `git diff --check` sem erros.
+- Suíte completa: 26 testes aprovados.
+- Testes novos: exportações CSV autenticadas, filtros/paginação inválidos, telas analíticas, paginação de serviços, valor consolidado e filtros de lote/movimentação.
+- Nenhuma tecnologia externa, serviço pago ou banco novo foi adicionado.

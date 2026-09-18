@@ -124,6 +124,28 @@ class UniVetAppTests(unittest.TestCase):
         self.assertIn("Página inicial", resposta_fernanda.get_data(as_text=True))
         self.assertIn("Dra. Fernanda Calixto", resposta_fernanda.get_data(as_text=True))
 
+    def test_exportacoes_csv_exigem_login_e_retornam_csv(self):
+        self.assertEqual(self.client.get("/estoque/exportar/posicao.csv").status_code, 302)
+        self._login("admin", "123456")
+        for rota in ("/estoque/exportar/posicao.csv", "/estoque/exportar/movimentacoes.csv", "/estoque/exportar/consumo.csv"):
+            resposta = self.client.get(rota)
+            self.assertEqual(resposta.status_code, 200)
+            self.assertIn("text/csv", resposta.content_type)
+            self.assertTrue(resposta.get_data().startswith(b"\xef\xbb\xbf"))
+
+    def test_filtros_invalidos_de_paginacao_nao_geram_erro_500(self):
+        self._login("admin", "123456")
+        for rota in ("/estoque/produtos?pagina=abc", "/estoque/lotes?pagina=-10", "/estoque/movimentacoes?por_pagina=texto", "/estoque/fornecedores?pagina=abc"):
+            resposta = self.client.get(rota)
+            self.assertNotEqual(resposta.status_code, 500)
+
+    def test_telas_de_analise_do_estoque_renderizam(self):
+        self._login("admin", "123456")
+        for rota in ("/estoque", "/estoque/relatorios", "/estoque/relatorios?dias=30&categoria_id=999999", "/estoque/fornecedores?status=ativo"):
+            resposta = self.client.get(rota)
+            self.assertEqual(resposta.status_code, 200, rota)
+            self.assertNotIn("Traceback", resposta.get_data(as_text=True))
+
     def test_apenas_usuarios_autorizados_permanecem_no_banco(self):
         conexao = self._conexao()
         usuarios = conexao.execute("SELECT login, perfil, ativo FROM usuarios ORDER BY login ASC").fetchall()
