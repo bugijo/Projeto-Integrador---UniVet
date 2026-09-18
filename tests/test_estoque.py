@@ -65,6 +65,29 @@ class EstoqueServicesTests(unittest.TestCase):
         self.assertEqual(lote["quantidade_atual"], 10)
         self.assertEqual((movement["tipo"], movement["quantidade"]), ("Entrada", 10))
 
+    def test_valor_sugerido_por_lote_e_valor_praticado_na_saida(self):
+        lote_id, _ = self.entrada("L-001", 10, "2027-12-31")
+        lote = self.connection.execute(
+            "SELECT valor_compra_unitario, valor_venda_sugerido_unitario FROM lotes WHERE id = ?",
+            (lote_id,),
+        ).fetchone()
+        self.assertEqual((lote["valor_compra_unitario"], lote["valor_venda_sugerido_unitario"]), (10, 13))
+
+        saida = registrar_saida_fefo(self.connection, self.produto_id, 2, 1, valor_unitario_praticado=15)[0]
+        movimento = self.connection.execute(
+            "SELECT valor_unitario_sugerido, valor_unitario_praticado FROM movimentacoes_estoque WHERE id = ?",
+            (saida["movimentacao_id"],),
+        ).fetchone()
+        self.assertEqual((movimento["valor_unitario_sugerido"], movimento["valor_unitario_praticado"]), (13, 15))
+
+    def test_valor_praticado_fica_registrado_no_uso_da_consulta(self):
+        self.entrada("L-001", 5, "2027-12-31")
+        registrar_uso_consulta(self.connection, 1, self.produto_id, 2, 1, valor_unitario_praticado=18)
+        item = self.connection.execute(
+            "SELECT valor_unitario_sugerido, valor_unitario_praticado FROM itens_consulta WHERE consulta_id = 1"
+        ).fetchone()
+        self.assertEqual((item["valor_unitario_sugerido"], item["valor_unitario_praticado"]), (13, 18))
+
     def test_saida_nao_permite_estoque_negativo(self):
         self.entrada("L-001", 2, "2027-12-31")
         with self.assertRaises(EstoqueInsuficiente):

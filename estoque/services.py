@@ -29,6 +29,19 @@ def _quantidade(valor):
     return valor
 
 
+def _valor_praticado(valor, sugerido=0):
+    """Normaliza o preço praticado; quando omitido, usa a sugestão do lote."""
+    if valor is None or str(valor).strip() == "":
+        return round(float(sugerido or 0), 2)
+    try:
+        valor = float(str(valor).replace(",", "."))
+    except (TypeError, ValueError) as exc:
+        raise EstoqueError("Informe um valor de venda válido.") from exc
+    if valor < 0:
+        raise EstoqueError("O valor de venda não pode ser negativo.")
+    return round(valor, 2)
+
+
 def _data_valida(valor, nome="data"):
     if not valor:
         return None
@@ -69,7 +82,8 @@ def listar_produtos(connection, filtros=None):
         SELECT produtos.*, categorias.nome AS categoria_nome,
                COALESCE(SUM(CASE WHEN lotes.ativo = 1 THEN lotes.quantidade_atual ELSE 0 END), 0) AS estoque_total,
                COUNT(DISTINCT CASE WHEN lotes.ativo = 1 THEN lotes.id END) AS total_lotes,
-               MIN(CASE WHEN lotes.ativo = 1 AND lotes.quantidade_atual > 0 AND lotes.validade IS NOT NULL THEN lotes.validade END) AS proxima_validade
+               MIN(CASE WHEN lotes.ativo = 1 AND lotes.quantidade_atual > 0 AND lotes.validade IS NOT NULL THEN lotes.validade END) AS proxima_validade,
+               COALESCE(MIN(CASE WHEN lotes.ativo = 1 AND lotes.quantidade_atual > 0 THEN lotes.valor_venda_sugerido_unitario END), 0) AS valor_venda_sugerido
         FROM produtos
         LEFT JOIN categorias ON categorias.id = produtos.categoria_id
         LEFT JOIN lotes ON lotes.produto_id = produtos.id
@@ -102,7 +116,8 @@ def buscar_produto(connection, produto_id):
         """
         SELECT produtos.*, categorias.nome AS categoria_nome,
                COALESCE(SUM(CASE WHEN lotes.ativo = 1 THEN lotes.quantidade_atual ELSE 0 END), 0) AS estoque_total,
-               COUNT(DISTINCT CASE WHEN lotes.ativo = 1 THEN lotes.id END) AS total_lotes
+               COUNT(DISTINCT CASE WHEN lotes.ativo = 1 THEN lotes.id END) AS total_lotes,
+               COALESCE(MIN(CASE WHEN lotes.ativo = 1 AND lotes.quantidade_atual > 0 THEN lotes.valor_venda_sugerido_unitario END), 0) AS valor_venda_sugerido
         FROM produtos
         LEFT JOIN categorias ON categorias.id = produtos.categoria_id
         LEFT JOIN lotes ON lotes.produto_id = produtos.id
@@ -117,7 +132,7 @@ def listar_lotes(connection, filtros=None):
     filtros = filtros or {}
     sql = """
         SELECT lotes.*, produtos.nome AS produto_nome, produtos.codigo AS produto_codigo,
-               produtos.unidade_medida, fornecedores.nome AS fornecedor_nome
+               produtos.unidade_medida, produtos.margem_lucro_percentual, fornecedores.nome AS fornecedor_nome
         FROM lotes
         INNER JOIN produtos ON produtos.id = lotes.produto_id
         LEFT JOIN fornecedores ON fornecedores.id = lotes.fornecedor_id
@@ -206,23 +221,27 @@ def registrar_entrada(connection, produto_id, fornecedor_id, numero_lote, quanti
         raise EstoqueError("Informe um valor de compra válido.")
     if valor < 0:
         raise EstoqueError("O valor de compra não pode ser negativo.")
+    produto = connection.execute("SELECT margem_lucro_percentual FROM produtos WHERE id = ?", (produto_id,)).fetchone()
+    if not produto:
+        raise EstoqueError("Produto não encontrado.")
+    valor_sugerido = round(valor * (1 + float(produto["margem_lucro_percentual"] or 0) / 100), 2)
     agora = _agora()
     try:
         connection.execute("BEGIN IMMEDIATE")
         cursor = connection.execute(
             """
-            INSERT INTO lotes (produto_id, fornecedor_id, numero_lote, quantidade_inicial, quantidade_atual, validade, valor_compra_unitario, data_entrada)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO lotes (produto_id, fornecedor_id, numero_lote, quantidade_inicial, quantidade_atual, validade, valor_compra_unitario, valor_venda_sugerido_unitario, data_entrada)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (produto_id, fornecedor_id or None, numero_lote.strip(), quantidade, quantidade, validade, valor, agora[:10]),
+            (produto_id, fornecedor_id or None, numero_lote.strip(), quantidade, quantidade, validade, valor, valor_sugerido, agora[:10]),
         )
         lote_id = cursor.lastrowid
         movement = connection.execute(
             """
-            INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, motivo, usuario_id, criado_em)
-            VALUES (?, ?, 'Entrada', ?, ?, ?, ?, ?)
+            INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, valor_unitario_sugerido, motivo, usuario_id, criado_em)
+            VALUES (?, ?, 'Entrada', ?, ?, ?, ?, ?, ?)
             """,
-            (produto_id, lote_id, quantidade, quantidade, motivo.strip() or "Compra", usuario_id, agora),
+            (produto_id, lote_id, quantidade, quantidade, valor_sugerido, motivo.strip() or "Compra", usuario_id, agora),
         )
         connection.commit()
         return lote_id, movement.lastrowid
@@ -231,7 +250,7 @@ def registrar_entrada(connection, produto_id, fornecedor_id, numero_lote, quanti
         raise
 
 
-def registrar_saida_fefo(connection, produto_id, quantidade, usuario_id, motivo="Uso em atendimento", consulta_id=None):
+def registrar_saida_fefo(connection, produto_id, quantidade, usuario_id, motivo="Uso em atendimento", consulta_id=None, valor_unitario_praticado=None):
     quantidade = _quantidade(quantidade)
     hoje = datetime.now().strftime("%Y-%m-%d")
     try:
@@ -264,12 +283,12 @@ def registrar_saida_fefo(connection, produto_id, quantidade, usuario_id, motivo=
                 raise EstoqueError("O estoque mudou durante a operação. Tente novamente.")
             movement = connection.execute(
                 """
-                INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, motivo, consulta_id, usuario_id)
-                VALUES (?, ?, 'Saída', ?, ?, ?, ?, ?)
+                INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, valor_unitario_sugerido, valor_unitario_praticado, motivo, consulta_id, usuario_id)
+                VALUES (?, ?, 'Saída', ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (produto_id, lote["id"], usada, -usada, motivo.strip() or "Uso em atendimento", consulta_id, usuario_id),
+                (produto_id, lote["id"], usada, -usada, lote["valor_venda_sugerido_unitario"], _valor_praticado(valor_unitario_praticado, lote["valor_venda_sugerido_unitario"]), motivo.strip() or "Uso em atendimento", consulta_id, usuario_id),
             )
-            alocacoes.append({"lote_id": lote["id"], "quantidade": usada, "movimentacao_id": movement.lastrowid, "numero_lote": lote["numero_lote"]})
+            alocacoes.append({"lote_id": lote["id"], "quantidade": usada, "movimentacao_id": movement.lastrowid, "numero_lote": lote["numero_lote"], "valor_unitario_sugerido": lote["valor_venda_sugerido_unitario"], "valor_unitario_praticado": _valor_praticado(valor_unitario_praticado, lote["valor_venda_sugerido_unitario"])})
             restante -= usada
             if restante <= 0.000001:
                 break
@@ -280,7 +299,7 @@ def registrar_saida_fefo(connection, produto_id, quantidade, usuario_id, motivo=
         raise
 
 
-def registrar_uso_consulta(connection, consulta_id, produto_id, quantidade, usuario_id, motivo="Uso em atendimento"):
+def registrar_uso_consulta(connection, consulta_id, produto_id, quantidade, usuario_id, motivo="Uso em atendimento", valor_unitario_praticado=None):
     """Baixa produtos por FEFO e vincula todas as parcelas à consulta em uma transação."""
     quantidade = _quantidade(quantidade)
     consulta = connection.execute("SELECT id FROM consultas WHERE id = ?", (consulta_id,)).fetchone()
@@ -317,19 +336,19 @@ def registrar_uso_consulta(connection, consulta_id, produto_id, quantidade, usua
                 raise EstoqueError("O estoque mudou durante a operação. Tente novamente.")
             movement = connection.execute(
                 """
-                INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, motivo, consulta_id, usuario_id)
-                VALUES (?, ?, 'Saída', ?, ?, ?, ?, ?)
+                INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, valor_unitario_sugerido, valor_unitario_praticado, motivo, consulta_id, usuario_id)
+                VALUES (?, ?, 'Saída', ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (produto_id, lote["id"], usada, -usada, motivo.strip() or "Uso em atendimento", consulta_id, usuario_id),
+                (produto_id, lote["id"], usada, -usada, lote["valor_venda_sugerido_unitario"], _valor_praticado(valor_unitario_praticado, lote["valor_venda_sugerido_unitario"]), motivo.strip() or "Uso em atendimento", consulta_id, usuario_id),
             )
             item = connection.execute(
                 """
-                INSERT INTO itens_consulta (consulta_id, produto_id, lote_id, quantidade, movimentacao_id, usuario_id)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO itens_consulta (consulta_id, produto_id, lote_id, quantidade, valor_unitario_sugerido, valor_unitario_praticado, movimentacao_id, usuario_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (consulta_id, produto_id, lote["id"], usada, movement.lastrowid, usuario_id),
+                (consulta_id, produto_id, lote["id"], usada, lote["valor_venda_sugerido_unitario"], _valor_praticado(valor_unitario_praticado, lote["valor_venda_sugerido_unitario"]), movement.lastrowid, usuario_id),
             )
-            itens.append({"id": item.lastrowid, "lote_id": lote["id"], "numero_lote": lote["numero_lote"], "quantidade": usada, "movimentacao_id": movement.lastrowid})
+            itens.append({"id": item.lastrowid, "lote_id": lote["id"], "numero_lote": lote["numero_lote"], "quantidade": usada, "valor_unitario_sugerido": lote["valor_venda_sugerido_unitario"], "valor_unitario_praticado": _valor_praticado(valor_unitario_praticado, lote["valor_venda_sugerido_unitario"]), "movimentacao_id": movement.lastrowid})
             restante -= usada
             if restante <= 0.000001:
                 break
@@ -365,10 +384,10 @@ def registrar_ajuste(connection, lote_id, nova_quantidade, usuario_id, motivo):
             raise EstoqueError("Não foi possível aplicar o ajuste.")
         movimento = connection.execute(
             """
-            INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, motivo, usuario_id)
-            VALUES (?, ?, 'Ajuste', ?, ?, ?, ?)
+            INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, valor_unitario_sugerido, valor_unitario_praticado, motivo, usuario_id)
+            VALUES (?, ?, 'Ajuste', ?, ?, ?, ?, ?, ?)
             """,
-            (lote["produto_id"], lote_id, abs(diferenca), diferenca, descricao, usuario_id),
+            (lote["produto_id"], lote_id, abs(diferenca), diferenca, lote["valor_venda_sugerido_unitario"], lote["valor_venda_sugerido_unitario"], descricao, usuario_id),
         )
         connection.commit()
         return movimento.lastrowid
@@ -381,7 +400,8 @@ def listar_itens_consulta(connection, consulta_id):
     return connection.execute(
         """
         SELECT itens_consulta.*, produtos.nome AS produto_nome, produtos.unidade_medida,
-               lotes.numero_lote, movimentacoes_estoque.criado_em
+               lotes.numero_lote, movimentacoes_estoque.criado_em,
+               movimentacoes_estoque.quantidade * COALESCE(movimentacoes_estoque.valor_unitario_praticado, 0) AS valor_total
         FROM itens_consulta
         INNER JOIN produtos ON produtos.id = itens_consulta.produto_id
         INNER JOIN lotes ON lotes.id = itens_consulta.lote_id
@@ -419,10 +439,10 @@ def registrar_estorno(connection, movimentacao_id, usuario_id, motivo="Estorno")
             raise EstoqueError("O estorno resultaria em estoque negativo.")
         estorno = connection.execute(
             """
-            INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, motivo, consulta_id, usuario_id, movimentacao_origem_id)
-            VALUES (?, ?, 'Estorno', ?, ?, ?, ?, ?, ?)
+            INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, valor_unitario_sugerido, valor_unitario_praticado, motivo, consulta_id, usuario_id, movimentacao_origem_id)
+            VALUES (?, ?, 'Estorno', ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (origem["produto_id"], origem["lote_id"], abs(variacao_estorno), variacao_estorno, motivo.strip() or "Estorno", origem["consulta_id"], usuario_id, movimentacao_id),
+            (origem["produto_id"], origem["lote_id"], abs(variacao_estorno), variacao_estorno, origem["valor_unitario_sugerido"], origem["valor_unitario_praticado"], motivo.strip() or "Estorno", origem["consulta_id"], usuario_id, movimentacao_id),
         )
         connection.commit()
         return estorno.lastrowid

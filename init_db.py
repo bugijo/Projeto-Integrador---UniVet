@@ -157,6 +157,20 @@ def init_db():
         )
         """
     )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS condicoes_clinicas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pet_id INTEGER NOT NULL,
+            condicao TEXT NOT NULL,
+            observacoes TEXT,
+            status TEXT NOT NULL DEFAULT 'Ativa' CHECK (status IN ('Ativa', 'Controlada', 'Resolvida')),
+            registrado_em TEXT NOT NULL,
+            usuario_nome TEXT NOT NULL,
+            FOREIGN KEY (pet_id) REFERENCES pets (id) ON DELETE CASCADE
+        )
+        """
+    )
 
     for tabela, coluna, definicao in [
         ("usuarios", "access_code_hash", "TEXT"),
@@ -186,6 +200,7 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_pets_tutor ON pets (tutor_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_consultas_pet ON consultas (pet_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_consultas_veterinario_periodo ON consultas (veterinario_id, data_hora, data_fim)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_condicoes_pet_status ON condicoes_clinicas (pet_id, status, registrado_em)")
 
     criar_tabelas_estoque(connection)
 

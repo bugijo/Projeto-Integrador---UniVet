@@ -1,36 +1,40 @@
 {% extends "base.html" %}
 
-{% block title %}UniVet | Histórico clínico{% endblock %}
+{% block title %}UniVet | Prontuário clínico{% endblock %}
 
 {% block content %}
     <section class="page-header">
         <div>
+            <span class="eyebrow">Prontuário contínuo</span>
             <h1>Histórico clínico</h1>
-            <p>Prontuário do paciente com dados da consulta selecionada e atendimentos anteriores.</p>
+            <p>Condições, atendimentos e registros anteriores do paciente ficam reunidos em um único lugar.</p>
         </div>
-        <a class="btn btn-secondary" href="{{ url_for('listar_consultas') }}">Voltar</a>
+        <div class="actions">
+            <a class="btn" href="{{ url_for('criar_consulta', pet_id=pet['id']) }}">Novo atendimento</a>
+            <a class="btn btn-secondary" href="{{ url_for('listar_pets') }}">Voltar</a>
+        </div>
     </section>
 
     <section class="grid-cards">
-        <article class="card">
+        <article class="card metric-card metric-card-accent">
             <div class="card-body">
                 <span class="metric-label">Paciente</span>
-                <strong class="metric-value">{{ consulta["pet_nome"] }}</strong>
-                <p>Tutor: {{ consulta["tutor_nome"] }}</p>
+                <strong class="metric-value">{{ pet["nome"] }}</strong>
+                <p>{{ pet["especie"] }}{% if pet["raca"] %} · {{ pet["raca"] }}{% endif %} · Tutor: {{ pet["tutor_nome"] }}</p>
             </div>
         </article>
         <article class="card">
             <div class="card-body">
-                <span class="metric-label">Consulta selecionada</span>
-                <strong class="metric-value">{{ consulta["data_hora"]|data_hora_br }}</strong>
-                <p>{{ consulta["servico_nome"] }} com {{ consulta["veterinario_nome"] }}</p>
+                <span class="metric-label">Atendimentos registrados</span>
+                <strong class="metric-value">{{ historico_clinico|length }}</strong>
+                <p>{{ "Acompanhe a evolução clínica na linha do tempo." if historico_clinico else "Nenhum atendimento registrado ainda." }}</p>
             </div>
         </article>
         <article class="card">
             <div class="card-body">
-                <span class="metric-label">Observações do cadastro</span>
-                <strong class="metric-value">Prontuário base</strong>
-                <p>{{ consulta["pet_historico"] or "Sem observações clínicas fixas no cadastro do animal." }}</p>
+                <span class="metric-label">Condições acompanhadas</span>
+                <strong class="metric-value">{{ condicoes|length }}</strong>
+                <p>{{ pet["historico"] or "Sem observações clínicas fixas no cadastro do animal." }}</p>
             </div>
         </article>
     </section>
@@ -38,45 +42,108 @@
     <section class="card table-card">
         <div class="card-body">
             <div class="section-heading">
-                <div><span class="eyebrow">Estoque integrado</span><h2>Produtos utilizados no atendimento</h2></div>
-                <span class="field-help">A baixa segue o lote com validade mais próxima.</span>
+                <div>
+                    <span class="eyebrow">Acompanhamento clínico</span>
+                    <h2>Condições e observações permanentes</h2>
+                </div>
+                <span class="field-help">Registre uma condição sem apagar os atendimentos anteriores.</span>
             </div>
-            <form method="post" action="{{ url_for('adicionar_produto_consulta', consulta_id=consulta['id']) }}" class="filter-bar">
-                <div class="field-group"><label for="produto_id">Produto</label><select id="produto_id" name="produto_id" required><option value="">Selecione um produto</option>{% for produto in produtos_estoque %}<option value="{{ produto['id'] }}">{{ produto['nome'] }} · {{ produto['estoque_total']|round(2) }} {{ produto['unidade_medida'] }}</option>{% endfor %}</select></div>
-                <div class="field-group"><label for="quantidade">Quantidade</label><input id="quantidade" name="quantidade" type="number" min="0.01" step="0.01" required></div>
-                <div class="field-group"><label for="motivo">Motivo</label><input id="motivo" name="motivo" value="Uso em atendimento" required></div>
-                <div class="filter-actions"><button class="btn" type="submit">Adicionar e baixar</button></div>
+            <form method="post" action="{{ url_for('adicionar_condicao_clinica', pet_id=pet['id']) }}" class="filter-bar">
+                <div class="field-group">
+                    <label for="condicao">Nova condição</label>
+                    <input id="condicao" name="condicao" type="text" placeholder="Ex.: Dermatite alérgica" required>
+                </div>
+                <div class="field-group">
+                    <label for="status-condicao">Status</label>
+                    <select id="status-condicao" name="status">
+                        {% for status in status_condicao %}
+                            <option value="{{ status }}">{{ status }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label for="observacoes-condicao">Observações</label>
+                    <input id="observacoes-condicao" name="observacoes" type="text" placeholder="Cuidados, evolução ou orientação">
+                </div>
+                <div class="filter-actions"><button class="btn" type="submit">Adicionar condição</button></div>
             </form>
             <div class="table-scroll">
                 <table>
-                    <caption class="sr-only">Produtos utilizados nesta consulta</caption>
-                    <thead><tr><th>Produto</th><th>Lote</th><th>Quantidade</th><th>Movimentação</th><th>Data</th></tr></thead>
-                    <tbody>{% for item in itens_consulta %}<tr><td>{{ item['produto_nome'] }}</td><td>{{ item['numero_lote'] }}</td><td>{{ item['quantidade']|round(2) }} {{ item['unidade_medida'] }}</td><td><span class="movement-badge movement-saída">Saída</span></td><td>{{ item['criado_em']|data_hora_br }}</td></tr>{% else %}<tr><td colspan="5" class="empty-state">Nenhum produto foi registrado nesta consulta.</td></tr>{% endfor %}</tbody>
+                    <caption class="sr-only">Condições clínicas do paciente</caption>
+                    <thead><tr><th>Condição</th><th>Status</th><th>Observações</th><th>Registrada em</th><th>Responsável</th></tr></thead>
+                    <tbody>
+                        {% for item in condicoes %}
+                            <tr>
+                                <td><strong>{{ item["condicao"] }}</strong></td>
+                                <td>
+                                    {% if item["status"] == "Ativa" %}<span class="state-badge state-critical">Ativa</span>
+                                    {% elif item["status"] == "Controlada" %}<span class="state-badge state-attention">Controlada</span>
+                                    {% else %}<span class="state-badge state-muted">Resolvida</span>{% endif %}
+                                </td>
+                                <td>{{ item["observacoes"] or "Sem observações." }}</td>
+                                <td>{{ item["registrado_em"]|data_hora_br }}</td>
+                                <td>{{ item["usuario_nome"] }}</td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="5" class="empty-state">Nenhuma condição clínica foi adicionada ao prontuário.</td></tr>
+                        {% endfor %}
+                    </tbody>
                 </table>
             </div>
         </div>
     </section>
 
+    {% if consulta %}
+        <section class="card table-card">
+            <div class="card-body">
+                <div class="section-heading">
+                    <div><span class="eyebrow">Atendimento selecionado</span><h2>Produtos utilizados no atendimento</h2></div>
+                    <span class="field-help">A baixa segue o lote com validade mais próxima.</span>
+                </div>
+                <form method="post" action="{{ url_for('adicionar_produto_consulta', consulta_id=consulta['id']) }}" class="filter-bar">
+                    <div class="field-group"><label for="produto_id">Produto</label><select id="produto_id" name="produto_id" required><option value="">Selecione um produto</option>{% for produto in produtos_estoque %}<option value="{{ produto['id'] }}" data-sugerido="{{ '%.2f'|format(produto['valor_venda_sugerido'] or 0) }}">{{ produto['nome'] }} · {{ produto['estoque_total']|round(2) }} {{ produto['unidade_medida'] }}</option>{% endfor %}</select><span id="valor-sugerido-ajuda" class="field-help">Valor sugerido: R$ 0,00 por unidade.</span></div>
+                    <div class="field-group"><label for="quantidade">Quantidade</label><input id="quantidade" name="quantidade" type="number" min="0.01" step="0.01" required></div>
+                    <div class="field-group"><label for="valor_unitario_praticado">Valor real repassado/vendido por unidade</label><input id="valor_unitario_praticado" name="valor_unitario_praticado" type="number" min="0" step="0.01" required><span class="field-help">O administrador pode manter a sugestão ou informar outro valor.</span></div>
+                    <div class="field-group"><label for="motivo">Motivo</label><input id="motivo" name="motivo" value="Uso em atendimento" required></div>
+                    <div class="filter-actions"><button class="btn" type="submit">Adicionar e baixar</button></div>
+                </form>
+                <div class="table-scroll">
+                    <table>
+                        <caption class="sr-only">Produtos utilizados nesta consulta</caption>
+                        <thead><tr><th>Produto</th><th>Lote</th><th>Quantidade</th><th>Valor sugerido</th><th>Valor praticado</th><th>Total</th><th>Movimentação</th><th>Data</th></tr></thead>
+                        <tbody>{% for item in itens_consulta %}<tr><td>{{ item['produto_nome'] }}</td><td>{{ item['numero_lote'] }}</td><td>{{ item['quantidade']|round(2) }} {{ item['unidade_medida'] }}</td><td>{% if item['valor_unitario_sugerido'] is not none %}R$ {{ '%.2f'|format(item['valor_unitario_sugerido']) }}{% else %}Não informado{% endif %}</td><td>{% if item['valor_unitario_praticado'] is not none %}R$ {{ '%.2f'|format(item['valor_unitario_praticado']) }}{% else %}Não informado{% endif %}</td><td>{% if item['valor_unitario_praticado'] is not none %}R$ {{ '%.2f'|format((item['quantidade'] * item['valor_unitario_praticado'])) }}{% else %}Não informado{% endif %}</td><td><span class="movement-badge movement-saída">Saída</span></td><td>{{ item['criado_em']|data_hora_br }}</td></tr>{% else %}<tr><td colspan="8" class="empty-state">Nenhum produto foi registrado nesta consulta.</td></tr>{% endfor %}</tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        <script>
+            const produtoConsulta = document.getElementById("produto_id");
+            const valorConsulta = document.getElementById("valor_unitario_praticado");
+            const ajudaConsulta = document.getElementById("valor-sugerido-ajuda");
+            function atualizarValorConsulta() {
+                const opcao = produtoConsulta.options[produtoConsulta.selectedIndex];
+                const sugerido = Number.parseFloat(opcao?.dataset.sugerido || "0") || 0;
+                ajudaConsulta.textContent = `Valor sugerido: R$ ${sugerido.toFixed(2).replace(".", ",")} por unidade.`;
+                if (!valorConsulta.value) valorConsulta.value = sugerido.toFixed(2);
+            }
+            produtoConsulta.addEventListener("change", () => { valorConsulta.value = ""; atualizarValorConsulta(); });
+            atualizarValorConsulta();
+        </script>
+    {% endif %}
+
     <section class="card table-card">
         <div class="card-body">
-            <h2>Linha do tempo do paciente</h2>
+            <div class="section-heading">
+                <div><span class="eyebrow">Histórico preservado</span><h2>Linha do tempo do paciente</h2></div>
+                <span class="field-help">Os registros antigos permanecem disponíveis para consulta.</span>
+            </div>
             <div class="table-scroll">
                 <table>
-                    <thead>
-                        <tr>
-                            <th>Data e hora</th>
-                            <th>Serviço</th>
-                            <th>Veterinário</th>
-                            <th>Status</th>
-                            <th>Diagnóstico</th>
-                            <th>Tratamento</th>
-                            <th>Vacinas</th>
-                            <th>Observações</th>
-                        </tr>
-                    </thead>
+                    <caption class="sr-only">Linha do tempo clínica do paciente</caption>
+                    <thead><tr><th>Data e hora</th><th>Serviço</th><th>Veterinário</th><th>Status</th><th>Diagnóstico</th><th>Tratamento</th><th>Vacinas</th><th>Observações</th><th>Ação</th></tr></thead>
                     <tbody>
                         {% for item in historico_clinico %}
-                            <tr {% if item["id"] == consulta["id"] %}class="highlight-row"{% endif %}>
+                            <tr {% if consulta and item["id"] == consulta["id"] %}class="highlight-row"{% endif %}>
                                 <td>{{ item["data_hora"]|data_hora_br }}</td>
                                 <td>{{ item["servico_nome"] }}</td>
                                 <td>{{ item["veterinario_nome"] }}</td>
@@ -85,9 +152,10 @@
                                 <td>{{ item["tratamento"] or "Não informado." }}</td>
                                 <td>{{ item["vacinas"] or "Não informado." }}</td>
                                 <td>{{ item["observacoes"] or "Sem observações." }}</td>
+                                <td><a class="btn btn-text" href="{{ url_for('visualizar_historico', entidade='consultas', registro_id=item['id']) }}">Abrir</a></td>
                             </tr>
                         {% else %}
-                            <tr><td colspan="8" class="empty-state">Ainda não há atendimentos anteriores para este paciente.</td></tr>
+                            <tr><td colspan="9" class="empty-state">Ainda não há atendimentos anteriores para este paciente.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -95,33 +163,17 @@
         </div>
     </section>
 
-    <section class="card table-card">
-        <div class="card-body">
-            <h2>Histórico de modificações da consulta</h2>
-            <div class="table-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Data e hora</th>
-                            <th>Ação</th>
-                            <th>Usuária</th>
-                            <th>Registro</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in auditoria %}
-                            <tr>
-                                <td>{{ item["criado_em"]|data_hora_br }}</td>
-                                <td>{{ item["acao"] }}</td>
-                                <td>{{ item["usuario_nome"] }}</td>
-                                <td><pre class="history-pre">{{ item["dados_json"] }}</pre></td>
-                            </tr>
-                        {% else %}
-                            <tr><td colspan="4" class="empty-state">Nenhuma modificação registrada para esta consulta.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+    {% if consulta and auditoria %}
+        <section class="card table-card">
+            <div class="card-body">
+                <h2>Histórico de modificações do atendimento selecionado</h2>
+                <div class="table-scroll">
+                    <table>
+                        <thead><tr><th>Data e hora</th><th>Ação</th><th>Usuária</th><th>Registro</th></tr></thead>
+                        <tbody>{% for item in auditoria %}<tr><td>{{ item["criado_em"]|data_hora_br }}</td><td>{{ item["acao"] }}</td><td>{{ item["usuario_nome"] }}</td><td><pre class="history-pre">{{ item["dados_json"] }}</pre></td></tr>{% else %}<tr><td colspan="4" class="empty-state">Nenhuma modificação registrada para este atendimento.</td></tr>{% endfor %}</tbody>
+                    </table>
+                </div>
             </div>
-        </div>
-    </section>
+        </section>
+    {% endif %}
 {% endblock %}

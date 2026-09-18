@@ -109,3 +109,32 @@ def criar_tabelas_estoque(connection):
         WHERE quantidade_variacao IS NULL
         """
     )
+
+    migracoes = {
+        "produtos": [("margem_lucro_percentual", "REAL NOT NULL DEFAULT 30")],
+        "lotes": [("valor_venda_sugerido_unitario", "REAL NOT NULL DEFAULT 0")],
+        "movimentacoes_estoque": [
+            ("valor_unitario_sugerido", "REAL"),
+            ("valor_unitario_praticado", "REAL"),
+        ],
+        "itens_consulta": [
+            ("valor_unitario_sugerido", "REAL"),
+            ("valor_unitario_praticado", "REAL"),
+        ],
+    }
+    for tabela, colunas_novas in migracoes.items():
+        existentes = {item[1] for item in connection.execute(f"PRAGMA table_info({tabela})").fetchall()}
+        for coluna, definicao in colunas_novas:
+            if coluna not in existentes:
+                connection.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {definicao}")
+
+    connection.execute(
+        """
+        UPDATE lotes
+        SET valor_venda_sugerido_unitario = ROUND(
+            valor_compra_unitario * (1 + COALESCE((SELECT margem_lucro_percentual FROM produtos WHERE produtos.id = lotes.produto_id), 30) / 100),
+            2
+        )
+        WHERE valor_venda_sugerido_unitario IS NULL OR valor_venda_sugerido_unitario = 0
+        """
+    )

@@ -39,6 +39,7 @@ DATABASE = BASE_DIR / "banco.db"
 STATUSS_CONSULTA = ("Agendada", "Concluida", "Cancelada")
 STATUSS_CONFIRMACAO = ("Pendente", "Confirmada", "Nao confirmada")
 TIPOS_ATENDIMENTO = ("Presencial", "Domiciliar")
+STATUSS_CONDICAO = ("Ativa", "Controlada", "Resolvida")
 MESES_PT = {
     1: "Janeiro", 2: "Fevereiro", 3: "Marco", 4: "Abril", 5: "Maio", 6: "Junho",
     7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro",
@@ -58,11 +59,12 @@ def garantir_banco_inicializado():
     connection = sqlite3.connect(DATABASE)
     try:
         tabela = connection.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('usuarios', 'produtos')"
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('usuarios', 'produtos', 'condicoes_clinicas')"
         ).fetchall()
+        colunas_produto = {item[1] for item in connection.execute("PRAGMA table_info(produtos)").fetchall()}
     finally:
         connection.close()
-    if len(tabela) == 2:
+    if len(tabela) == 3 and "margem_lucro_percentual" in colunas_produto:
         return
     from init_db import init_db
 
@@ -572,14 +574,16 @@ def criar_produto():
         categoria_id = request.form.get("categoria_id", type=int) or None
         unidade = request.form.get("unidade_medida", "unidade").strip() or "unidade"
         estoque_minimo = request.form.get("estoque_minimo", "0").strip().replace(",", ".")
-        produto_form = {"nome": nome, "codigo": codigo or "", "tipo": tipo, "categoria_id": categoria_id, "unidade_medida": unidade, "estoque_minimo": estoque_minimo}
+        margem_lucro = request.form.get("margem_lucro_percentual", "30").strip().replace(",", ".")
+        produto_form = {"nome": nome, "codigo": codigo or "", "tipo": tipo, "categoria_id": categoria_id, "unidade_medida": unidade, "estoque_minimo": estoque_minimo, "margem_lucro_percentual": margem_lucro}
         try:
             estoque_minimo = float(estoque_minimo)
-            if not nome or tipo not in ("Medicamento", "Vacina", "Material", "Produto") or estoque_minimo < 0:
+            margem_lucro = float(margem_lucro)
+            if not nome or tipo not in ("Medicamento", "Vacina", "Material", "Produto") or estoque_minimo < 0 or margem_lucro < 0:
                 raise ValueError
             connection.execute(
-                "INSERT INTO produtos (nome, codigo, tipo, categoria_id, unidade_medida, estoque_minimo) VALUES (?, ?, ?, ?, ?, ?)",
-                (nome, codigo, tipo, categoria_id, unidade, estoque_minimo),
+                "INSERT INTO produtos (nome, codigo, tipo, categoria_id, unidade_medida, estoque_minimo, margem_lucro_percentual) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (nome, codigo, tipo, categoria_id, unidade, estoque_minimo, margem_lucro),
             )
             connection.commit()
         except (ValueError, sqlite3.IntegrityError):
@@ -614,14 +618,16 @@ def editar_produto(produto_id):
         categoria_id = request.form.get("categoria_id", type=int) or None
         unidade = request.form.get("unidade_medida", "unidade").strip() or "unidade"
         estoque_minimo = request.form.get("estoque_minimo", "0").strip().replace(",", ".")
-        produto_form = {"id": produto_id, "nome": nome, "codigo": codigo or "", "tipo": tipo, "categoria_id": categoria_id, "unidade_medida": unidade, "estoque_minimo": estoque_minimo}
+        margem_lucro = request.form.get("margem_lucro_percentual", str(produto["margem_lucro_percentual"] or 30)).strip().replace(",", ".")
+        produto_form = {"id": produto_id, "nome": nome, "codigo": codigo or "", "tipo": tipo, "categoria_id": categoria_id, "unidade_medida": unidade, "estoque_minimo": estoque_minimo, "margem_lucro_percentual": margem_lucro}
         try:
             estoque_minimo = float(estoque_minimo)
-            if not nome or tipo not in ("Medicamento", "Vacina", "Material", "Produto") or estoque_minimo < 0:
+            margem_lucro = float(margem_lucro)
+            if not nome or tipo not in ("Medicamento", "Vacina", "Material", "Produto") or estoque_minimo < 0 or margem_lucro < 0:
                 raise ValueError
             connection.execute(
-                "UPDATE produtos SET nome = ?, codigo = ?, tipo = ?, categoria_id = ?, unidade_medida = ?, estoque_minimo = ? WHERE id = ?",
-                (nome, codigo, tipo, categoria_id, unidade, estoque_minimo, produto_id),
+                "UPDATE produtos SET nome = ?, codigo = ?, tipo = ?, categoria_id = ?, unidade_medida = ?, estoque_minimo = ?, margem_lucro_percentual = ? WHERE id = ?",
+                (nome, codigo, tipo, categoria_id, unidade, estoque_minimo, margem_lucro, produto_id),
             )
             connection.commit()
         except (ValueError, sqlite3.IntegrityError):
@@ -845,6 +851,7 @@ def registrar_saida_estoque():
                 request.form.get("quantidade", ""),
                 session.get("usuario_id"),
                 request.form.get("motivo", "Saída manual"),
+                valor_unitario_praticado=request.form.get("valor_unitario_praticado", ""),
             )
         except (EstoqueError, EstoqueInsuficiente, sqlite3.IntegrityError) as erro:
             connection.close()
@@ -1278,6 +1285,36 @@ def historico_clinico_pet(pet_id):
     return registros
 
 
+def buscar_pet_detalhado(pet_id):
+    connection = get_db_connection()
+    pet = connection.execute(
+        """
+        SELECT pets.*, tutores.nome AS tutor_nome, tutores.telefone AS tutor_telefone
+        FROM pets
+        INNER JOIN tutores ON tutores.id = pets.tutor_id
+        WHERE pets.id = ?
+        """,
+        (pet_id,),
+    ).fetchone()
+    connection.close()
+    return pet
+
+
+def condicoes_clinicas_pet(pet_id):
+    connection = get_db_connection()
+    condicoes = connection.execute(
+        """
+        SELECT * FROM condicoes_clinicas
+        WHERE pet_id = ?
+        ORDER BY CASE status WHEN 'Ativa' THEN 0 WHEN 'Controlada' THEN 1 ELSE 2 END,
+                 registrado_em DESC, id DESC
+        """,
+        (pet_id,),
+    ).fetchall()
+    connection.close()
+    return condicoes
+
+
 def salvar_consulta(formulario, consulta_id=None):
     data_hora = formulario.get("data_hora", "").strip()
     pet_id = formulario.get("pet_id", type=int)
@@ -1424,7 +1461,9 @@ def criar_consulta():
             return render_template("consultas/form.html", consulta=consulta, acao="Nova Consulta", secao="consultas", breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Nova consulta", None)), **contexto)
         flash("Consulta cadastrada com sucesso.", "sucesso")
         return redirect(url_for("listar_consultas"))
-    return render_template("consultas/form.html", consulta=None, acao="Nova Consulta", secao="consultas", breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Nova consulta", None)), **contexto)
+    pet_id = request.args.get("pet_id", type=int)
+    consulta_inicial = {"pet_id": pet_id} if pet_id else None
+    return render_template("consultas/form.html", consulta=consulta_inicial, acao="Nova Consulta", secao="consultas", breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Nova consulta", None)), **contexto)
 
 
 @app.route("/consultas/<int:consulta_id>/editar", methods=["GET", "POST"])
@@ -1455,7 +1494,15 @@ def adicionar_produto_consulta(consulta_id):
     motivo = request.form.get("motivo", "Uso em atendimento").strip()
     connection = get_db_connection()
     try:
-        registrar_uso_consulta(connection, consulta_id, produto_id, quantidade, session.get("usuario_id"), motivo)
+        registrar_uso_consulta(
+            connection,
+            consulta_id,
+            produto_id,
+            quantidade,
+            session.get("usuario_id"),
+            motivo,
+            request.form.get("valor_unitario_praticado", ""),
+        )
         flash("Produto utilizado registrado e estoque atualizado por FEFO.", "sucesso")
     except (EstoqueError, EstoqueInsuficiente, sqlite3.IntegrityError) as erro:
         flash(str(erro) or "Não foi possível registrar o produto utilizado.", "erro")
@@ -1510,6 +1557,60 @@ def agenda_do_dia(data_iso):
     )
 
 
+@app.route("/pets/<int:pet_id>/condicoes", methods=["POST"])
+@login_obrigatorio
+def adicionar_condicao_clinica(pet_id):
+    condicao = request.form.get("condicao", "").strip()
+    observacoes = request.form.get("observacoes", "").strip()
+    status = request.form.get("status", "Ativa").strip()
+    connection = get_db_connection()
+    pet = connection.execute("SELECT id FROM pets WHERE id = ?", (pet_id,)).fetchone()
+    if not pet:
+        connection.close()
+        flash("Paciente não encontrado.", "erro")
+        return redirect(url_for("listar_pets"))
+    if not condicao or status not in STATUSS_CONDICAO:
+        connection.close()
+        flash("Informe a condição clínica e um status válido.", "erro")
+        return redirect(url_for("historico_clinico_pet_page", pet_id=pet_id))
+    registrado_em = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    cursor = connection.execute(
+        """
+        INSERT INTO condicoes_clinicas (pet_id, condicao, observacoes, status, registrado_em, usuario_nome)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (pet_id, condicao, observacoes, status, registrado_em, session.get("usuario_nome") or session.get("usuario_login", "Sistema")),
+    )
+    condicao_id = cursor.lastrowid
+    connection.commit()
+    connection.close()
+    registrar_historico("condicoes_clinicas", condicao_id, "criada", {"pet_id": pet_id, "condicao": condicao, "status": status})
+    flash("Condição clínica adicionada ao prontuário.", "sucesso")
+    return redirect(url_for("historico_clinico_pet_page", pet_id=pet_id))
+
+
+@app.route("/pets/<int:pet_id>/historico-clinico")
+@login_obrigatorio
+def historico_clinico_pet_page(pet_id):
+    pet = buscar_pet_detalhado(pet_id)
+    if not pet:
+        flash("Paciente não encontrado.", "erro")
+        return redirect(url_for("listar_pets"))
+    return render_template(
+        "consultas/historico.html",
+        pet=pet,
+        consulta=None,
+        historico_clinico=historico_clinico_pet(pet_id),
+        condicoes=condicoes_clinicas_pet(pet_id),
+        auditoria=[],
+        itens_consulta=[],
+        produtos_estoque=[],
+        status_condicao=STATUSS_CONDICAO,
+        secao="pets",
+        breadcrumbs=breadcrumbs_padrao(("Animais", url_for("listar_pets")), ("Prontuário clínico", None)),
+    )
+
+
 @app.route("/historico/<entidade>/<int:registro_id>")
 @login_obrigatorio
 def visualizar_historico(entidade, registro_id):
@@ -1524,11 +1625,14 @@ def visualizar_historico(entidade, registro_id):
         connection.close()
         return render_template(
             "consultas/historico.html",
+            pet=buscar_pet_detalhado(consulta["pet_id"]),
             consulta=consulta,
             historico_clinico=historico_clinico_pet(consulta["pet_id"]),
+            condicoes=condicoes_clinicas_pet(consulta["pet_id"]),
             auditoria=obter_historico(entidade, registro_id),
             itens_consulta=itens,
             produtos_estoque=produtos_estoque,
+            status_condicao=STATUSS_CONDICAO,
             secao="consultas",
             breadcrumbs=breadcrumbs_padrao(("Consultas", url_for("listar_consultas")), ("Histórico clínico", None)),
         )

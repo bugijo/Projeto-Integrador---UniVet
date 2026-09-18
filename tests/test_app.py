@@ -191,6 +191,35 @@ class UniVetAppTests(unittest.TestCase):
         self.assertIn("Retorno sem sinais de inflamação.", texto)
         self.assertIn("Boa resposta ao tratamento.", texto)
 
+    def test_prontuario_pet_adiciona_condicao_e_inicia_atendimento_com_paciente(self):
+        self._login("fernanda.calixto", "Fer123")
+        pet_id = self._id_pet()
+
+        resposta = self.client.get(f"/pets/{pet_id}/historico-clinico")
+        texto = resposta.get_data(as_text=True)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("Condições e observações permanentes", texto)
+        self.assertIn("Novo atendimento", texto)
+
+        resposta = self.client.post(
+            f"/pets/{pet_id}/condicoes",
+            data={
+                "condicao": "Dermatite alérgica",
+                "status": "Ativa",
+                "observacoes": "Acompanhar resposta ao tratamento.",
+            },
+            follow_redirects=True,
+        )
+        texto = resposta.get_data(as_text=True)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("Dermatite alérgica", texto)
+        self.assertIn("Condição clínica adicionada ao prontuário.", texto)
+
+        resposta = self.client.get(f"/consultas/nova?pet_id={pet_id}")
+        texto = resposta.get_data(as_text=True)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn(f'<option value="{pet_id}" selected>', texto)
+
     def test_api_disponibilidade_rejeita_data_invalida_sem_erro_500(self):
         self._login("admin", "123456")
         resposta = self.client.get(
