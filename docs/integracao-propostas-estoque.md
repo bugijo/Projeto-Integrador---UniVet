@@ -121,3 +121,21 @@ Commit: `feat: integrar filtros paginacao e exportacoes do estoque`.
 - Suíte completa: 26 testes aprovados.
 - Testes novos: exportações CSV autenticadas, filtros/paginação inválidos, telas analíticas, paginação de serviços, valor consolidado e filtros de lote/movimentação.
 - Nenhuma tecnologia externa, serviço pago ou banco novo foi adicionado.
+
+### Decisão sobre PDF
+
+O PDF foi analisado e não foi implementado nesta etapa. A base não possuía biblioteca PDF, e adicionar uma dependência apenas para uma exportação secundária aumentaria o risco de instalação/deploy sem melhorar o fluxo essencial. O CSV local atende aos relatórios prioritários, funciona sem serviço externo e permanece aberto para uma etapa posterior caso a equipe escolha uma biblioteca open source gratuita e faça a validação de deploy.
+
+## 8. Relatório executivo da execução
+
+- Estado inicial: branch correta, `main` intacta, alterações anteriores preservadas em `56c1c19`.
+- Funcionalidades integradas: filtros, paginação, CSV, valor estimado do estoque, consumo/reposição no dashboard e filtros analíticos de relatório.
+- Origem: padrões de busca/paginação/exportação/dashboard das propostas externas, adaptados ao Flask/SQLite; requisitos de integração e rastreabilidade do Plano de Ação.
+- Descartadas: migração de stack, PostgreSQL, React, Node, PWA, barcode, PDF nesta rodada e qualquer serviço pago.
+- Banco: nenhuma tabela nova; apenas consultas agregadas sobre lotes e movimentações existentes.
+- Interface: filtros, links de exportação, indicadores adicionais e componente de paginação acessível.
+- Testes: 26 aprovados; incluindo regressão clínica, estoque, filtros, paginação, exportações e smoke das telas analíticas.
+- Correções durante a execução: sintaxe da macro Jinja de paginação e fixtures incompletos dos testes de movimentação.
+- Arquivos principais: `app.py`, `estoque/services.py`, templates de estoque, `templates/_paginacao.html` e testes.
+- Commits: `56c1c19` de segurança e `f6b063b` da primeira integração.
+- Limitações restantes: validação visual em navegador real, PDF, API REST coesa e persistência durável em nuvem continuam fora desta etapa.
