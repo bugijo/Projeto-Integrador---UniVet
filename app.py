@@ -120,6 +120,10 @@ def csv_response(nome, cabecalho, linhas):
     return Response(conteudo, mimetype="text/csv", headers={"Content-Disposition": f"attachment; filename={nome}"})
 
 
+def row_json(item):
+    return {chave: item[chave] for chave in item.keys()} if item else None
+
+
 @app.template_global("url_pagina")
 def url_pagina(pagina):
     parametros = request.args.to_dict()
@@ -1025,6 +1029,37 @@ def exportar_movimentacoes_csv():
     dados = listar_movimentacoes(connection, filtros)
     connection.close()
     return csv_response("movimentacoes.csv", ["Data", "Produto", "Lote", "Tipo", "Quantidade", "Valor sugerido", "Valor praticado", "Motivo", "Consulta", "Usuário"], [[item["criado_em"], item["produto_nome"], item["numero_lote"], item["tipo"], item["quantidade"], item["valor_unitario_sugerido"], item["valor_unitario_praticado"], item["motivo"], item["pet_nome"] or "", item["usuario_nome"] or ""] for item in dados])
+
+
+@app.route("/api/estoque/resumo")
+@login_obrigatorio
+def api_estoque_resumo():
+    connection = get_db_connection()
+    resumo = resumo_estoque(connection)
+    connection.close()
+    return jsonify(resumo)
+
+
+@app.route("/api/estoque/produtos")
+@login_obrigatorio
+def api_estoque_produtos():
+    pagina, por_pagina = paginacao_args()
+    filtros = {"busca": request.args.get("busca", "").strip(), "tipo": request.args.get("tipo", "").strip(), "categoria_id": request.args.get("categoria_id", type=int), "situacao": request.args.get("situacao", "").strip(), "somente_ativos": request.args.get("inativos") != "1", "paginado": True, "pagina": pagina, "por_pagina": por_pagina}
+    connection = get_db_connection()
+    resultado = listar_produtos(connection, filtros)
+    connection.close()
+    return jsonify({"data": [row_json(item) for item in resultado["itens"]], "meta": {chave: resultado[chave] for chave in ("pagina", "por_pagina", "total", "total_paginas")}})
+
+
+@app.route("/api/estoque/movimentacoes")
+@login_obrigatorio
+def api_estoque_movimentacoes():
+    pagina, por_pagina = paginacao_args()
+    filtros = {"produto_id": request.args.get("produto_id", type=int), "tipo": request.args.get("tipo", "").strip(), "usuario_id": request.args.get("usuario_id", type=int), "consulta_id": request.args.get("consulta_id", type=int), "data_inicio": request.args.get("data_inicio", "").strip(), "data_fim": request.args.get("data_fim", "").strip(), "paginado": True, "pagina": pagina, "por_pagina": por_pagina}
+    connection = get_db_connection()
+    resultado = listar_movimentacoes(connection, filtros)
+    connection.close()
+    return jsonify({"data": [row_json(item) for item in resultado["itens"]], "meta": {chave: resultado[chave] for chave in ("pagina", "por_pagina", "total", "total_paginas")}})
 
 
 @app.route("/estoque/exportar/posicao.csv")

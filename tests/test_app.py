@@ -146,6 +146,16 @@ class UniVetAppTests(unittest.TestCase):
             self.assertEqual(resposta.status_code, 200, rota)
             self.assertNotIn("Traceback", resposta.get_data(as_text=True))
 
+    def test_api_minima_de_estoque_retorna_dados_paginados(self):
+        self.assertEqual(self.client.get("/api/estoque/resumo").status_code, 302)
+        self._login("admin", "123456")
+        resposta = self.client.get("/api/estoque/produtos?pagina=1&por_pagina=5")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("meta", resposta.get_json())
+        self.assertIn("data", resposta.get_json())
+        self.assertEqual(self.client.get("/api/estoque/resumo").status_code, 200)
+        self.assertEqual(self.client.get("/api/estoque/movimentacoes?por_pagina=5").status_code, 200)
+
     def test_apenas_usuarios_autorizados_permanecem_no_banco(self):
         conexao = self._conexao()
         usuarios = conexao.execute("SELECT login, perfil, ativo FROM usuarios ORDER BY login ASC").fetchall()

@@ -24,7 +24,7 @@ O banco permanece SQLite para desenvolvimento e demonstração. A configuração
 | Auditoria/estorno | Base atual; proposta 2 | Auditoria/estorno já existem | Preservar histórico e testar reversão | Rastreabilidade sem apagar fatos |
 | Valor de estoque | Propostas 1 e 2; evolução local | Compra/venda já estão no protótipo | Exibir somente indicadores simples | Apoio à gestão, sem financeiro completo |
 | Reposição por histórico | Base atual; Plano de Ação | Sugestão simples e transparente | Melhorar explicação, sem modelo preditivo complexo | Sugestão compreensível |
-| API | Plano de Ação; proposta 2 | Existem endpoints pontuais | Criar contrato mínimo para dados do estoque, se aprovado | Evidenciar requisito web/API |
+| API | Plano de Ação; proposta 2 | Existiam endpoints pontuais | Criada API autenticada de resumo, produtos e movimentações, com filtros e metadados de paginação | Evidenciar requisito web/API |
 | Responsividade e acessibilidade | Plano de Ação; propostas externas | CSS responsivo existente | Checklist e testes manuais/automatizados | Uso em desktop e celular |
 
 ## 3. Ordem de implementação aprovada para a próxima fase
@@ -130,12 +130,13 @@ O PDF foi analisado e não foi implementado nesta etapa. A base não possuía bi
 
 - Estado inicial: branch correta, `main` intacta, alterações anteriores preservadas em `56c1c19`.
 - Funcionalidades integradas: filtros, paginação, CSV, valor estimado do estoque, consumo/reposição no dashboard e filtros analíticos de relatório.
+- API: endpoints autenticados `/api/estoque/resumo`, `/api/estoque/produtos` e `/api/estoque/movimentacoes`, sem alterar a aplicação server-side.
 - Origem: padrões de busca/paginação/exportação/dashboard das propostas externas, adaptados ao Flask/SQLite; requisitos de integração e rastreabilidade do Plano de Ação.
 - Descartadas: migração de stack, PostgreSQL, React, Node, PWA, barcode, PDF nesta rodada e qualquer serviço pago.
 - Banco: nenhuma tabela nova; apenas consultas agregadas sobre lotes e movimentações existentes.
 - Interface: filtros, links de exportação, indicadores adicionais e componente de paginação acessível.
-- Testes: 26 aprovados; incluindo regressão clínica, estoque, filtros, paginação, exportações e smoke das telas analíticas.
+- Testes: 27 aprovados; incluindo regressão clínica, estoque, filtros, paginação, exportações, API e smoke das telas analíticas.
 - Correções durante a execução: sintaxe da macro Jinja de paginação e fixtures incompletos dos testes de movimentação.
 - Arquivos principais: `app.py`, `estoque/services.py`, templates de estoque, `templates/_paginacao.html` e testes.
 - Commits: `56c1c19` de segurança e `f6b063b` da primeira integração.
-- Limitações restantes: validação visual em navegador real, PDF, API REST coesa e persistência durável em nuvem continuam fora desta etapa.
+- Limitações restantes: validação visual em navegador real, PDF e persistência durável em nuvem continuam fora desta etapa.
