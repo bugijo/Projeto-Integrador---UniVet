@@ -95,6 +95,9 @@ def criar_tabelas_estoque(connection):
         CREATE INDEX IF NOT EXISTS idx_lotes_fornecedor ON lotes(fornecedor_id);
         CREATE INDEX IF NOT EXISTS idx_movimentacoes_produto_data ON movimentacoes_estoque(produto_id, criado_em);
         CREATE INDEX IF NOT EXISTS idx_movimentacoes_lote ON movimentacoes_estoque(lote_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_estorno_unico_origem
+            ON movimentacoes_estoque(movimentacao_origem_id)
+            WHERE tipo = 'Estorno' AND movimentacao_origem_id IS NOT NULL;
         CREATE INDEX IF NOT EXISTS idx_movimentacoes_consulta ON movimentacoes_estoque(consulta_id);
         CREATE INDEX IF NOT EXISTS idx_itens_consulta ON itens_consulta(consulta_id);
         """

@@ -1,10 +1,15 @@
 """Consultas e regras de negócio do módulo de estoque."""
 
 from datetime import datetime
+import math
 
 
 TIPOS_PRODUTO = ("Medicamento", "Vacina", "Material", "Produto")
 TIPOS_MOVIMENTACAO = ("Entrada", "Saída", "Ajuste", "Estorno")
+# Limites por operação/lote e por preço unitário, evitando overflow em totais.
+MAX_QUANTIDADE = 1_000_000_000
+MAX_VALOR = 1_000_000_000
+MAX_MARGEM = 10_000
 
 
 class EstoqueError(Exception):
@@ -19,11 +24,18 @@ def _agora():
     return datetime.now().strftime("%Y-%m-%dT%H:%M")
 
 
-def _quantidade(valor):
+def _numero(valor, nome, limite, minimo=0):
     try:
         valor = float(valor)
-    except (TypeError, ValueError):
-        raise EstoqueError("Informe uma quantidade válida.")
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise EstoqueError(f"Informe {nome} válido.") from exc
+    if not math.isfinite(valor) or not minimo <= valor <= limite:
+        raise EstoqueError(f"Informe {nome} finito entre {minimo:g} e {limite:g}.")
+    return valor
+
+
+def _quantidade(valor):
+    valor = _numero(valor, "uma quantidade", MAX_QUANTIDADE)
     if valor <= 0:
         raise EstoqueError("A quantidade deve ser maior que zero.")
     return valor
@@ -32,13 +44,8 @@ def _quantidade(valor):
 def _valor_praticado(valor, sugerido=0):
     """Normaliza o preço praticado; quando omitido, usa a sugestão do lote."""
     if valor is None or str(valor).strip() == "":
-        return round(float(sugerido or 0), 2)
-    try:
-        valor = float(str(valor).replace(",", "."))
-    except (TypeError, ValueError) as exc:
-        raise EstoqueError("Informe um valor de venda válido.") from exc
-    if valor < 0:
-        raise EstoqueError("O valor de venda não pode ser negativo.")
+        valor = sugerido if sugerido is not None else 0
+    valor = _numero(str(valor).replace(",", "."), "um valor de venda", MAX_VALOR)
     return round(valor, 2)
 
 
@@ -260,16 +267,12 @@ def registrar_entrada(connection, produto_id, fornecedor_id, numero_lote, quanti
         raise EstoqueError("Informe o número do lote.")
     quantidade = _quantidade(quantidade)
     validade = _data_valida(validade, "validade")
-    try:
-        valor = float(valor or 0)
-    except (TypeError, ValueError):
-        raise EstoqueError("Informe um valor de compra válido.")
-    if valor < 0:
-        raise EstoqueError("O valor de compra não pode ser negativo.")
+    valor = _numero(valor if valor not in (None, "") else 0, "um valor de compra", MAX_VALOR)
     produto = connection.execute("SELECT margem_lucro_percentual FROM produtos WHERE id = ?", (produto_id,)).fetchone()
     if not produto:
         raise EstoqueError("Produto não encontrado.")
-    valor_sugerido = round(valor * (1 + float(produto["margem_lucro_percentual"] or 0) / 100), 2)
+    margem = _numero(produto["margem_lucro_percentual"] or 0, "uma margem", MAX_MARGEM)
+    valor_sugerido = _valor_praticado(valor * (1 + margem / 100))
     agora = _agora()
     try:
         connection.execute("BEGIN IMMEDIATE")
@@ -405,22 +408,17 @@ def registrar_uso_consulta(connection, consulta_id, produto_id, quantidade, usua
 
 
 def registrar_ajuste(connection, lote_id, nova_quantidade, usuario_id, motivo):
-    try:
-        nova_quantidade = float(nova_quantidade)
-    except (TypeError, ValueError):
-        raise EstoqueError("Informe uma quantidade válida.")
-    if nova_quantidade < 0:
-        raise EstoqueError("A quantidade ajustada não pode ser negativa.")
-    lote = connection.execute("SELECT * FROM lotes WHERE id = ?", (lote_id,)).fetchone()
-    if not lote:
-        raise EstoqueError("Lote não encontrado.")
-    diferenca = nova_quantidade - float(lote["quantidade_atual"])
-    if abs(diferenca) < 0.000001:
-        raise EstoqueError("A nova quantidade é igual ao saldo atual.")
-    descricao = motivo.strip() if motivo and motivo.strip() else "Ajuste de inventário"
-    descricao = f"{descricao} ({'aumento' if diferenca > 0 else 'redução'})"
+    nova_quantidade = _numero(nova_quantidade, "uma quantidade", MAX_QUANTIDADE)
     try:
         connection.execute("BEGIN IMMEDIATE")
+        lote = connection.execute("SELECT * FROM lotes WHERE id = ?", (lote_id,)).fetchone()
+        if not lote:
+            raise EstoqueError("Lote não encontrado.")
+        diferenca = nova_quantidade - _numero(lote["quantidade_atual"], "um saldo", MAX_QUANTIDADE)
+        if abs(diferenca) < 0.000001:
+            raise EstoqueError("A nova quantidade é igual ao saldo atual.")
+        descricao = motivo.strip() if motivo and motivo.strip() else "Ajuste de inventário"
+        descricao = f"{descricao} ({'aumento' if diferenca > 0 else 'redução'})"
         atualizado = connection.execute(
             "UPDATE lotes SET quantidade_atual = ? WHERE id = ? AND quantidade_atual + ? >= 0",
             (nova_quantidade, lote_id, diferenca),
@@ -459,29 +457,29 @@ def listar_itens_consulta(connection, consulta_id):
 
 
 def registrar_estorno(connection, movimentacao_id, usuario_id, motivo="Estorno"):
-    origem = connection.execute("SELECT * FROM movimentacoes_estoque WHERE id = ?", (movimentacao_id,)).fetchone()
-    if not origem:
-        raise EstoqueError("Movimentação não encontrada.")
-    if origem["tipo"] not in ("Saída", "Ajuste"):
-        raise EstoqueError("Somente saídas e ajustes podem ser estornados.")
-    ja_estornada = connection.execute(
-        "SELECT 1 FROM movimentacoes_estoque WHERE movimentacao_origem_id = ? AND tipo = 'Estorno'",
-        (movimentacao_id,),
-    ).fetchone()
-    if ja_estornada:
-        raise EstoqueError("Esta movimentação já possui um estorno.")
-    variacao_origem = origem["quantidade_variacao"]
-    if variacao_origem is None:
-        variacao_origem = -origem["quantidade"] if origem["tipo"] == "Saída" else origem["quantidade"]
-    variacao_estorno = -float(variacao_origem)
     try:
         connection.execute("BEGIN IMMEDIATE")
+        origem = connection.execute("SELECT * FROM movimentacoes_estoque WHERE id = ?", (movimentacao_id,)).fetchone()
+        if not origem:
+            raise EstoqueError("Movimentação não encontrada.")
+        if origem["tipo"] not in ("Saída", "Ajuste"):
+            raise EstoqueError("Somente saídas e ajustes podem ser estornados.")
+        ja_estornada = connection.execute(
+            "SELECT 1 FROM movimentacoes_estoque WHERE movimentacao_origem_id = ? AND tipo = 'Estorno'",
+            (movimentacao_id,),
+        ).fetchone()
+        if ja_estornada:
+            raise EstoqueError("Esta movimentação já possui um estorno.")
+        variacao_origem = origem["quantidade_variacao"]
+        if variacao_origem is None:
+            variacao_origem = -origem["quantidade"] if origem["tipo"] == "Saída" else origem["quantidade"]
+        variacao_estorno = -_numero(variacao_origem, "uma variação", MAX_QUANTIDADE, -MAX_QUANTIDADE)
         atualizado = connection.execute(
-            "UPDATE lotes SET quantidade_atual = quantidade_atual + ? WHERE id = ? AND quantidade_atual + ? >= 0",
-            (variacao_estorno, origem["lote_id"], variacao_estorno),
+            "UPDATE lotes SET quantidade_atual = quantidade_atual + ? WHERE id = ? AND quantidade_atual + ? BETWEEN 0 AND ?",
+            (variacao_estorno, origem["lote_id"], variacao_estorno, MAX_QUANTIDADE),
         )
         if atualizado.rowcount != 1:
-            raise EstoqueError("O estorno resultaria em estoque negativo.")
+            raise EstoqueError("O estorno resultaria em estoque negativo ou acima do limite.")
         estorno = connection.execute(
             """
             INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, valor_unitario_sugerido, valor_unitario_praticado, motivo, consulta_id, usuario_id, movimentacao_origem_id)
