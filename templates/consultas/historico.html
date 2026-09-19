@@ -49,6 +49,7 @@
                 <span class="field-help">Registre uma condição sem apagar os atendimentos anteriores.</span>
             </div>
             <form method="post" action="{{ url_for('adicionar_condicao_clinica', pet_id=pet['id']) }}" class="filter-bar">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="field-group">
                     <label for="condicao">Nova condição</label>
                     <input id="condicao" name="condicao" type="text" placeholder="Ex.: Dermatite alérgica" required>
@@ -101,6 +102,7 @@
                     <span class="field-help">A baixa segue o lote com validade mais próxima.</span>
                 </div>
                 <form method="post" action="{{ url_for('adicionar_produto_consulta', consulta_id=consulta['id']) }}" class="filter-bar">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="field-group"><label for="produto_id">Produto</label><select id="produto_id" name="produto_id" required><option value="">Selecione um produto</option>{% for produto in produtos_estoque %}<option value="{{ produto['id'] }}" data-sugerido="{{ '%.2f'|format(produto['valor_venda_sugerido'] or 0) }}">{{ produto['nome'] }} · {{ produto['estoque_total']|round(2) }} {{ produto['unidade_medida'] }}</option>{% endfor %}</select><span id="valor-sugerido-ajuda" class="field-help">Valor sugerido: R$ 0,00 por unidade.</span></div>
                     <div class="field-group"><label for="quantidade">Quantidade</label><input id="quantidade" name="quantidade" type="number" min="0.01" step="0.01" required></div>
                     <div class="field-group"><label for="valor_unitario_praticado">Valor real repassado/vendido por unidade</label><input id="valor_unitario_praticado" name="valor_unitario_praticado" type="number" min="0" step="0.01" required><span class="field-help">O administrador pode manter a sugestão ou informar outro valor.</span></div>
@@ -116,7 +118,7 @@
                 </div>
             </div>
         </section>
-        <script>
+        <script nonce="{{ g.csp_nonce }}">
             const produtoConsulta = document.getElementById("produto_id");
             const valorConsulta = document.getElementById("valor_unitario_praticado");
             const ajudaConsulta = document.getElementById("valor-sugerido-ajuda");

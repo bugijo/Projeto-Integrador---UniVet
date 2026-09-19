@@ -8,5 +8,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      - key: UNIVET_ENV
+        value: production
+      - key: UNIVET_TRUST_PROXY
+        value: "1"
       - key: SECRET_KEY
         generateValue: true

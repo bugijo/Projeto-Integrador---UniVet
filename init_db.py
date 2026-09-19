@@ -1,14 +1,17 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 import sqlite3
+import os
+import argparse
 
 from werkzeug.security import generate_password_hash
 
 from estoque.schema import criar_tabelas_estoque
+from security import security_schema
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATABASE = BASE_DIR / "banco.db"
+DATABASE = Path(os.environ.get("UNIVET_DATABASE", str(BASE_DIR / "banco.db")))
 
 ESPECIES = [
     ("Cão", None), ("Gato", None), ("Ave", None), ("Réptil", None), ("Roedor", None),
@@ -58,11 +61,11 @@ SERVICOS = [
     ("Cirurgia", 120),
 ]
 
-VETERINARIOS = ["Dra. Fernanda Calixto", "Dr. Rafael Moreira"]
+VETERINARIOS = ["Veterinária Demo", "Veterinário Demo"]
 
 USUARIOS_PADRAO = [
     ("admin", "Administrador de testes", "admin", "123456"),
-    ("fernanda.calixto", "Dra. Fernanda Calixto", "veterinaria", "Fer123"),
+    ("vet.demo", "Veterinária Demo", "veterinaria", "Fer123"),
 ]
 
 CATEGORIAS_ESTOQUE_DEMO = [
@@ -87,17 +90,9 @@ def garantir_coluna(cursor, tabela, coluna, definicao):
 
 def criar_ou_atualizar_usuario(cursor, login, nome, perfil, senha):
     usuario = cursor.execute("SELECT id FROM usuarios WHERE login = ?", (login,)).fetchone()
-    senha_hash = generate_password_hash(senha)
     if usuario:
-        cursor.execute(
-            """
-            UPDATE usuarios
-            SET nome = ?, perfil = ?, senha_hash = ?, ativo = 1
-            WHERE id = ?
-            """,
-            (nome, perfil, senha_hash, usuario[0]),
-        )
         return usuario[0]
+    senha_hash = generate_password_hash(senha)
     cursor.execute(
         """
         INSERT INTO usuarios (login, nome, perfil, senha_hash, ativo)
@@ -108,8 +103,12 @@ def criar_ou_atualizar_usuario(cursor, login, nome, perfil, senha):
     return cursor.lastrowid
 
 
-def init_db():
+def init_db(seed_demo=False):
+    if seed_demo and os.environ.get('UNIVET_ENV') == 'production':
+        raise RuntimeError('Dados demo não são permitidos em produção.')
     connection = sqlite3.connect(DATABASE)
+    connection.execute('PRAGMA journal_mode=WAL')
+    connection.execute('PRAGMA busy_timeout=10000')
     cursor = connection.cursor()
     cursor.execute("PRAGMA foreign_keys = ON;")
 
@@ -203,6 +202,7 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_condicoes_pet_status ON condicoes_clinicas (pet_id, status, registrado_em)")
 
     criar_tabelas_estoque(connection)
+    security_schema(connection)
 
     cursor.executescript(
         """
@@ -239,7 +239,7 @@ def init_db():
     for servico, duracao in SERVICOS:
         cursor.execute("INSERT OR IGNORE INTO servicos (nome, duracao_minutos) VALUES (?, ?)", (servico, duracao))
 
-    for veterinario in VETERINARIOS:
+    for veterinario in (VETERINARIOS if seed_demo else []):
         cursor.execute("INSERT OR IGNORE INTO veterinarios (nome) VALUES (?)", (veterinario,))
 
     for especie_nome, especie_id in especies_map.items():
@@ -250,16 +250,14 @@ def init_db():
                 (raca_id, especie_id, raca_nome),
             )
 
-    ids_autorizados = []
-    for login, nome, perfil, senha in USUARIOS_PADRAO:
-        ids_autorizados.append(criar_ou_atualizar_usuario(cursor, login, nome, perfil, senha))
-    marcadores = ", ".join("?" for _ in ids_autorizados)
-    cursor.execute(f"DELETE FROM usuarios WHERE id NOT IN ({marcadores})", ids_autorizados)
+    if seed_demo:
+        for login, nome, perfil, senha in USUARIOS_PADRAO:
+            criar_ou_atualizar_usuario(cursor, login, nome, perfil, senha)
 
     consultas_por_horario = cursor.execute(
         "SELECT data_hora, COUNT(*) FROM consultas GROUP BY data_hora ORDER BY COUNT(*) DESC LIMIT 1"
     ).fetchone()
-    max_conflitos = consultas_por_horario[1] if consultas_por_horario else 1
+    max_conflitos = consultas_por_horario[1] if consultas_por_horario else 0
     total_vets = cursor.execute("SELECT COUNT(*) FROM veterinarios").fetchone()[0]
     while total_vets < max_conflitos:
         total_vets += 1
@@ -296,13 +294,13 @@ def init_db():
 
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_consulta_inicio_vet ON consultas (veterinario_id, data_hora)")
 
-    seed_dados_ficticios(cursor, especies_map)
-    seed_estoque_demo(cursor)
+    if seed_demo:
+        seed_dados_ficticios(cursor, especies_map)
+        seed_estoque_demo(cursor)
 
     connection.commit()
     connection.close()
     print("Banco de dados inicializado com sucesso.")
-    print("Logins de desenvolvimento: admin / 123456 e fernanda.calixto / Fer123")
 
 
 def seed_dados_ficticios(cursor, especies_map):
@@ -482,4 +480,6 @@ def seed_estoque_demo(cursor):
 
 
 if __name__ == "__main__":
-    init_db()
+    parser = argparse.ArgumentParser(description='Migração local; sem usuários/dados demo por padrão.')
+    parser.add_argument('--demo', action='store_true', help='Somente banco descartável de demonstração.')
+    init_db(seed_demo=parser.parse_args().demo)

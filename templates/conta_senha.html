@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card"><h1>Alterar senha</h1>
+<p>Use uma senha exclusiva com pelo menos 12 caracteres. Após salvar, entre novamente.</p>
+<form method="post" class="form-grid">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Senha atual <input type="password" name="senha_atual" autocomplete="current-password" required maxlength="128"></label>
+<label>Nova senha <input type="password" name="nova_senha" autocomplete="new-password" required minlength="12" maxlength="128"></label>
+<label>Confirme a nova senha <input type="password" name="confirmacao" autocomplete="new-password" required minlength="12" maxlength="128"></label>
+<button class="btn" type="submit">Salvar senha</button>
+</form></section>
+{% endblock %}

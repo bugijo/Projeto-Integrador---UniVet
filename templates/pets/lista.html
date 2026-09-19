@@ -52,7 +52,8 @@
                                             <a class="btn btn-secondary" href="{{ url_for('editar_pet', pet_id=pet['id']) }}">Editar</a>
                                             <a class="btn btn-secondary" href="{{ url_for('historico_clinico_pet_page', pet_id=pet['id']) }}">Prontuário</a>
                                             <form method="post" action="{{ url_for('excluir_pet', pet_id=pet['id']) }}">
-                                                <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este animal?')">Excluir</button>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button class="btn btn-danger" type="submit" data-confirm="Deseja excluir este animal?">Excluir</button>
                                             </form>
                                         </div>
                                     </td>

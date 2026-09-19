@@ -101,9 +101,10 @@
                             <strong>{{ usuario_logado.nome if usuario_logado else 'Visitante' }}</strong>
                             <small>{{ 'Administrador' if usuario_logado and usuario_logado.perfil == 'admin' else 'Equipe clínica' }}</small>
                         </div>
-                        <a class="logout-link" href="{{ url_for('logout') }}" aria-label="Sair do UniVet" title="Sair">
+                        <a href="{{ url_for('alterar_senha') }}">Alterar senha</a>
+<form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="logout-link" type="submit" aria-label="Sair do UniVet" title="Sair">
                             <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M14 8l4 4-4 4m4-4H9" /></svg>
-                        </a>
+                        </button></form>
                     </div>
                 </div>
             </aside>

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import app as app_module
 import init_db as init_db_module
+from support import FormClient
 
 
 class UniVetAppTests(unittest.TestCase):
@@ -15,10 +16,10 @@ class UniVetAppTests(unittest.TestCase):
         self.database_original_init = init_db_module.DATABASE
         app_module.DATABASE = self.db_path
         init_db_module.DATABASE = self.db_path
-        init_db_module.init_db()
+        init_db_module.init_db(seed_demo=True)
         app_module.limpar_caches_referencia()
         app_module.app.config.update(TESTING=True)
-        self.client = app_module.app.test_client()
+        self.client = FormClient(app_module.app, app_module.app.response_class)
         self._garantir_dados_base()
 
     def tearDown(self):
@@ -118,11 +119,11 @@ class UniVetAppTests(unittest.TestCase):
         resposta_admin = self._login("admin", "123456")
         self.assertIn("Página inicial", resposta_admin.get_data(as_text=True))
 
-        self.client.get("/logout", follow_redirects=True)
+        self.client.post("/logout", follow_redirects=True)
 
-        resposta_fernanda = self._login("fernanda.calixto", "Fer123")
+        resposta_fernanda = self._login("vet.demo", "Fer123")
         self.assertIn("Página inicial", resposta_fernanda.get_data(as_text=True))
-        self.assertIn("Dra. Fernanda Calixto", resposta_fernanda.get_data(as_text=True))
+        self.assertIn("Veterinária Demo", resposta_fernanda.get_data(as_text=True))
 
     def test_exportacoes_csv_exigem_login_e_retornam_csv(self):
         self.assertEqual(self.client.get("/estoque/exportar/posicao.csv").status_code, 302)
@@ -147,7 +148,7 @@ class UniVetAppTests(unittest.TestCase):
             self.assertNotIn("Traceback", resposta.get_data(as_text=True))
 
     def test_api_minima_de_estoque_retorna_dados_paginados(self):
-        self.assertEqual(self.client.get("/api/estoque/resumo").status_code, 302)
+        self.assertEqual(self.client.get("/api/estoque/resumo").status_code, 401)
         self._login("admin", "123456")
         resposta = self.client.get("/api/estoque/produtos?pagina=1&por_pagina=5")
         self.assertEqual(resposta.status_code, 200)
@@ -162,12 +163,12 @@ class UniVetAppTests(unittest.TestCase):
         conexao.close()
         self.assertEqual(
             [(item["login"], item["perfil"], item["ativo"]) for item in usuarios],
-            [("admin", "admin", 1), ("fernanda.calixto", "veterinaria", 1)],
+            [("admin", "admin", 1), ("vet.demo", "veterinaria", 1)],
         )
 
     def test_exclusao_de_veterinario_redistribui_consultas(self):
         self._login("admin", "123456")
-        alvo_id = self._id_veterinario("Dr. Rafael Moreira")
+        alvo_id = self._id_veterinario("Veterinário Demo")
         self.assertIsNotNone(alvo_id)
         consulta_id = self._criar_consulta(
             "2026-04-08T09:00",
@@ -192,13 +193,13 @@ class UniVetAppTests(unittest.TestCase):
 
     def test_exclusao_de_veterinario_exige_confirmacao(self):
         self._login("admin", "123456")
-        alvo_id = self._id_veterinario("Dr. Rafael Moreira")
+        alvo_id = self._id_veterinario("Veterinário Demo")
         resposta = self.client.post(f"/veterinarios/{alvo_id}/excluir", data={}, follow_redirects=True)
         self.assertIn("Confirme a exclusão para continuar.", resposta.get_data(as_text=True))
 
     def test_historico_clinico_da_consulta_exibe_prontuario_do_paciente(self):
-        self._login("fernanda.calixto", "Fer123")
-        veterinario_id = self._id_veterinario("Dra. Fernanda Calixto")
+        self._login("vet.demo", "Fer123")
+        veterinario_id = self._id_veterinario("Veterinária Demo")
         self._criar_consulta(
             "2026-04-05T10:00",
             veterinario_id,
@@ -224,7 +225,7 @@ class UniVetAppTests(unittest.TestCase):
         self.assertIn("Boa resposta ao tratamento.", texto)
 
     def test_prontuario_pet_adiciona_condicao_e_inicia_atendimento_com_paciente(self):
-        self._login("fernanda.calixto", "Fer123")
+        self._login("vet.demo", "Fer123")
         pet_id = self._id_pet()
 
         resposta = self.client.get(f"/pets/{pet_id}/historico-clinico")
@@ -274,7 +275,7 @@ class UniVetAppTests(unittest.TestCase):
                 "data_hora": "invalida",
                 "pet_id": self._id_pet(),
                 "servico_id": self._id_servico(),
-                "veterinario_id": self._id_veterinario("Dra. Fernanda Calixto"),
+                "veterinario_id": self._id_veterinario("Veterinária Demo"),
                 "tipo_atendimento": "Presencial",
                 "status": "Agendada",
                 "confirmacao_status": "Pendente",

@@ -10,8 +10,9 @@ import json
 import sqlite3
 import unicodedata
 
-from flask import Flask, Response, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, flash, g, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
+from security import register_security, start_session, end_session, password_hash
 
 from estoque.services import (
     EstoqueError,
@@ -37,7 +38,7 @@ from estoque.services import (
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATABASE = BASE_DIR / "banco.db"
+DATABASE = Path(os.environ.get("UNIVET_DATABASE", str(BASE_DIR / "banco.db")))
 STATUSS_CONSULTA = ("Agendada", "Concluida", "Cancelada")
 STATUSS_CONFIRMACAO = ("Pendente", "Confirmada", "Nao confirmada")
 TIPOS_ATENDIMENTO = ("Presencial", "Domiciliar")
@@ -53,7 +54,6 @@ PERFIS_AUTORIZADOS = ("admin", "veterinaria")
 LOGIN_DRA_FERNANDA = "fernanda.calixto"
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "univet-chave-inicial-dev")
 
 
 def garantir_banco_inicializado():
@@ -61,12 +61,12 @@ def garantir_banco_inicializado():
     connection = sqlite3.connect(DATABASE)
     try:
         tabela = connection.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('usuarios', 'produtos', 'condicoes_clinicas')"
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('usuarios', 'produtos', 'condicoes_clinicas', 'auth_sessions')"
         ).fetchall()
         colunas_produto = {item[1] for item in connection.execute("PRAGMA table_info(produtos)").fetchall()}
     finally:
         connection.close()
-    if len(tabela) == 3 and "margem_lucro_percentual" in colunas_produto:
+    if len(tabela) == 4 and "margem_lucro_percentual" in colunas_produto:
         return
     from init_db import init_db
 
@@ -75,10 +75,13 @@ def garantir_banco_inicializado():
 
 def get_db_connection():
     garantir_banco_inicializado()
-    connection = sqlite3.connect(DATABASE)
+    connection = sqlite3.connect(DATABASE, timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON;")
     return connection
+
+
+register_security(app, get_db_connection)
 
 
 def login_obrigatorio(view_function):
@@ -115,7 +118,11 @@ def csv_response(nome, cabecalho, linhas):
     saida = StringIO()
     escritor = csv.writer(saida, delimiter=";", lineterminator="\r\n")
     escritor.writerow(cabecalho)
-    escritor.writerows(linhas)
+    def safe_cell(value):
+        if isinstance(value, str) and value.lstrip().startswith(('=', '+', '-', '@', '\t', '\r', '\n')):
+            return "'" + value
+        return value
+    escritor.writerows([[safe_cell(value) for value in row] for row in linhas])
     conteudo = "\ufeff" + saida.getvalue()
     return Response(conteudo, mimetype="text/csv", headers={"Content-Disposition": f"attachment; filename={nome}"})
 
@@ -229,8 +236,10 @@ def serializar_row(row):
     return {chave: row[chave] for chave in row.keys()}
 
 
-def registrar_historico(entidade, registro_id, acao, dados):
-    connection = get_db_connection()
+def registrar_historico(entidade, registro_id, acao, dados, connection=None):
+    own_connection = connection is None
+    if own_connection:
+        connection = get_db_connection()
     connection.execute(
         """
         INSERT INTO historico_alteracoes (entidade, registro_id, acao, usuario_nome, dados_json, criado_em)
@@ -245,8 +254,9 @@ def registrar_historico(entidade, registro_id, acao, dados):
             datetime.now().strftime("%Y-%m-%dT%H:%M"),
         ),
     )
-    connection.commit()
-    connection.close()
+    if own_connection:
+        connection.commit()
+        connection.close()
 
 
 @lru_cache(maxsize=1)
@@ -493,15 +503,16 @@ def login():
         return redirect(url_for("pagina_inicial"))
     if request.method == "POST":
         identificador = request.form.get("login", "").strip()
-        senha = request.form.get("senha", "").strip()
+        senha = request.form.get("senha", "")
         usuario = usuario_por_login(identificador) if identificador else None
         if not identificador or not senha:
             flash("Informe o usuário e a senha para entrar.", "erro")
-        elif usuario and check_password_hash(usuario["senha_hash"], senha):
-            session["usuario_id"] = usuario["id"]
-            session["usuario_login"] = usuario["login"]
-            session["usuario_nome"] = usuario["nome"] or usuario["login"]
-            session["usuario_perfil"] = usuario["perfil"]
+        elif usuario and (not app.config['PRODUCTION'] or len(senha) >= 12) and check_password_hash(usuario["senha_hash"], senha):
+            connection = get_db_connection()
+            try:
+                start_session(connection, usuario)
+            finally:
+                connection.close()
             flash("Acesso liberado com sucesso.", "sucesso")
             return redirect(url_for("pagina_inicial"))
         else:
@@ -1470,12 +1481,18 @@ def salvar_consulta(formulario, consulta_id=None):
     if not data_hora or not pet_id or not servico_id or not veterinario_id or tipo_atendimento not in TIPOS_ATENDIMENTO or confirmacao_status not in STATUSS_CONFIRMACAO or status not in STATUSS_CONSULTA:
         return False, "Preencha corretamente os campos obrigatórios da consulta.", consulta, []
     duracao, servico = calcular_duracao_total(servico_id, tipo_atendimento)
+    if not servico:
+        return False, "Serviço inexistente.", consulta, []
     try:
         inicio_dt = parse_datetime_iso(data_hora)
     except ValueError:
         return False, "Informe uma data e hora válidas para a consulta.", consulta, []
     fim_dt = inicio_dt + timedelta(minutes=duracao)
     connection = get_db_connection()
+    if not connection.execute('SELECT 1 FROM pets WHERE id=?', (pet_id,)).fetchone() or not connection.execute('SELECT 1 FROM veterinarios WHERE id=?', (veterinario_id,)).fetchone():
+        connection.close()
+        return False, "Paciente ou veterinário inexistente.", consulta, []
+    connection.execute('BEGIN IMMEDIATE')
     disponivel, sugestoes = verificar_disponibilidade(connection, veterinario_id, inicio_dt, duracao, consulta_id)
     if not disponivel:
         connection.close()
@@ -1535,16 +1552,18 @@ def salvar_consulta(formulario, consulta_id=None):
                     confirmacao_status,
                 ),
             )
+        record_id = consulta_id or connection.execute('SELECT last_insert_rowid()').fetchone()[0]
+        registro = connection.execute('SELECT * FROM consultas WHERE id=?', (record_id,)).fetchone()
+        registrar_historico('consultas', record_id, 'editado' if consulta_id else 'criado', serializar_row(registro), connection)
         connection.commit()
     except sqlite3.IntegrityError:
+        connection.rollback()
         connection.close()
-        return False, "Horário inicial já utilizado para este veterinário.", consulta, []
-    if consulta_id:
-        registro = connection.execute("SELECT * FROM consultas WHERE id = ?", (consulta_id,)).fetchone()
-        registrar_historico("consultas", consulta_id, "editado", serializar_row(registro))
-    else:
-        registro = connection.execute("SELECT * FROM consultas ORDER BY id DESC LIMIT 1").fetchone()
-        registrar_historico("consultas", registro["id"], "criado", serializar_row(registro))
+        return False, "Não foi possível gravar: verifique vínculos e conflito de horário.", consulta, []
+    except Exception:
+        connection.rollback()
+        connection.close()
+        raise
     connection.close()
     return True, "", consulta, []
 
@@ -1641,12 +1660,22 @@ def adicionar_produto_consulta(consulta_id):
 @login_obrigatorio
 def excluir_consulta(consulta_id):
     connection = get_db_connection()
-    consulta = connection.execute("SELECT * FROM consultas WHERE id = ?", (consulta_id,)).fetchone()
-    connection.execute("DELETE FROM consultas WHERE id = ?", (consulta_id,))
-    connection.commit()
-    connection.close()
-    if consulta:
-        registrar_historico("consultas", consulta_id, "excluido", serializar_row(consulta))
+    try:
+        connection.execute('BEGIN IMMEDIATE')
+        consulta = connection.execute("SELECT * FROM consultas WHERE id = ?", (consulta_id,)).fetchone()
+        if connection.execute('SELECT 1 FROM itens_consulta WHERE consulta_id=?', (consulta_id,)).fetchone():
+            connection.rollback()
+            flash('Consulta com produtos utilizados deve ser preservada no histórico.', 'erro')
+            return redirect(url_for('listar_consultas'))
+        connection.execute("DELETE FROM consultas WHERE id = ?", (consulta_id,))
+        if consulta:
+            registrar_historico("consultas", consulta_id, "excluido", serializar_row(consulta), connection)
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
     flash("Consulta excluida com sucesso.", "sucesso")
     return redirect(url_for("listar_consultas"))
 
@@ -1708,9 +1737,9 @@ def adicionar_condicao_clinica(pet_id):
         (pet_id, condicao, observacoes, status, registrado_em, session.get("usuario_nome") or session.get("usuario_login", "Sistema")),
     )
     condicao_id = cursor.lastrowid
+    registrar_historico("condicoes_clinicas", condicao_id, "criada", {"pet_id": pet_id, "condicao": condicao, "status": status}, connection)
     connection.commit()
     connection.close()
-    registrar_historico("condicoes_clinicas", condicao_id, "criada", {"pet_id": pet_id, "condicao": condicao, "status": status})
     flash("Condição clínica adicionada ao prontuário.", "sucesso")
     return redirect(url_for("historico_clinico_pet_page", pet_id=pet_id))
 
@@ -1935,11 +1964,47 @@ def excluir_veterinario(veterinario_id):
     return redirect(url_for("listar_veterinarios_page"))
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["POST"])
 def logout():
-    session.clear()
+    connection = get_db_connection()
+    try:
+        end_session(connection)
+    finally:
+        connection.close()
     flash("Sessão encerrada com sucesso.", "sucesso")
     return redirect(url_for("login"))
+
+
+@app.route('/conta/senha', methods=['GET', 'POST'])
+@login_obrigatorio
+def alterar_senha():
+    if request.method == 'POST':
+        if not check_password_hash(g.current_user['senha_hash'], request.form.get('senha_atual', '')):
+            flash('Não foi possível alterar a senha. Confira os dados.', 'erro')
+        elif request.form.get('nova_senha') != request.form.get('confirmacao'):
+            flash('A confirmação da senha não confere.', 'erro')
+        else:
+            try:
+                hashed = password_hash(request.form.get('nova_senha', ''))
+            except ValueError as error:
+                flash(str(error), 'erro')
+            else:
+                connection = get_db_connection()
+                try:
+                    connection.execute('UPDATE usuarios SET senha_hash=?,session_version=session_version+1,must_change_password=0 WHERE id=?', (hashed, g.current_user['id']))
+                    connection.execute('DELETE FROM auth_sessions WHERE usuario_id=?', (g.current_user['id'],))
+                    connection.execute("INSERT INTO security_events(usuario_id,evento) VALUES (?,'password_changed')", (g.current_user['id'],))
+                    connection.commit()
+                finally:
+                    connection.close()
+                session.clear()
+                return redirect(url_for('login'))
+    return render_template('conta_senha.html', secao='conta', breadcrumbs=[('Minha conta', None)])
+
+
+@app.route('/health')
+def health():
+    return jsonify(status='ok', version=os.environ.get('RENDER_GIT_COMMIT', 'local'))
 
 
 @app.errorhandler(404)
