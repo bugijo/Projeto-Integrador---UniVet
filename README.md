@@ -1,12 +1,12 @@
 # UniVet
 
-Sistema de gestão veterinária desenvolvido para o Projeto Integrador I da UNIVESP.
+Sistema de gestão veterinária desenvolvido para o Projeto Integrador da UNIVESP e continuado no Projeto Integrador II.
 
 ## Visão geral
 
 O UniVet organiza a rotina da Clínica Veterinária Fernanda Calixto com foco em cadastros, agenda, prontuário clínico e operação diária.
 
-## Funcionalidades do MVP
+## Funcionalidades do UniVet 2.0
 
 - autenticação com dois perfis autorizados
 - página inicial com agenda do dia
@@ -23,6 +23,10 @@ O UniVet organiza a rotina da Clínica Veterinária Fernanda Calixto com foco em
 - rastreabilidade de movimentações, estornos e FEFO
 - alertas de estoque mínimo e vencimento
 - análise simples de consumo e sugestão transparente de reposição
+- dashboard com indicadores de valor, consumo e reposição
+- filtros e paginação em listagens de estoque
+- exportação CSV de movimentações, posição e consumo
+- API autenticada para resumo, produtos e movimentações de estoque
 
 ## Tecnologias utilizadas
 
@@ -49,6 +53,11 @@ UniVet/
 |-- estoque/
 |   |-- schema.py
 |   |-- services.py
+|-- docs/
+|   |-- relatorio-parcial-rascunho.md
+|   |-- evolucao-pi1-para-pi2.md
+|   |-- analise-propostas-estoque.md
+|   |-- integracao-propostas-estoque.md
 |-- .github/
 |   |-- workflows/
 |       |-- ci.yml
@@ -118,6 +127,20 @@ python -m unittest discover -s tests -v
 ```
 
 O projeto não depende de APIs pagas, serviços com cobrança por requisição ou bibliotecas comerciais. O protótipo utiliza Flask, SQLite, JavaScript, CSS e SVG próprios. O deploy descrito em `render.yaml` continua sujeito às limitações de persistência do SQLite em hospedagens gratuitas.
+
+## Rotas principais do estoque
+
+- `/estoque`: dashboard operacional;
+- `/estoque/produtos`: produtos, busca, filtros e paginação;
+- `/estoque/lotes`: lotes, validade, fornecedor e ajustes;
+- `/estoque/movimentacoes`: histórico, filtros e estornos;
+- `/estoque/relatorios`: consumo, reposição e indicadores;
+- `/estoque/exportar/*.csv`: exportações locais;
+- `/api/estoque/resumo`, `/api/estoque/produtos` e `/api/estoque/movimentacoes`: API autenticada.
+
+## Cobertura de testes
+
+A suíte atual possui 27 testes automatizados cobrindo autenticação, módulos clínicos, estoque, FEFO, validade, estoque negativo, estornos, integração com consultas, filtros, paginação, CSV, API e parâmetros inválidos.
 
 ## Pipeline GitHub
 
