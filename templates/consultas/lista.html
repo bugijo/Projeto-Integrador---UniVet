@@ -70,7 +70,7 @@
                                 </tr>
                             {% endfor %}
                         {% else %}
-                            <tr><td colspan="7" class="empty-state">Nenhuma consulta cadastrada para este mês.</td></tr>
+                            <tr><td colspan="7" class="empty-state"><div class="empty-state-content"><strong>Nenhuma consulta neste mês</strong><span>Agende um atendimento para preencher sua agenda.</span><a class="btn btn-secondary" href="{{ url_for('criar_consulta') }}">Agendar primeira consulta</a></div></td></tr>
                         {% endif %}
                     </tbody>
                 </table>

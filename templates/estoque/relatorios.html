@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}UniVet | Relatórios de estoque{% endblock %}
+
+{% block content %}
+    <section class="page-header">
+        <div>
+            <span class="eyebrow">Estoque · análise</span>
+            <h1>Relatórios de consumo</h1>
+            <p>Uma leitura objetiva do uso registrado nos últimos {{ dias }} dias para apoiar a rotina da clínica.</p>
+        </div>
+    </section>
+
+    <section class="card table-card report-controls">
+        <div class="card-body">
+            <form method="get" class="toolbar" aria-label="Filtros do relatório">
+                <div class="field-group">
+                    <label for="dias">Período analisado</label>
+                    <select id="dias" name="dias">
+                        <option value="7" {% if dias == 7 %}selected{% endif %}>Últimos 7 dias</option>
+                        <option value="30" {% if dias == 30 %}selected{% endif %}>Últimos 30 dias</option>
+                        <option value="90" {% if dias == 90 %}selected{% endif %}>Últimos 90 dias</option>
+                        <option value="365" {% if dias == 365 %}selected{% endif %}>Último ano</option>
+                    </select>
+                </div>
+                <div class="field-group"><label for="produto_id">Produto</label><select id="produto_id" name="produto_id"><option value="">Todos</option>{% for produto in produtos_filtro %}<option value="{{ produto['id'] }}" {% if filtros.produto_id == produto['id'] %}selected{% endif %}>{{ produto['nome'] }}</option>{% endfor %}</select></div>
+                <div class="field-group"><label for="categoria_id">Categoria</label><select id="categoria_id" name="categoria_id"><option value="">Todas</option>{% for categoria in categorias %}<option value="{{ categoria['id'] }}" {% if filtros.categoria_id == categoria['id'] %}selected{% endif %}>{{ categoria['nome'] }}</option>{% endfor %}</select></div>
+                <button class="btn" type="submit">Atualizar relatório</button>
+                <a class="btn btn-secondary" href="{{ url_for('exportar_consumo_csv', dias=dias, produto_id=filtros.produto_id, categoria_id=filtros.categoria_id) }}">Exportar CSV</a>
+            </form>
+        </div>
+    </section>
+
+    <section class="grid-cards report-metrics" aria-label="Resumo do relatório">
+        <article class="card metric-card">
+            <div class="card-body">
+                <span class="metric-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M8 16v-4m4 4V8m4 8v-6"/></svg></span>
+                <span class="metric-label">Consumo total</span>
+                <strong class="metric-value">{{ relatorio|sum(attribute='consumo')|round(2) }}</strong>
+                <span class="metric-context">Unidades no período</span>
+            </div>
+        </article>
+        <article class="card metric-card">
+            <div class="card-body"><span class="metric-label">Valor em estoque</span><strong class="metric-value">R$ {{ '%.2f'|format(relatorio|sum(attribute='valor_estoque')) }}</strong><span class="metric-context">Custo dos lotes ativos</span></div>
+        </article>
+        <article class="card metric-card">
+            <div class="card-body">
+                <span class="metric-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M8 16v-4m4 4V8m4 8v-6"/></svg></span>
+                <span class="metric-label">Produtos com uso</span>
+                <strong class="metric-value">{{ relatorio|selectattr('consumo', 'gt', 0)|list|length }}</strong>
+                <span class="metric-context">Com saída registrada</span>
+            </div>
+        </article>
+        <article class="card metric-card metric-card-warning">
+            <div class="card-body">
+                <span class="metric-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 4 9 16H3L12 4Z"/><path d="M12 9v5m0 3h.01"/></svg></span>
+                <span class="metric-label">Reposição recomendada</span>
+                <strong class="metric-value">{{ produtos_reposicao|length }}</strong>
+                <span class="metric-context">Produtos que pedem atenção</span>
+            </div>
+        </article>
+        <article class="card metric-card metric-card-accent">
+            <div class="card-body">
+                <span class="metric-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></span>
+                <span class="metric-label">Janela analisada</span>
+                <strong class="metric-value">{{ dias }}</strong>
+                <span class="metric-context">Dias de histórico</span>
+            </div>
+        </article>
+    </section>
+
+    <div class="report-layout">
+        <section class="card chart-card">
+            <div class="card-body">
+                <div class="section-heading">
+                    <div><span class="eyebrow">Tendência</span><h2>Consumo por período</h2></div>
+                    <span class="field-help">Saídas por dia</span>
+                </div>
+                <div class="period-chart" role="img" aria-label="Gráfico de consumo diário no período selecionado">
+                    {% set max_diario = consumo_diario|map(attribute='quantidade')|max|default(0, true) %}
+                    {% for dia in consumo_diario %}
+                        <div class="period-column">
+                            <span class="period-value">{{ dia['quantidade']|round(2) }}</span>
+                            <div class="period-track"><span class="period-bar" style="height: {% if max_diario %}{{ (dia['quantidade'] / max_diario * 100)|round(0) }}{% else %}3{% endif %}%"></span></div>
+                            <span class="period-label">{{ dia['dia']|data_br }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+
+        <section class="card chart-card">
+            <div class="card-body">
+                <div class="section-heading">
+                    <div><span class="eyebrow">Ranking</span><h2>Produtos mais utilizados</h2></div>
+                    <span class="field-help">Top 5 no período</span>
+                </div>
+                {% set max_produto = relatorio|map(attribute='consumo')|max|default(0, true) %}
+                <div class="ranking-list">
+                    {% for item in relatorio[:5] %}
+                        <div class="ranking-row">
+                            <div class="ranking-heading"><strong>{{ item['nome'] }}</strong><span>{{ item['consumo']|round(2) }} {{ item['unidade_medida'] }}</span></div>
+                            <div class="ranking-track"><span class="ranking-bar" style="width: {% if max_produto %}{{ (item['consumo'] / max_produto * 100)|round(0) }}{% else %}0{% endif %}%"></span></div>
+                        </div>
+                    {% else %}
+                        <div class="empty-state-content"><strong>Nenhum consumo registrado</strong><span>As saídas aparecerão neste ranking.</span></div>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <section class="card table-card">
+        <div class="card-body">
+            <div class="section-heading">
+                <div><span class="eyebrow">Detalhamento</span><h2>Consumo por produto</h2></div>
+                <span class="field-help">Dados rastreados no estoque</span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <caption class="sr-only">Consumo de produtos no período</caption>
+                    <thead><tr><th>Produto</th><th>Tipo</th><th>Consumo</th><th>Estoque atual</th><th>Situação</th></tr></thead>
+                    <tbody>
+                        {% for item in relatorio %}
+                            <tr><td><strong>{{ item['nome'] }}</strong></td><td>{{ item['tipo'] }}</td><td>{{ item['consumo']|round(2) }} {{ item['unidade_medida'] }}</td><td>{{ item['estoque_atual']|round(2) }}</td><td>{% if item['consumo'] > 0 %}<span class="state-badge state-normal">Com histórico</span>{% else %}<span class="state-badge state-muted">Sem uso no período</span>{% endif %}</td></tr>
+                        {% else %}
+                            <tr><td colspan="5" class="empty-state"><div class="empty-state-content"><strong>Nenhum produto ativo cadastrado</strong><span>Cadastre produtos para começar a acompanhar o consumo.</span></div></td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+{% endblock %}

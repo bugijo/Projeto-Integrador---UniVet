@@ -5,17 +5,21 @@
 {% block content %}
     <section class="page-header">
         <div>
+            <span class="eyebrow">Visão geral da operação</span>
             <h1>Página inicial</h1>
             <p>Visão geral da clínica com agenda do dia, indicadores e próximos atendimentos.</p>
         </div>
-        <a class="btn" href="{{ url_for('criar_consulta') }}">Agendar consulta</a>
+        <div class="actions">
+            <a class="btn btn-secondary" href="{{ url_for('estoque_dashboard') }}">Abrir estoque</a>
+            <a class="btn" href="{{ url_for('criar_consulta') }}">Agendar consulta</a>
+        </div>
     </section>
 
-    <section class="grid-cards">
-        <article class="card"><div class="card-body"><span class="metric-label">Tutores cadastrados</span><strong class="metric-value">{{ totais.tutores }}</strong></div></article>
-        <article class="card"><div class="card-body"><span class="metric-label">Animais cadastrados</span><strong class="metric-value">{{ totais.pets }}</strong></div></article>
-        <article class="card"><div class="card-body"><span class="metric-label">Consultas no sistema</span><strong class="metric-value">{{ totais.consultas }}</strong></div></article>
-        <article class="card"><div class="card-body"><span class="metric-label">Consultas de hoje</span><strong class="metric-value">{{ consultas_hoje|length }}</strong></div></article>
+    <section class="grid-cards dashboard-metrics" aria-label="Indicadores principais">
+        <article class="card metric-card"><div class="card-body"><span class="metric-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20v-1a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v1m2-8a3 3 0 1 0 0-6m1 9h1a4 4 0 0 1 4 4v1"/></svg></span><span class="metric-label">Tutores cadastrados</span><strong class="metric-value">{{ totais.tutores }}</strong><span class="metric-context">Base de responsáveis</span></div></article>
+        <article class="card metric-card"><div class="card-body"><span class="metric-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 11a3 3 0 1 0-3-3m11 3a3 3 0 1 0 3-3M9 17a3 3 0 1 1-6 0c0-2 2-3 3-3s3 1 3 3Zm12 0a3 3 0 1 1-6 0c0-2 2-3 3-3s3 1 3 3Z"/><path d="M12 13c-2.5 0-4 1.7-4 3.8C8 19 9.8 20 12 20s4-1 4-3.2c0-2.1-1.5-3.8-4-3.8Z"/></svg></span><span class="metric-label">Animais cadastrados</span><strong class="metric-value">{{ totais.pets }}</strong><span class="metric-context">Pacientes ativos</span></div></article>
+        <article class="card metric-card"><div class="card-body"><span class="metric-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3v3m10-3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/><path d="M8 13h3m2 0h3m-8 4h3m2 0h3"/></svg></span><span class="metric-label">Consultas no sistema</span><strong class="metric-value">{{ totais.consultas }}</strong><span class="metric-context">Histórico de atendimentos</span></div></article>
+        <article class="card metric-card metric-card-accent"><div class="card-body"><span class="metric-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></span><span class="metric-label">Consultas de hoje</span><strong class="metric-value">{{ consultas_hoje|length }}</strong><span class="metric-context">Agenda operacional</span></div></article>
     </section>
 
     <section class="grid-cards">
@@ -23,6 +27,16 @@
         <article class="card soft-card"><div class="card-body"><span class="metric-label">Concluidas hoje</span><strong class="metric-value">{{ resumo_hoje["Concluida"] }}</strong></div></article>
         <article class="card soft-card"><div class="card-body"><span class="metric-label">Canceladas hoje</span><strong class="metric-value">{{ resumo_hoje["Cancelada"] }}</strong></div></article>
     </section>
+
+    <section class="dashboard-strip" aria-label="Resumo do estoque">
+        <div><span class="eyebrow">Estoque</span><h2>Visão rápida do estoque</h2><p>Alertas importantes para a operação da clínica.</p></div>
+        <div class="dashboard-strip-metrics"><a class="mini-metric" href="{{ url_for('listar_produtos_page') }}"><span>Produtos ativos</span><strong>{{ estoque.produtos }}</strong></a><a class="mini-metric" href="{{ url_for('listar_produtos_page', situacao='baixo') }}"><span>Abaixo do mínimo</span><strong>{{ estoque.baixo }}</strong></a><a class="mini-metric" href="{{ url_for('listar_lotes_page', proximos='1') }}"><span>Vencendo em 30 dias</span><strong>{{ estoque.vencendo }}</strong></a></div>
+    </section>
+
+    <div class="dashboard-columns">
+        <section class="card table-card"><div class="card-body"><div class="section-heading"><div><span class="eyebrow">Atenção</span><h2>Produtos críticos</h2></div><a class="text-link" href="{{ url_for('estoque_dashboard') }}">Abrir estoque</a></div><div class="table-scroll"><table><caption class="sr-only">Produtos abaixo do estoque mínimo</caption><thead><tr><th>Produto</th><th>Atual</th><th>Mínimo</th></tr></thead><tbody>{% for produto in produtos_criticos %}<tr><td><a class="table-link" href="{{ url_for('detalhar_produto', produto_id=produto['id']) }}">{{ produto['nome'] }}</a></td><td>{{ produto['estoque_total']|round(2) }}</td><td>{{ produto['estoque_minimo']|round(2) }}</td></tr>{% else %}<tr><td colspan="3" class="empty-state">Nenhum produto crítico.</td></tr>{% endfor %}</tbody></table></div></div></section>
+        <section class="card table-card"><div class="card-body"><div class="section-heading"><div><span class="eyebrow">Validade</span><h2>Próximos vencimentos</h2></div><a class="text-link" href="{{ url_for('listar_lotes_page', proximos='1') }}">Ver lotes</a></div><div class="table-scroll"><table><caption class="sr-only">Próximos vencimentos de estoque</caption><thead><tr><th>Produto</th><th>Lote</th><th>Validade</th></tr></thead><tbody>{% for lote in lotes_vencendo %}<tr><td>{{ lote['produto_nome'] }}</td><td>{{ lote['numero_lote'] }}</td><td><span class="state-badge state-attention">{{ lote['validade']|data_br }}</span></td></tr>{% else %}<tr><td colspan="3" class="empty-state">Nenhum vencimento próximo.</td></tr>{% endfor %}</tbody></table></div></div></section>
+    </div>
 
     <section class="card table-card">
         <div class="card-body">

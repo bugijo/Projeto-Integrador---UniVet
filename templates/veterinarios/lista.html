@@ -32,6 +32,8 @@
                                     </div>
                                 </td>
                             </tr>
+                        {% else %}
+                            <tr><td colspan="2" class="empty-state"><div class="empty-state-content"><strong>Nenhum veterinário cadastrado</strong><span>Os profissionais disponíveis aparecem nesta tabela.</span></div></td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

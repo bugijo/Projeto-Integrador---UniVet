@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}UniVet | Ajustar lote{% endblock %}
+{% block content %}
+    <section class="page-header"><div><span class="eyebrow">Estoque</span><h1>Ajustar lote</h1><p>{{ lote['produto_nome'] }} · lote {{ lote['numero_lote'] }}</p></div><a class="btn btn-secondary" href="{{ url_for('listar_lotes_page') }}">Voltar</a></section>
+    <section class="card form-card"><div class="card-body"><div class="highlight-box">Saldo atual: <strong>{{ lote['quantidade_atual']|round(2) }} {{ lote['unidade_medida'] }}</strong>. O ajuste será registrado no histórico.</div><form method="post" class="form-grid"><div class="field-group"><label for="nova_quantidade">Nova quantidade</label><input id="nova_quantidade" name="nova_quantidade" type="number" min="0" step="0.01" value="{{ lote['quantidade_atual'] }}" required></div><div class="field-group"><label for="motivo">Motivo do ajuste</label><textarea id="motivo" name="motivo" class="compact-textarea" placeholder="Ex.: conferência física do inventário" required></textarea></div><div class="actions"><button class="btn" type="submit">Registrar ajuste</button><a class="btn btn-secondary" href="{{ url_for('listar_lotes_page') }}">Cancelar</a></div></form></div></section>
+{% endblock %}

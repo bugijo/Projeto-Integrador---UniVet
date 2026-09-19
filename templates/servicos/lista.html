@@ -32,6 +32,8 @@
                                     </div>
                                 </td>
                             </tr>
+                        {% else %}
+                            <tr><td colspan="3" class="empty-state"><div class="empty-state-content"><strong>Nenhum serviço cadastrado</strong><span>Os serviços disponíveis aparecem nesta tabela.</span></div></td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

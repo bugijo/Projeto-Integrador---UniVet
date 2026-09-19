@@ -34,7 +34,7 @@
                     <input type="text" id="endereco" name="endereco" value="{{ tutor['endereco'] if tutor else '' }}" placeholder="Rua, numero e bairro">
                 </div>
 
-                <div class="actions" style="grid-column: 1 / -1;">
+                <div class="actions full-width">
                     <button class="btn" type="submit">Salvar tutor</button>
                     <a class="btn btn-secondary" href="{{ url_for('listar_tutores') }}">Cancelar</a>
                 </div>

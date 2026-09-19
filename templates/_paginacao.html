@@ -1,0 +1,7 @@
+{% if pagina_resultado and pagina_resultado.total_paginas > 1 %}
+<nav class="pagination" aria-label="Paginação">
+    {% if pagina_resultado.pagina > 1 %}<a class="btn btn-secondary" href="{{ url_pagina(pagina_resultado.pagina - 1) }}">Anterior</a>{% endif %}
+    <span aria-current="page">Página {{ pagina_resultado.pagina }} de {{ pagina_resultado.total_paginas }} · {{ pagina_resultado.total }} registros</span>
+    {% if pagina_resultado.pagina < pagina_resultado.total_paginas %}<a class="btn btn-secondary" href="{{ url_pagina(pagina_resultado.pagina + 1) }}">Próxima</a>{% endif %}
+</nav>
+{% endif %}

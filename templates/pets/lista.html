@@ -50,7 +50,7 @@
                                     <td>
                                         <div class="inline-actions">
                                             <a class="btn btn-secondary" href="{{ url_for('editar_pet', pet_id=pet['id']) }}">Editar</a>
-                                            <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='pets', registro_id=pet['id']) }}">Histórico</a>
+                                            <a class="btn btn-secondary" href="{{ url_for('historico_clinico_pet_page', pet_id=pet['id']) }}">Prontuário</a>
                                             <form method="post" action="{{ url_for('excluir_pet', pet_id=pet['id']) }}">
                                                 <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este animal?')">Excluir</button>
                                             </form>
@@ -60,7 +60,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="7" class="empty-state">Nenhum animal cadastrado até o momento.</td>
+                                <td colspan="7" class="empty-state"><div class="empty-state-content"><strong>Nenhum animal cadastrado</strong><span>Adicione um paciente para começar o histórico clínico.</span><a class="btn btn-secondary" href="{{ url_for('criar_pet') }}">Cadastrar primeiro animal</a></div></td>
                             </tr>
                         {% endif %}
                     </tbody>

@@ -12,3 +12,5 @@ banco.db
 .pytest_cache/
 server.out.log
 server.err.log
+output/pdf/
+tmp/
