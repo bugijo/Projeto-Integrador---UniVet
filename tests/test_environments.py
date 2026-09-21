@@ -115,3 +115,28 @@ print(json.dumps([c.get(p).status_code for p in ('/pagina-inicial','/consultas',
         self.assertNotEqual(result.returncode,0)
         self.assertEqual(result.stdout,'')
         self.assertIn('terminal local interativo',result.stderr)
+
+    def test_production_first_access_and_process_restart(self):
+        result = self.run_isolated('production', '''
+import init_db, json, secrets, subprocess, sys
+init_db.init_db()
+from admin_cli import manage
+temporary=secrets.token_urlsafe(24)
+manage(init_db.DATABASE,'bootstrap','operator.fictitious',password=temporary)
+import app
+from support import FormClient
+c=FormClient(app.app,app.app.response_class)
+def post(path,data):
+    c.get('/conta/senha' if path=='/conta/senha' else '/login',base_url='https://localhost')
+    with c.session_transaction() as state:
+        data['csrf_token']=state['csrf_token']
+    return c.post(path,base_url='https://localhost',data=data)
+post('/login',{'login':'operator.fictitious','senha':temporary})
+restricted=c.get('/pagina-inicial',base_url='https://localhost').location.endswith('/conta/senha')
+final=secrets.token_urlsafe(24)
+r=post('/conta/senha',{'senha_atual':temporary,'nova_senha':final,'confirmacao':final})
+dashboard=c.get('/pagina-inicial',base_url='https://localhost').status_code
+restart=subprocess.run([sys.executable,'-c',"import init_db,sqlite3;init_db.init_db();c=sqlite3.connect(init_db.DATABASE);print(c.execute('SELECT count(*) FROM usuarios WHERE must_change_password=0').fetchone()[0])"],capture_output=True,text=True,check=True)
+print(json.dumps([restricted,r.location.endswith('/pagina-inicial'),dashboard,restart.stdout.splitlines()[-1]]))
+''')
+        self.assertEqual(result,[True,True,200,'1'])
