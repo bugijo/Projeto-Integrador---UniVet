@@ -8,10 +8,11 @@ from werkzeug.security import generate_password_hash
 
 from estoque.schema import criar_tabelas_estoque
 from security import security_schema
+from config import load_settings, verify_database_environment
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATABASE = Path(os.environ.get("UNIVET_DATABASE", str(BASE_DIR / "banco.db")))
+DATABASE = load_settings().database
 
 ESPECIES = [
     ("Cão", None), ("Gato", None), ("Ave", None), ("Réptil", None), ("Roedor", None),
@@ -107,6 +108,11 @@ def init_db(seed_demo=False):
     if seed_demo and os.environ.get('UNIVET_ENV') == 'production':
         raise RuntimeError('Dados demo não são permitidos em produção.')
     connection = sqlite3.connect(DATABASE)
+    try:
+        verify_database_environment(connection, os.environ.get('UNIVET_ENV', 'development'), initialize=True)
+    except Exception:
+        connection.close()
+        raise
     connection.execute('PRAGMA journal_mode=WAL')
     connection.execute('PRAGMA busy_timeout=10000')
     cursor = connection.cursor()

@@ -11,6 +11,15 @@ from datetime import timedelta
 from flask import abort, g, jsonify, redirect, request, session, url_for
 from werkzeug.security import generate_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
+from flask.sessions import SecureCookieSessionInterface
+
+
+class EnvironmentSessionInterface(SecureCookieSessionInterface):
+    def get_signing_serializer(self, app):
+        serializer = super().get_signing_serializer(app)
+        if serializer is not None:
+            serializer.salt = ('univet-session:' + app.config['UNIVET_ENV']).encode()
+        return serializer
 
 ADMIN_WRITES = {
     'criar_produto', 'editar_produto', 'alternar_produto', 'listar_categorias_page',
@@ -98,6 +107,8 @@ def register_security(app, get_connection):
                       MAX_CONTENT_LENGTH=256 * 1024, MAX_FORM_MEMORY_SIZE=256 * 1024,
                       RATE_LIMIT_ENABLED=production or os.environ.get('UNIVET_RATE_LIMIT_ENABLED', '1') != '0',
                       PRODUCTION=production)
+    app.config.update(UNIVET_ENV=mode, SESSION_COOKIE_NAME='session' if mode in ('development', 'test') else 'univet_' + mode)
+    app.session_interface = EnvironmentSessionInterface()
     if os.environ.get('UNIVET_TRUST_PROXY') == '1':
         # Somente atrás de UM proxy confiável, sem acesso direto ao backend.
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=0)

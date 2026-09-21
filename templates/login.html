@@ -16,7 +16,7 @@
             <div class="welcome-brand">
                 <img src="{{ logo_url }}" alt="Logo da Clinica Veterinaria Fernanda Calixto">
                 <div>
-                    <span class="pill">Acesso seguro da clínica</span>
+                    <span class="pill">{{ 'Ambiente de demonstração — dados fictícios' if config.UNIVET_ENV == 'demo' else 'Acesso seguro da clínica' }}</span>
                     <h1>Bem-vinda ao UniVet</h1>
                     <p>
                         Entre com usuário e senha para acessar a rotina clínica com

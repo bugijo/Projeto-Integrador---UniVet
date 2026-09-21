@@ -1,22 +1,28 @@
 """Administração local explícita; senhas somente por prompt privado."""
 import argparse
-import getpass
+import secrets
+import sys
 from pathlib import Path
 import sqlite3
 
 from security import password_hash
+from config import load_settings, verify_database_environment
 
 
 def manage(database, action, login, name='', role='veterinaria', password=None):
     path = Path(database).resolve()
     if not path.is_file():
         raise ValueError('Banco inexistente. Execute a migração explicitamente primeiro.')
+    settings = load_settings()
+    if settings.environment in ('demo','production') and path != settings.database:
+        raise ValueError('Banco administrativo difere do ambiente configurado.')
     if role not in ('admin', 'veterinaria') or not login.strip() or len(login) > 100:
         raise ValueError('Usuário ou perfil inválido.')
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys=ON')
     try:
+        verify_database_environment(conn, settings.environment)
         conn.execute('BEGIN IMMEDIATE')
         user = conn.execute('SELECT * FROM usuarios WHERE login=?', (login,)).fetchone()
         if action in ('bootstrap', 'create-user'):
@@ -26,7 +32,7 @@ def manage(database, action, login, name='', role='veterinaria', password=None):
                 raise ValueError('Usuário já existe; nenhuma alteração realizada.')
             cursor = conn.execute('INSERT INTO usuarios(login,nome,perfil,senha_hash,ativo,must_change_password) VALUES (?,?,?,?,1,?)',
                                  (login, name.strip() or login, 'admin' if action == 'bootstrap' else role,
-                                  password_hash(password or ''), int(action != 'bootstrap')))
+                                  password_hash(password or ''), 1))
             user_id = cursor.lastrowid
         else:
             if not user:
@@ -62,14 +68,16 @@ def main():
     args = parser.parse_args()
     password = None
     if args.action != 'deactivate':
-        password = getpass.getpass('Senha privada (mínimo 12 caracteres): ')
-        if password != getpass.getpass('Confirme: '):
-            parser.error('Senhas não conferem.')
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            parser.error('Execute em terminal local interativo, sem redirecionamento ou gravação da sessão.')
+        password = secrets.token_urlsafe(24)
     try:
         manage(args.database, args.action, args.login, args.name, args.role, password)
-    except (ValueError, sqlite3.Error):
+    except (ValueError, RuntimeError, sqlite3.Error):
         parser.exit(1, 'Operação recusada. Confira usuário, política de senha e schema do banco; nada foi confirmado.\n')
-    print('Operação concluída. Senha não registrada em log.')
+    print('Operação concluída.')
+    if password is not None:
+        print('Senha temporária (única exibição; entregue por canal privado): ' + password)
 
 
 if __name__ == '__main__':

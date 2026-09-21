@@ -129,7 +129,8 @@ class SecurityTests(unittest.TestCase):
         newer=secrets.token_urlsafe(24)
         response=self.client.post('/conta/senha',data={'senha_atual':new,'nova_senha':newer,'confirmacao':newer})
         self.assertEqual(response.status_code,302)
-        self.assertEqual(self.client.get('/api/estoque/resumo').status_code,401)
+        self.assertTrue(response.location.endswith('/pagina-inicial'))
+        self.assertEqual(self.client.get('/api/estoque/resumo').status_code,200)
         self.client.post('/login',data={'login':'admin','senha':newer})
         self.assertEqual(self.client.get('/api/estoque/resumo').status_code,200)
         with self.assertRaises(ValueError):
@@ -154,7 +155,9 @@ class SecurityTests(unittest.TestCase):
 
     def test_production_https_headers_and_secure_config(self):
         import json
-        env=dict(os.environ,UNIVET_ENV='production',SECRET_KEY=secrets.token_hex(32))
+        env=dict(os.environ,UNIVET_ENV='production',SECRET_KEY=secrets.token_hex(32), DATABASE_URL='sqlite:////tmp/univet-static-test-unused.db', UNIVET_SQLITE_PERSISTENT='1')
+        for key in ('UNIVET_DATABASE', 'DEMO_DATABASE_URL', 'RENDER'):
+            env.pop(key,None)
         env.pop('UNIVET_TRUST_PROXY',None)
         script="""import app,json
 c=app.app.test_client()

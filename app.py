@@ -10,9 +10,10 @@ import json
 import sqlite3
 import unicodedata
 
-from flask import Flask, Response, flash, g, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, flash, g, has_request_context, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
 from security import register_security, start_session, end_session, password_hash
+from config import load_settings, verify_database_environment
 
 from estoque.services import (
     EstoqueError,
@@ -38,7 +39,8 @@ from estoque.services import (
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATABASE = Path(os.environ.get("UNIVET_DATABASE", str(BASE_DIR / "banco.db")))
+SETTINGS = load_settings()
+DATABASE = SETTINGS.database
 STATUSS_CONSULTA = ("Agendada", "Concluida", "Cancelada")
 STATUSS_CONFIRMACAO = ("Pendente", "Confirmada", "Nao confirmada")
 TIPOS_ATENDIMENTO = ("Presencial", "Domiciliar")
@@ -57,9 +59,12 @@ app = Flask(__name__)
 
 
 def garantir_banco_inicializado():
-    # Em produção o SQLite pode iniciar vazio; neste caso, criamos a estrutura automaticamente.
+    # Somente desenvolvimento auto-inicializa. Ambientes publicados exigem migração explícita.
+    if SETTINGS.environment in ('demo', 'production') and not DATABASE.is_file():
+        raise RuntimeError('Banco não inicializado; execute migração explícita.')
     connection = sqlite3.connect(DATABASE)
     try:
+        verify_database_environment(connection, SETTINGS.environment)
         tabela = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('usuarios', 'produtos', 'condicoes_clinicas', 'auth_sessions')"
         ).fetchall()
@@ -68,6 +73,8 @@ def garantir_banco_inicializado():
         connection.close()
     if len(tabela) == 4 and "margem_lucro_percentual" in colunas_produto:
         return
+    if SETTINGS.environment in ('demo', 'production'):
+        raise RuntimeError('Schema incompleto; execute migração explícita.')
     from init_db import init_db
 
     init_db()
@@ -78,7 +85,16 @@ def get_db_connection():
     connection = sqlite3.connect(DATABASE, timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON;")
+    if has_request_context():
+        g.setdefault('database_connections', []).append(connection)
     return connection
+
+
+@app.teardown_request
+def close_request_connections(error=None):
+    # close() também reverte escritas não confirmadas em caminhos excepcionais.
+    for connection in g.pop('database_connections', []):
+        connection.close()
 
 
 register_security(app, get_db_connection)
@@ -1985,6 +2001,8 @@ def alterar_senha():
             flash('Não foi possível alterar a senha. Confira os dados.', 'erro')
         elif request.form.get('nova_senha') != request.form.get('confirmacao'):
             flash('A confirmação da senha não confere.', 'erro')
+        elif check_password_hash(g.current_user['senha_hash'], request.form.get('nova_senha', '')):
+            flash('A nova senha deve ser diferente da senha atual.', 'erro')
         else:
             try:
                 hashed = password_hash(request.form.get('nova_senha', ''))
@@ -1993,15 +2011,24 @@ def alterar_senha():
             else:
                 connection = get_db_connection()
                 try:
-                    connection.execute('UPDATE usuarios SET senha_hash=?,session_version=session_version+1,must_change_password=0 WHERE id=?', (hashed, g.current_user['id']))
+                    changed = connection.execute('UPDATE usuarios SET senha_hash=?,session_version=session_version+1,must_change_password=0 WHERE id=? AND ativo=1 AND session_version=?', (hashed, g.current_user['id'], g.current_user['session_version']))
+                    if changed.rowcount != 1:
+                        connection.rollback()
+                        session.clear()
+                        return redirect(url_for('login'))
                     connection.execute('DELETE FROM auth_sessions WHERE usuario_id=?', (g.current_user['id'],))
                     connection.execute("INSERT INTO security_events(usuario_id,evento) VALUES (?,'password_changed')", (g.current_user['id'],))
                     connection.commit()
+                    if g.current_user['must_change_password']:
+                        user = connection.execute('SELECT * FROM usuarios WHERE id=?', (g.current_user['id'],)).fetchone()
+                        start_session(connection, user)
+                        flash('Nova senha definida com sucesso.', 'sucesso')
+                        return redirect(url_for('pagina_inicial'))
                 finally:
                     connection.close()
                 session.clear()
                 return redirect(url_for('login'))
-    return render_template('conta_senha.html', secao='conta', breadcrumbs=[('Minha conta', None)])
+    return render_template('conta_senha.html', primeiro_acesso=bool(g.current_user['must_change_password']), secao='conta', breadcrumbs=[('Minha conta', None)])
 
 
 @app.route('/health')
