@@ -126,6 +126,8 @@ def register_security(app, get_connection):
             return
         if request.endpoint is None:
             abort(404)
+        if any(len(request.args.getlist(name)) != 1 or len(request.args[name]) > 512 for name in request.args):
+            abort(400)
         conn = get_connection()
         try:
             if session.get('sid'):

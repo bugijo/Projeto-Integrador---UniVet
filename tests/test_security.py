@@ -89,6 +89,11 @@ class SecurityTests(unittest.TestCase):
         self.assertIn("'=1+1",response.get_data(as_text=True))
         self.assertIn("'  @SUM",response.get_data(as_text=True))
         self.assertEqual(self.client.post('/estoque/categorias',data={'nome':'x'*513}).status_code,400)
+        response=self.client.post('/pets/novo',data={'nome':'Fictício','especie_id':'999999','tutor_id':'1','raca_personalizada':'Fictícia'})
+        self.assertLess(response.status_code,500)
+        response=self.client.post('/consultas/nova',data={'data_hora':'9999-12-31T23:59','pet_id':'1','servico_id':'1','veterinario_id':'1','tipo_atendimento':'Presencial','confirmacao_status':'Pendente','status':'Agendada'})
+        self.assertLess(response.status_code,500)
+        self.assertEqual(self.client.get('/api/estoque/produtos',query_string={'busca':'x'*513}).status_code,400)
 
     def test_headers_and_cookie(self):
         self.login()

@@ -1270,7 +1270,7 @@ def criar_pet():
         raca = None if not raca_id else next((item for item in listar_racas_por_especie(especie_id) if item["id"] == raca_id), None)
         nome_raca = raca_personalizada if not raca else raca["nome"]
         pet = {"nome": nome, "especie_id": especie_id, "raca_id": raca_id, "raca_personalizada": raca_personalizada, "idade": idade, "tutor_id": tutor_id, "historico": historico}
-        if not nome or not especie_id or not tutor_id or not nome_raca:
+        if not nome or not especie or not tutor_id or not nome_raca:
             flash("Preencha os campos obrigatórios do animal.", "erro")
             return render_template("pets/form.html", pet=pet, acao="Novo Animal", secao="pets", breadcrumbs=breadcrumbs_padrao(("Animais", url_for("listar_pets")), ("Novo animal", None)), **contexto)
         connection = get_db_connection()
@@ -1317,7 +1317,7 @@ def editar_pet(pet_id):
         raca = None if not raca_id else next((item for item in listar_racas_por_especie(especie_id) if item["id"] == raca_id), None)
         nome_raca = raca_personalizada if not raca else raca["nome"]
         pet = {"id": pet_id, "nome": nome, "especie_id": especie_id, "raca_id": raca_id, "raca_personalizada": raca_personalizada, "idade": idade, "tutor_id": tutor_id, "historico": historico}
-        if not nome or not especie_id or not tutor_id or not nome_raca:
+        if not nome or not especie or not tutor_id or not nome_raca:
             flash("Preencha os campos obrigatórios do animal.", "erro")
             return render_template("pets/form.html", pet=pet, acao="Editar Animal", secao="pets", breadcrumbs=breadcrumbs_padrao(("Animais", url_for("listar_pets")), ("Editar animal", None)), **contexto)
         try:
@@ -1485,6 +1485,8 @@ def salvar_consulta(formulario, consulta_id=None):
         return False, "Serviço inexistente.", consulta, []
     try:
         inicio_dt = parse_datetime_iso(data_hora)
+        if not 1900 <= inicio_dt.year <= 2100:
+            raise ValueError('Data fora do intervalo permitido.')
     except ValueError:
         return False, "Informe uma data e hora válidas para a consulta.", consulta, []
     fim_dt = inicio_dt + timedelta(minutes=duracao)
@@ -1834,7 +1836,7 @@ def editar_servico(servico_id):
         nome = request.form.get("nome", "").strip()
         duracao = request.form.get("duracao_minutos", type=int)
         dados = {"id": servico_id, "nome": nome, "duracao_minutos": duracao}
-        if not nome or not duracao or duracao < 20:
+        if not nome or not duracao or not 20 <= duracao <= 1440:
             flash("Informe um nome e duração mínima de 20 minutos.", "erro")
             return render_template("servicos/form.html", servico=dados, acao="Editar serviço", secao="servicos", breadcrumbs=breadcrumbs_padrao(("Serviços", url_for("listar_servicos_page")), ("Editar serviço", None)))
         connection = get_db_connection()
