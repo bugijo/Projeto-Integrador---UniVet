@@ -23,7 +23,7 @@ Branch `security/demo-producao-isolados`, sucessora local da branch de contexto 
 
 Contagem de pendências nesta classificação de liberação: **2 bloqueadores, 2 altos, 3 médios, 0 baixos**. Não é contagem de toda vulnerabilidade possível. Resolvido localmente não afirma que a correção foi implantada.
 
-Checkpoint final: **77 testes passaram (27 anteriores +50), 0 falhas, 18,969 s**, inclusive primeiro acesso HTTPS e restart em produção fictícia. Backup/restore compara schema/conteúdo de tabelas fictícias, não apenas contagens; concorrência inclui ajuste, estorno, saída e uso clínico. Navegador local anterior confirmou login/formulários e XSS escapado sem execução. Mudanças posteriores de primeiro acesso ainda precisam QA visual final.
+Checkpoint final: **77 testes passaram (27 anteriores +50), 0 falhas, 18,673 s**, sem depender de PYTHONPATH, inclusive primeiro acesso HTTPS e restart em produção fictícia. Log `artifacts/final-ci-command-tests.log`. Backup/restore compara schema/conteúdo de tabelas fictícias, não apenas contagens; concorrência inclui ajuste, estorno, saída e uso clínico. Navegador local anterior confirmou login/formulários e XSS escapado sem execução. Mudanças posteriores de primeiro acesso ainda precisam QA visual final.
 
 Carga: 1/5/10/20/30/50 usuários, zero erros nos perfis curtos com WAL. Soak 10 usuários/600 s: **1 timeout em 37.680**, p95 58 ms/p99 160 ms; não aprovado integralmente. Fonte e limites em `relatorio-carga.md`.
 

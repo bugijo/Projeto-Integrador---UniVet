@@ -69,6 +69,7 @@ class EnvironmentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='univet-mode-') as directory:
             env = {k:v for k,v in os.environ.items() if k not in ('DATABASE_URL','DEMO_DATABASE_URL','UNIVET_DATABASE','RENDER','UNIVET_TRUST_PROXY')}
             env.update(UNIVET_ENV=mode, SECRET_KEY=secrets.token_hex(32), UNIVET_SQLITE_PERSISTENT='1')
+            env['PYTHONPATH'] = str(Path(__file__).resolve().parent)
             env['DATABASE_URL' if mode=='production' else 'DEMO_DATABASE_URL'] = 'sqlite:///'+str(Path(directory)/'isolated.db')
             result = subprocess.run([sys.executable, '-c', script], env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stderr)

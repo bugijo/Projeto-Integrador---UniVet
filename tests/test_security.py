@@ -148,10 +148,13 @@ class SecurityTests(unittest.TestCase):
             manage(self.fixture.db_path,'bootstrap','another',password=password)
 
     def test_production_rejects_missing_secret(self):
-        env=dict(os.environ,UNIVET_ENV='production')
+        env=dict(os.environ,UNIVET_ENV='production', DATABASE_URL='sqlite:////tmp/univet-static-test-unused.db', UNIVET_SQLITE_PERSISTENT='1')
+        for key in ('UNIVET_DATABASE', 'DEMO_DATABASE_URL', 'RENDER'):
+            env.pop(key,None)
         env.pop('SECRET_KEY',None)
         result=subprocess.run([sys.executable,'-c','import app'],env=env,capture_output=True,timeout=10)
         self.assertNotEqual(result.returncode,0)
+        self.assertIn(b'SECRET_KEY', result.stderr)
 
     def test_production_https_headers_and_secure_config(self):
         import json

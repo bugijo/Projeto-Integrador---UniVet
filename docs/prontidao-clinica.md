@@ -25,7 +25,7 @@ Controles locais: CSRF, hash Werkzeug, sessão revogável/expiração/rotação,
 
 Clínica: histórico de cadastros e alterações na mesma transação; consulta cancelada em vez de apagada; concluídas, condições e autoria protegidas de exclusão. Agendamentos sem atendimento podem ser redistribuídos com registro de histórico ao remover profissional; política completa de adendos ainda pendente.
 
-Checkpoint final da rodada: **77 testes = 27 anteriores +50 novos; 77 passaram, 0 falharam**, log `artifacts/final-isolation-tests.log`. Inclui banco limpo, duas inicializações, primeiro acesso HTTPS e novo processo preservando conta fictícia. Não equivale a redeploy em nuvem nem fluxo clínico integral na futura arquitetura PostgreSQL.
+Checkpoint final da rodada: **77 testes = 27 anteriores +50 novos; 77 passaram, 0 falharam**, em 18,673 s, log `artifacts/final-ci-command-tests.log`. Comando de descoberta independente de PYTHONPATH como no CI. Inclui banco limpo, duas inicializações, primeiro acesso HTTPS e novo processo preservando conta fictícia. Não equivale a redeploy em nuvem nem fluxo clínico integral na futura arquitetura PostgreSQL.
 
 ## Banco, backup, restore e concorrência
 
