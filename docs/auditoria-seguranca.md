@@ -170,3 +170,14 @@ Codex Security: `npx @openai/codex-security --help` tentou iniciar, mas falhou c
 Preparação de contexto: não havia AGENTS.md, `.agents/`, `.codex/`, `skills/` ou config.toml no repositório inspecionado. Preservada configuração de usuário; apenas quatro skills foram criadas. `skills.max_context_tokens` existe na [referência oficial](https://learn.chatgpt.com/docs/config-file/config-reference), mas nenhum valor foi aumentado nem imposto à versão instalada (`codex-cli 0.144.3`). Não se promete redução mensurável de tokens sem medir sessões comparáveis.
 
 Próximas decisões: priorização em `checklist-producao-clinica.md`. Acesso ao painel Render e decisão de saneamento do histórico permanecem pendentes; não impedem concluir este relatório, mas impedem atestar produção e remoção remota dos PDFs.
+## Atualização de continuidade — 22/09/2026
+
+Esta etapa concluiu a validação local do caminho PostgreSQL sem tocar em produção:
+
+- `DATABASE_URL`/`DEMO_DATABASE_URL` passaram a aceitar PostgreSQL com validação de esquema de URL, separação de ambientes e pool com limites conservadores.
+- O baseline Alembic cria o schema PostgreSQL e registra o ambiente. Banco existente sem controle de migração é recusado; não há migração destrutiva automática nem seed demo em produção.
+- Testes separados passaram: 13 HTTP e 24 de estoque/concorrência em PostgreSQL descartável local. A regressão SQLite passou com 114 testes e 37 skips esperados.
+- Backup custom-format e restore em banco PostgreSQL vazio foram ensaiados com `pg_dump`/`pg_restore`; fingerprint de 22 tabelas coincidiu. O ensaio é apenas local, com dados fictícios.
+- Foram corrigidas incompatibilidades de adaptação de data/timestamp e `last_insert_rowid()` no caminho de testes PostgreSQL. Não houve mudança deliberada de regra de negócio.
+
+Isso reduz os bloqueadores de persistência/migração local, mas não fecha a auditoria de produção: ainda falta homologar um provedor persistente gratuito, HTTPS, deploy isolado, carga/soak final, primeiro acesso operacional e confirmação de backup/restore no destino. O status permanece **NÃO APTO PARA DADOS REAIS**.

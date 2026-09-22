@@ -1,14 +1,23 @@
-# Estado atual — 21/09/2026
+# Estado atual — 22/09/2026
+
+## Atualização desta etapa — PostgreSQL, migração e continuidade
+
+- O suporte PostgreSQL foi implementado localmente com `DATABASE_URL`, adaptador psycopg, pool limitado e migrações Alembic versionadas. A migração cria o schema completo sem seeds de demonstração; o ambiente é gravado e validado no banco.
+- Dependências instaladas no `.venv`: `psycopg[binary,pool]` e `alembic`, com intervalos compatíveis. Nenhuma dependência paga foi adicionada.
+- Validação SQLite regressiva: **114 testes OK, 37 ignorados**, 18,863 s, sem alteração funcional observada. Log: `artifacts/sqlite-regression-after-pg-adapter.log`.
+- Validação PostgreSQL em containers descartáveis locais, criada exclusivamente para os testes: **13 testes HTTP OK** (`artifacts/postgres-http-final.log`) e **24 testes de estoque/concorrência OK** (`artifacts/postgres-stock-concurrency-final.log`). A execução agregada foi separada porque o runner acumulou tempo/limpeza de containers; isso não substitui uma execução CI limpa.
+- Backup/restore PostgreSQL local validado com `pg_dump`/`pg_restore` em formato custom, banco de destino vazio e comparação de fingerprint de **22 tabelas**. O ensaio usou somente dados fictícios e container descartável; ainda não valida provedor externo.
+- A limitação de compatibilidade entre SQL legado SQLite e PostgreSQL ficou encapsulada no adaptador; rotas, regras FEFO, estoque, histórico e agenda não foram redesenhados nesta etapa.
 
 - Branch: `security/demo-producao-isolados`, criada de `chore/contexto-auditoria-producao` conforme novo roteiro. Base pública `95d1369`; confirmar HEAD/status no Git. Sem push, deploy ou alteração de dados reais.
 - **NÃO APTO PARA DADOS REAIS. Tarefa ampla ainda não concluída.** Critérios e pendências em `prontidao-clinica.md`; auditoria inicial preservada como histórico, atualização no topo de `auditoria-seguranca.md` prevalece.
 - Commits locais: `7531f4d` concorrência; `ee20d1f` segurança HTTP/agenda; `3368d38` backup; `6a50dde` validações; `9718c20` isolamento/primeiro acesso; `0124788` histórico atômico/preservação clínica.
-- Testes: 77/77 em 18,673 s = 27 originais +50 novos, incluindo primeiro acesso HTTPS/restart em produção fictícia. Última execução sem depender de PYTHONPATH, como CI: `TMPDIR=/dev/shm env -u PYTHONPATH .venv/bin/python -m unittest discover -s tests -v`; bancos descartáveis, nunca `banco.db`. Log `artifacts/final-ci-command-tests.log`.
-- Ambiente: `config.py`, DEMO_DATABASE_URL/DATABASE_URL independentes, marca persistente do ambiente, cookies/salt distintos. URLs SQLite absolutas suportadas; PostgreSQL **não implementado**. Produção SQLite exige declaração de disco local persistente e é recusada no Render; flag não comprova durabilidade nem homologa operação.
+- Testes anteriores: 77/77 em 18,673 s = 27 originais +50 novos, incluindo primeiro acesso HTTPS/restart em produção fictícia. A regressão atual SQLite é registrada no checkpoint acima; bancos descartáveis, nunca `banco.db`.
+- Ambiente: `config.py`, DEMO_DATABASE_URL/DATABASE_URL independentes, marca persistente do ambiente, cookies/salt distintos. URLs SQLite absolutas e PostgreSQL suportados localmente; produção SQLite exige declaração de disco local persistente e é recusada no Render. O suporte PostgreSQL local não homologa ainda o provedor de produção.
 - Conta: CLI gera senha temporária aleatória apenas em TTY, hash Werkzeug, troca obrigatória, revogação/rotação; primeiro acesso redireciona dashboard após troca. DrFernanda **não criada** e nenhuma senha dela gerada.
 - Proteções verificadas: CSRF, RBAC server-side, API/CSV, sessão, headers, limites, FEFO/transações, estorno/ajuste/agenda concorrentes; restore SQLite fictício integral. Consultas canceladas sem exclusão; concluídas protegidas. Política formal de adendos ainda pendente.
-- Carga anterior: seis perfis 1–50 sem erros; soak 600 s = 1 timeout/37.680, integridade ok. Não aprovar estabilidade plena; resultados são de snapshot anterior às novas mudanças. Ver `relatorio-carga.md`.
-- Ferramentas: pip-audit repetido em 21/09, 12 pacotes/0 advisories; Bandit final 2 médios revisados (bind local e paginação interna). Codex Security 0.1.29 executa com Node22 temporário, somente dry-run antes/depois, autenticação não verificada; sem scan pago. POC PostgreSQL local 5 concorrentes passou; não é aplicação migrada.
-- Próximos passos locais: adaptação PostgreSQL completa/migrações e restore, corrigir lacunas SEC-09/13/14, repetir carga/soak da versão final, fluxo clínico completo e testes multiprocesso. Não refazer achados já corrigidos sem mudança relevante.
+- Carga anterior: seis perfis 1–50 sem erros; soak 600 s = 1 timeout/37.680, integridade ok. Não aprovar estabilidade plena; resultados são de snapshot anterior às mudanças PostgreSQL. Ver `relatorio-carga.md`.
+- Ferramentas: pip-audit repetido em 21/09, 12 pacotes/0 advisories; Bandit final 2 médios revisados (bind local e paginação interna). Codex Security 0.1.29 executa com Node22 temporário, somente dry-run antes/depois, autenticação não verificada; sem scan pago. PostgreSQL local migrado e testado em containers descartáveis; ainda não é homologação externa.
+- Próximos passos locais: validar um provedor PostgreSQL gratuito sem cobrança/cartão, repetir carga/soak na versão final, completar fluxo clínico e testes multiprocesso; corrigir/decidir lacunas SEC-09/13/14. Não refazer achados já corrigidos sem mudança relevante.
 - Dependências externas: identificar backend/URLs/SHA, escolher persistência gratuita sem cartão/cobrança, validar restart/redeploy/backup do alvo e responsáveis. Não alterar produção sem confirmação. PDFs no histórico remoto (SEC-12) exigem autorização específica para saneamento.
 - Artefatos brutos em `artifacts/` e `perf/results/`, ignorados. Não executar `docs/audit_local.py`: reprodução histórica das falhas antigas; usar regressões atuais.

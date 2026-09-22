@@ -99,3 +99,6 @@ Execução pública não faz parte desta tarefa. Antes de propor um corte real, 
 5. Documentar dados de origem/destino autoritativos, instante final, diferenças, responsável e liberação. Nunca operar duas bases aceitando escrita simultânea durante o retorno. Reter backups pré/pós-corte pelo prazo acordado; exclusão posterior requer procedimento próprio.
 
 Pendentes para implementação: provedor final; requisitos clínicos e de privacidade; volume/crescimento; semântica de fuso/precisão; retenção e restauração Aiven Free; cotas aplicáveis à conta Render; driver e adaptação SQL; binários para POC; responsáveis e RPO/RTO. Nenhuma escolha documental autoriza contratação, cobrança ou migração pública.
+## Atualização — 22/09/2026
+
+Desde a pesquisa inicial registrada abaixo, o ambiente local passou a usar um PostgreSQL descartável em Docker somente para validação. O baseline Alembic foi aplicado, os testes PostgreSQL separados passaram (13 HTTP e 24 estoque/concorrência) e um backup/restore custom-format foi validado por fingerprint de 22 tabelas. Nenhum provedor remoto, produção ou dado real foi acessado. A conclusão de homologação externa permanece pendente.
