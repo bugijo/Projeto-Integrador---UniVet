@@ -52,8 +52,17 @@ class Row(dict):
 def row_factory(cursor):
     names = [column.name for column in cursor.description] if cursor.description else []
     def row(values):
-        # Contrato legado de exibição ISO; valores NUMERIC continuam Decimal.
-        return Row(zip(names, [v.isoformat() if isinstance(v,(date,datetime)) else v for v in values]))
+        # Contrato legado: consultas clínicas trabalham com precisão de minuto.
+        # SQLite já devolve esse formato textual; normalizamos o timestamp PG
+        # para evitar que o sufixo ``:00`` quebre os parsers existentes.
+        normalized = []
+        for value in values:
+            if isinstance(value, datetime):
+                value = value.isoformat(timespec='minutes')
+            elif isinstance(value, date):
+                value = value.isoformat()
+            normalized.append(value)
+        return Row(zip(names, normalized))
     return row
 
 

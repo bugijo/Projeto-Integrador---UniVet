@@ -41,6 +41,12 @@ class PostgresHTTPTests(legacy_http.UniVetAppTests):
     def _conexao(self):
         return connect(self.db_path)
 
+    def test_agenda_do_dia_preserva_formato_de_minuto_no_postgresql(self):
+        self.client.get('/login')
+        self.client.post('/login', data={'login':'admin','senha':'123456'})
+        response = self.client.get('/consultas/dia/2099-01-01')
+        self.assertEqual(response.status_code, 200)
+
 
 class CoreFixture:
     @classmethod
