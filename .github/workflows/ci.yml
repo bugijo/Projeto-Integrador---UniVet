@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - 'security/**'
   pull_request:
     branches:
       - main
@@ -34,6 +35,35 @@ jobs:
 
       - name: Run tests
         run: python -m unittest discover -s tests -v
+
+  postgres:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run PostgreSQL HTTP tests in isolated containers
+        env:
+          UNIVET_TEST_POSTGRES: "1"
+          PYTHONPATH: tests
+        run: python -m unittest test_postgres.PostgresHTTPTests -v
+
+      - name: Run PostgreSQL stock and concurrency tests in isolated containers
+        env:
+          UNIVET_TEST_POSTGRES: "1"
+          PYTHONPATH: tests
+        run: python -m unittest test_postgres.PostgresStockTests test_postgres.PostgresConcurrencyTests -v
 
   deploy:
     needs: test

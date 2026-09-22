@@ -31,7 +31,7 @@ Checkpoint final: **77 testes passaram (27 anteriores +50), 0 falhas, 18,673 s**
 
 Carga: 1/5/10/20/30/50 usuários, zero erros nos perfis curtos com WAL. Soak 10 usuários/600 s: **1 timeout em 37.680**, p95 58 ms/p99 160 ms; não aprovado integralmente. Fonte e limites em `relatorio-carga.md`.
 
-Codex Security: incompatibilidade de Node contornada por Node22 temporário, versão 0.1.29. Help/schema e dry-run antes/depois executados; `authentication.verified=false`. **Nenhum scan efetivo**, nenhuma garantia de gratuidade assumida, nenhuma API paga usada. pip-audit repetido em 21/09: 12 pacotes, 0 advisories. Bandit final repetido: 2 médios (bind e SQL de paginação interno), revisados; não são prova de ausência de outras falhas. Artefatos `bandit-isolation-final.json` e `dependencies-isolation-final.json`, ignorados.
+Codex Security: incompatibilidade de Node contornada por Node22 temporário, versão 0.1.29. Help/schema e dry-run antes/depois executados; `authentication.verified=false`. **Nenhum scan efetivo**, nenhuma garantia de gratuidade assumida, nenhuma API paga usada. `pip-audit` atual, após Psycopg/Alembic, encontrou zero vulnerabilidades conhecidas. Bandit atual encontrou 4 médios/22 baixos e zero altos: bind local, identificadores SQL internos e subprocessos controlados de testes; foram revisados como não exploráveis por entrada HTTP, mas permanecem no relatório do scanner. Artefatos em `artifacts/` são ignorados.
 
 ## Relatório inicial preservado — 19/09/2026
 
@@ -180,7 +180,7 @@ Esta etapa concluiu a validação local do caminho PostgreSQL sem tocar em produ
 
 - `DATABASE_URL`/`DEMO_DATABASE_URL` passaram a aceitar PostgreSQL com validação de esquema de URL, separação de ambientes e pool com limites conservadores.
 - O baseline Alembic cria o schema PostgreSQL e registra o ambiente. Banco existente sem controle de migração é recusado; não há migração destrutiva automática nem seed demo em produção.
-- Testes separados passaram: 13 HTTP e 24 de estoque/concorrência em PostgreSQL descartável local. A regressão SQLite passou com 114 testes e 37 skips esperados.
+- Testes separados passaram: 13 HTTP e 24 de estoque/concorrência em PostgreSQL descartável local. A regressão SQLite passou com 114 testes e 37 skips esperados. O CI foi ampliado para executar os grupos PostgreSQL em job separado, evitando que esses skips sejam a única verificação da branch.
 - Backup custom-format e restore em banco PostgreSQL vazio foram ensaiados com `pg_dump`/`pg_restore`; fingerprint de 22 tabelas coincidiu. O ensaio é apenas local, com dados fictícios.
 - Foram corrigidas incompatibilidades de adaptação de data/timestamp e `last_insert_rowid()` no caminho de testes PostgreSQL. Não houve mudança deliberada de regra de negócio.
 
