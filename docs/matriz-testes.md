@@ -25,6 +25,7 @@ Atualizada em 22/09/2026. `OK local` não significa aprovação de produção.
 - PostgreSQL local: 13 testes HTTP e 24 testes de estoque/concorrência OK.
 - PostgreSQL backup/restore local: 22 tabelas comparadas por fingerprint.
 - Os 37 skips são grupos opt-in de PostgreSQL no modo SQLite; devem ser executados no job PostgreSQL do CI antes da liberação.
+- O run de CI `35715470083` executou os grupos PostgreSQL em job separado e terminou com sucesso; os skips permanecem somente na execução SQLite por desenho.
 
 ## Critério de passagem
 

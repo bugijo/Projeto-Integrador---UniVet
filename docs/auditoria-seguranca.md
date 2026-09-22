@@ -180,7 +180,7 @@ Esta etapa concluiu a validação local do caminho PostgreSQL sem tocar em produ
 
 - `DATABASE_URL`/`DEMO_DATABASE_URL` passaram a aceitar PostgreSQL com validação de esquema de URL, separação de ambientes e pool com limites conservadores.
 - O baseline Alembic cria o schema PostgreSQL e registra o ambiente. Banco existente sem controle de migração é recusado; não há migração destrutiva automática nem seed demo em produção.
-- Testes separados passaram: 13 HTTP e 24 de estoque/concorrência em PostgreSQL descartável local. A regressão SQLite passou com 114 testes e 37 skips esperados. O CI foi ampliado para executar os grupos PostgreSQL em job separado, evitando que esses skips sejam a única verificação da branch.
+- Testes separados passaram: 13 HTTP e 24 de estoque/concorrência em PostgreSQL descartável local. A regressão SQLite passou com 114 testes e 37 skips esperados. O run CI `35715470083` executou os grupos PostgreSQL em job separado e passou; `deploy` foi ignorado por a branch não ser `main`.
 - Backup custom-format e restore em banco PostgreSQL vazio foram ensaiados com `pg_dump`/`pg_restore`; fingerprint de 22 tabelas coincidiu. O ensaio é apenas local, com dados fictícios.
 - Foram corrigidas incompatibilidades de adaptação de data/timestamp e `last_insert_rowid()` no caminho de testes PostgreSQL. Não houve mudança deliberada de regra de negócio.
 
