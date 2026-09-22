@@ -2,7 +2,7 @@
 
 ## Estado
 
-Atualizado em 21/09/2026: carga executada localmente em 19/09, com snapshots imutáveis e dados fictícios. Primeira execução com journal antigo apresentou 2 falhas em 478 requisições no perfil 20 e foi interrompida. Após WAL/busy timeout, os seis perfis passaram, mas **soak apresentou um timeout e NÃO está integralmente aprovado**. A versão medida precede isolamento/primeiro acesso e preservação clínica adicionados posteriormente; repetir na versão final. Nenhum teste contra Render.
+Atualizado em 22/09/2026: além do snapshot histórico abaixo, foi executada carga local descartável sobre PostgreSQL após a correção do adaptador de timestamp. Os perfis 1 e 5 passaram sem falhas; perfis de 10–50 e soak de 120 s reutilizaram `admin` e acionaram legitimamente o limite de 10 logins por conta/15 min. Esse resultado não mede capacidade autenticada com usuários independentes e não é aprovação. Nenhum teste contra Render.
 
 Escopo exclusivo: `perf/` e este relatório. A skill local `.agents/skills/univet-testing/SKILL.md` orientou isolamento de ambos os módulos de banco, limites de recursos e separação entre carga e validação de segurança. A suíte geral e o teste da proteção de rate limit pertencem ao agente principal.
 
@@ -49,6 +49,19 @@ CPU do processo segue a convenção de 100% por núcleo e pode superar 100%; a p
 Servidor e Locust compartilham o mesmo host; hardware, versões e hashes constam em `metadata.json`. A base é pequena/fictícia, os ativos estáticos/JS não são executados como num navegador, e autenticações simultâneas podem dominar os perfis curtos. Não extrapolar esses números para produção, volume real de dados, máximo de usuários suportados ou aprovação de segurança. Metas de latência/capacidade ainda precisam ser definidas para homologação.
 
 ## Resultados
+
+### Pós-correção PostgreSQL — 22/09/2026
+
+| Usuários | Duração | Req/s | Média | Mediana | p95 | p99 | Erros | Interpretação |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | 15 s | 7,86 | 27,81 ms | 22 ms | 57 ms | 100 ms | 0/105 | Passou |
+| 5 | 15 s | 36,38 | 28,25 ms | 20 ms | 58 ms | 220 ms | 0/504 | Passou |
+| 10 | 15 s | 27,10 | 48,89 ms | 22 ms | 190 ms | 640 ms | 6/380 | Login limitado pela mesma conta |
+| 20 | 15 s | 70,18 | 37,51 ms | 24 ms | 94 ms | 350 ms | 15/973 | Login limitado pela mesma conta |
+| 30/50 | 15 s | 39,05/56,51 | 82,65/164,48 ms | — | 180/560 ms | 230/670 ms | 105/275 | Login limitado pela mesma conta |
+| 10 (soak) | 120 s | 26,62 | 34,91 ms | 28 ms | 83 ms | 89 ms | 15/30 | Login limitado pela mesma conta |
+
+O cenário usou apenas dados fictícios, banco e servidor descartáveis locais, CSRF habilitado e rate limit habilitado. A proteção observada está em `security.py`: 10 tentativas por conta e 20 por IP em 900 s. A repetição aprovada deve criar identidades temporárias independentes somente no banco descartável, sem desativar a proteção.
 
 | Usuários | Duração | Req/s | Média | Mediana | p95 | p99 | Erros | CPU/RAM |
 |---:|---:|---|---|---|---|---|---|---|

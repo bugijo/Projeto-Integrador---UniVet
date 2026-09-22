@@ -1,5 +1,12 @@
 # Estado atual — 22/09/2026
 
+## Atualização da validação PostgreSQL e carga local — 22/09/2026
+
+- A regressão identificada no primeiro teste de carga PostgreSQL foi corrigida no adaptador de linhas: timestamps `datetime` retornam novamente a precisão de minuto esperada pelas rotas legadas. A regressão de agenda foi adicionada a `tests/test_postgres.py`.
+- Pós-correção: **14 testes HTTP PostgreSQL OK** em 82,301 s; regressão SQLite **115 testes OK, 38 ignorados**, em 20,312 s. Os 38 ignorados são os grupos PostgreSQL opt-in quando a suíte roda sem `UNIVET_TEST_POSTGRES=1`.
+- A nova carga local descartável, com Gunicorn/2 workers e dados fictícios, teve 0 falhas nos perfis de 1 e 5 usuários. Nos perfis de 10–50 e no soak de 10 usuários/120 s, as falhas foram exclusivamente `POST /login` recusados pelo limite de segurança de 10 tentativas por conta em 15 minutos, porque todos os usuários virtuais reutilizaram a mesma conta `admin`. Isso não é aprovado como teste de capacidade autenticada; o limitador não será desativado e a medição precisa ser repetida com contas fictícias independentes.
+- A carga continua pendente para aprovação: não houve execução remota, nem soak de 10–20 minutos com identidades independentes. A falha funcional de timestamp está fechada localmente; a estabilidade operacional continua aberta.
+
 ## Atualização desta etapa — PostgreSQL, migração e continuidade
 
 - O suporte PostgreSQL foi implementado localmente com `DATABASE_URL`, adaptador psycopg, pool limitado e migrações Alembic versionadas. A migração cria o schema completo sem seeds de demonstração; o ambiente é gravado e validado no banco.
