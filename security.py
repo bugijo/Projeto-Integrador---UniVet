@@ -12,6 +12,7 @@ from flask import abort, g, jsonify, redirect, request, session, url_for
 from werkzeug.security import generate_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask.sessions import SecureCookieSessionInterface
+from database import psycopg
 
 
 class EnvironmentSessionInterface(SecureCookieSessionInterface):
@@ -38,6 +39,10 @@ def password_hash(password):
 
 
 def security_schema(conn):
+    # O schema PostgreSQL é criado exclusivamente pelas migrações versionadas.
+    # Este caminho mantém PRAGMA/executescript restritos ao SQLite legado.
+    if getattr(conn, 'dialect', None) == 'postgresql':
+        return
     columns = {r[1] for r in conn.execute('PRAGMA table_info(usuarios)')}
     for name, definition in [('session_version', 'INTEGER NOT NULL DEFAULT 0'),
                              ('must_change_password', 'INTEGER NOT NULL DEFAULT 0'),
@@ -121,7 +126,7 @@ def register_security(app, get_connection):
         key = hmac.new(app.secret_key.encode(), f'{category}:{identity}:{int(now // window)}'.encode(), hashlib.sha256).hexdigest()
         conn.execute('DELETE FROM rate_limits WHERE expires_at < ?', (now,))
         row = conn.execute('''INSERT INTO rate_limits VALUES (?,?,1)
-            ON CONFLICT(key) DO UPDATE SET hits=hits+1 RETURNING hits''', (key, now + window)).fetchone()
+            ON CONFLICT(key) DO UPDATE SET hits=rate_limits.hits+1 RETURNING hits''', (key, now + window)).fetchone()
         conn.commit()
         if row[0] > maximum:
             abort(429)
@@ -229,3 +234,5 @@ def register_security(app, get_connection):
         app.register_error_handler(code, error_response)
     app.register_error_handler(sqlite3.IntegrityError, error_response)
     app.register_error_handler(sqlite3.OperationalError, error_response)
+    app.register_error_handler(psycopg.IntegrityError, lambda error: (jsonify(error='Dados inválidos.'),400))
+    app.register_error_handler(psycopg.Error, lambda error: (jsonify(error='Banco temporariamente indisponível.'),503))

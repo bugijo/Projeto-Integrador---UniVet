@@ -7,23 +7,22 @@ import sqlite3
 
 from security import password_hash
 from config import load_settings, verify_database_environment
+from database import connect, is_postgres, begin_write, DATABASE_ERRORS
 
 
 def manage(database, action, login, name='', role='veterinaria', password=None):
-    path = Path(database).resolve()
-    if not path.is_file():
+    path = database if is_postgres(database) else Path(database).resolve()
+    if not is_postgres(path) and not path.is_file():
         raise ValueError('Banco inexistente. Execute a migração explicitamente primeiro.')
     settings = load_settings()
     if settings.environment in ('demo','production') and path != settings.database:
         raise ValueError('Banco administrativo difere do ambiente configurado.')
     if role not in ('admin', 'veterinaria') or not login.strip() or len(login) > 100:
         raise ValueError('Usuário ou perfil inválido.')
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    conn.execute('PRAGMA foreign_keys=ON')
+    conn = connect(path)
     try:
         verify_database_environment(conn, settings.environment)
-        conn.execute('BEGIN IMMEDIATE')
+        begin_write(conn)
         user = conn.execute('SELECT * FROM usuarios WHERE login=?', (login,)).fetchone()
         if action in ('bootstrap', 'create-user'):
             if action == 'bootstrap' and conn.execute("SELECT 1 FROM usuarios WHERE perfil='admin' AND ativo=1").fetchone():
@@ -60,7 +59,7 @@ def manage(database, action, login, name='', role='veterinaria', password=None):
 
 def main():
     parser = argparse.ArgumentParser(description='Operador local confiável; nenhum acesso remoto. Senhas não são argumentos.')
-    parser.add_argument('--database', required=True)
+    parser.add_argument('--database', help='Caminho SQLite local; para PostgreSQL use DATABASE_URL no ambiente.')
     parser.add_argument('action', choices=['bootstrap','create-user','reset-password','deactivate'])
     parser.add_argument('--login', required=True)
     parser.add_argument('--name', default='')
@@ -72,8 +71,10 @@ def main():
             parser.error('Execute em terminal local interativo, sem redirecionamento ou gravação da sessão.')
         password = secrets.token_urlsafe(24)
     try:
-        manage(args.database, args.action, args.login, args.name, args.role, password)
-    except (ValueError, RuntimeError, sqlite3.Error):
+        if args.database and is_postgres(args.database):
+            raise ValueError('Não passe credenciais PostgreSQL em argumentos.')
+        manage(args.database or load_settings().database, args.action, args.login, args.name, args.role, password)
+    except (ValueError, RuntimeError, *DATABASE_ERRORS):
         parser.exit(1, 'Operação recusada. Confira usuário, política de senha e schema do banco; nada foi confirmado.\n')
     print('Operação concluída.')
     if password is not None:

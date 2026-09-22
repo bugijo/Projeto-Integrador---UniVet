@@ -14,6 +14,7 @@ from flask import Flask, Response, flash, g, has_request_context, jsonify, redir
 from werkzeug.security import check_password_hash
 from security import register_security, start_session, end_session, password_hash
 from config import load_settings, verify_database_environment
+from database import connect, is_postgres, begin_write, last_insert_id, INTEGRITY_ERRORS
 
 from estoque.services import (
     EstoqueError,
@@ -59,6 +60,8 @@ app = Flask(__name__)
 
 
 def garantir_banco_inicializado():
+    if is_postgres(DATABASE):
+        return  # Schema PostgreSQL somente por migração explícita.
     # Somente desenvolvimento auto-inicializa. Ambientes publicados exigem migração explícita.
     if SETTINGS.environment in ('demo', 'production') and not DATABASE.is_file():
         raise RuntimeError('Banco não inicializado; execute migração explícita.')
@@ -82,9 +85,13 @@ def garantir_banco_inicializado():
 
 def get_db_connection():
     garantir_banco_inicializado()
-    connection = sqlite3.connect(DATABASE, timeout=10)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON;")
+    connection = connect(DATABASE)
+    if is_postgres(DATABASE):
+        try:
+            verify_database_environment(connection, SETTINGS.environment)
+        except Exception:
+            connection.close()
+            raise
     if has_request_context():
         g.setdefault('database_connections', []).append(connection)
     return connection
@@ -266,7 +273,7 @@ def registrar_historico(entidade, registro_id, acao, dados, connection=None):
             registro_id,
             acao,
             session.get("usuario_nome") or session.get("usuario_login", "Sistema"),
-            json.dumps(dados, ensure_ascii=False),
+            json.dumps(dados, ensure_ascii=False, default=str),
             datetime.now().strftime("%Y-%m-%dT%H:%M"),
         ),
     )
@@ -431,7 +438,7 @@ def consultas_do_mes(ano, mes):
         INNER JOIN tutores ON tutores.id = pets.tutor_id
         INNER JOIN veterinarios ON veterinarios.id = consultas.veterinario_id
         INNER JOIN servicos ON servicos.id = consultas.servico_id
-        WHERE substr(consultas.data_hora, 1, 7) = ?
+        WHERE substr(CAST(consultas.data_hora AS TEXT), 1, 7) = ?
         ORDER BY consultas.data_hora ASC
         """,
         (prefixo,),
@@ -451,7 +458,7 @@ def consultas_do_dia(data_iso):
         INNER JOIN tutores ON tutores.id = pets.tutor_id
         INNER JOIN veterinarios ON veterinarios.id = consultas.veterinario_id
         INNER JOIN servicos ON servicos.id = consultas.servico_id
-        WHERE date(consultas.data_hora) = ?
+        WHERE substr(CAST(consultas.data_hora AS TEXT),1,10) = ?
         ORDER BY consultas.data_hora ASC
         """,
         (data_iso,),
@@ -663,14 +670,14 @@ def criar_produto():
                 (nome, codigo, tipo, categoria_id, unidade, estoque_minimo, margem_lucro),
             )
             connection.commit()
-        except (ValueError, sqlite3.IntegrityError):
+        except (ValueError, *INTEGRITY_ERRORS):
             connection.close()
             flash("Preencha corretamente os dados do produto. O código deve ser único.", "erro")
             form_connection = get_db_connection()
             dados = _dados_form_produto(form_connection, produto_form)
             form_connection.close()
             return render_template("estoque/produtos/form.html", acao="Novo produto", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Produtos", url_for("listar_produtos_page")), ("Novo produto", None)), **dados)
-        produto_id = connection.execute("SELECT last_insert_rowid()").fetchone()[0]
+        produto_id = last_insert_id(connection)
         connection.close()
         flash("Produto cadastrado com sucesso.", "sucesso")
         return redirect(url_for("detalhar_produto", produto_id=produto_id))
@@ -707,7 +714,7 @@ def editar_produto(produto_id):
                 (nome, codigo, tipo, categoria_id, unidade, estoque_minimo, margem_lucro, produto_id),
             )
             connection.commit()
-        except (ValueError, sqlite3.IntegrityError):
+        except (ValueError, *INTEGRITY_ERRORS):
             connection.close()
             flash("Preencha corretamente os dados do produto. O código deve ser único.", "erro")
             form_connection = get_db_connection()
@@ -776,7 +783,7 @@ def listar_categorias_page():
             connection.execute("INSERT INTO categorias (nome, descricao) VALUES (?, ?)", (nome, descricao))
             connection.commit()
             flash("Categoria cadastrada com sucesso.", "sucesso")
-        except (ValueError, sqlite3.IntegrityError):
+        except (ValueError, *INTEGRITY_ERRORS):
             connection.rollback()
             flash("Informe um nome de categoria único.", "erro")
         connection.close()
@@ -803,7 +810,7 @@ def editar_categoria(categoria_id):
                 raise ValueError
             connection.execute("UPDATE categorias SET nome = ?, descricao = ? WHERE id = ?", (nome, descricao, categoria_id))
             connection.commit()
-        except (ValueError, sqlite3.IntegrityError):
+        except (ValueError, *INTEGRITY_ERRORS):
             connection.close()
             flash("Informe um nome de categoria único.", "erro")
             return render_template("estoque/categorias/form.html", categoria={"id": categoria_id, "nome": nome, "descricao": descricao}, acao="Editar categoria", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Categorias", url_for("listar_categorias_page")), ("Editar categoria", None)))
@@ -837,7 +844,7 @@ def listar_fornecedores_page():
             connection.execute("INSERT INTO fornecedores (nome, documento, telefone, email, endereco) VALUES (?, ?, ?, ?, ?)", dados)
             connection.commit()
             flash("Fornecedor cadastrado com sucesso.", "sucesso")
-        except (ValueError, sqlite3.IntegrityError):
+        except (ValueError, *INTEGRITY_ERRORS):
             connection.rollback()
             flash("Informe um nome de fornecedor único.", "erro")
         connection.close()
@@ -866,7 +873,7 @@ def editar_fornecedor(fornecedor_id):
                 raise ValueError
             connection.execute("UPDATE fornecedores SET nome = ?, documento = ?, telefone = ?, email = ?, endereco = ? WHERE id = ?", (*dados, fornecedor_id))
             connection.commit()
-        except (ValueError, sqlite3.IntegrityError):
+        except (ValueError, *INTEGRITY_ERRORS):
             connection.close()
             flash("Informe um nome de fornecedor único.", "erro")
             return render_template("estoque/fornecedores/form.html", fornecedor=dict(zip(("nome", "documento", "telefone", "email", "endereco"), dados)), acao="Editar fornecedor", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Fornecedores", url_for("listar_fornecedores_page")), ("Editar fornecedor", None)))
@@ -907,7 +914,7 @@ def registrar_entrada_estoque():
                 session.get("usuario_id"),
                 request.form.get("motivo", "Compra"),
             )
-        except (EstoqueError, sqlite3.IntegrityError) as erro:
+        except (EstoqueError, *INTEGRITY_ERRORS) as erro:
             connection.close()
             flash(str(erro) or "Não foi possível registrar a entrada.", "erro")
             return render_template("estoque/lotes/entrada.html", produtos=produtos, fornecedores=fornecedores, dados=request.form, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Entrada de lote", None)))
@@ -933,7 +940,7 @@ def registrar_saida_estoque():
                 request.form.get("motivo", "Saída manual"),
                 valor_unitario_praticado=request.form.get("valor_unitario_praticado", ""),
             )
-        except (EstoqueError, EstoqueInsuficiente, sqlite3.IntegrityError) as erro:
+        except (EstoqueError, EstoqueInsuficiente, *INTEGRITY_ERRORS) as erro:
             connection.close()
             flash(str(erro) or "Não foi possível registrar a saída.", "erro")
             return render_template("estoque/saidas/form.html", produtos=produtos, dados=request.form, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Saída manual", None)))
@@ -974,7 +981,7 @@ def ajustar_lote(lote_id):
         try:
             registrar_ajuste(connection, lote_id, request.form.get("nova_quantidade", ""), session.get("usuario_id"), request.form.get("motivo", ""))
             flash("Ajuste registrado com sucesso.", "sucesso")
-        except (EstoqueError, sqlite3.IntegrityError) as erro:
+        except (EstoqueError, *INTEGRITY_ERRORS) as erro:
             flash(str(erro) or "Não foi possível registrar o ajuste.", "erro")
         finally:
             connection.close()
@@ -1013,10 +1020,10 @@ def relatorios_estoque():
     inicio = (hoje - timedelta(days=dias - 1)).isoformat()
     consumo_diario = connection.execute(
         """
-        SELECT date(criado_em) AS dia, COALESCE(SUM(quantidade), 0) AS quantidade
+        SELECT substr(CAST(criado_em AS TEXT),1,10) AS dia, COALESCE(SUM(quantidade), 0) AS quantidade
         FROM movimentacoes_estoque
-        WHERE tipo = 'Saída' AND date(criado_em) >= date(?)
-        GROUP BY date(criado_em)
+        WHERE tipo = 'Saída' AND substr(CAST(criado_em AS TEXT),1,10) >= ?
+        GROUP BY substr(CAST(criado_em AS TEXT),1,10)
         ORDER BY dia ASC
         """,
         (inicio,),
@@ -1188,7 +1195,7 @@ def criar_tutor():
             novo = connection.execute("SELECT * FROM tutores WHERE id = ?", (inserted.lastrowid,)).fetchone()
             registrar_historico("tutores", novo["id"], "criado", serializar_row(novo), connection)
             connection.commit()
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             connection.close()
             flash("Já existe um tutor cadastrado com este CPF.", "erro")
             return render_template("tutores/form.html", tutor=tutor, acao="Novo Tutor", secao="tutores", breadcrumbs=breadcrumbs_padrao(("Tutores", url_for("listar_tutores")), ("Novo tutor", None)))
@@ -1218,13 +1225,13 @@ def editar_tutor(tutor_id):
             return render_template("tutores/form.html", tutor=dados, acao="Editar Tutor", secao="tutores", breadcrumbs=breadcrumbs_padrao(("Tutores", url_for("listar_tutores")), ("Editar tutor", None)))
         try:
             connection = get_db_connection()
-            connection.execute('BEGIN IMMEDIATE')
+            begin_write(connection)
             original = connection.execute("SELECT * FROM tutores WHERE id = ?", (tutor_id,)).fetchone()
             connection.execute("UPDATE tutores SET nome = ?, telefone = ?, cpf = ?, endereco = ? WHERE id = ?", (nome, telefone, formatar_cpf(cpf), endereco, tutor_id))
             registrar_historico("tutores", tutor_id, "editado", {"antes": serializar_row(original), "depois": dados}, connection)
             connection.commit()
             connection.close()
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             flash("Já existe outro tutor cadastrado com este CPF.", "erro")
             return render_template("tutores/form.html", tutor=dados, acao="Editar Tutor", secao="tutores", breadcrumbs=breadcrumbs_padrao(("Tutores", url_for("listar_tutores")), ("Editar tutor", None)))
         flash("Tutor atualizado com sucesso.", "sucesso")
@@ -1236,7 +1243,7 @@ def editar_tutor(tutor_id):
 @login_obrigatorio
 def excluir_tutor(tutor_id):
     connection = get_db_connection()
-    connection.execute('BEGIN IMMEDIATE')
+    begin_write(connection)
     tutor = connection.execute("SELECT * FROM tutores WHERE id = ?", (tutor_id,)).fetchone()
     total = connection.execute("SELECT COUNT(*) FROM pets WHERE tutor_id = ?", (tutor_id,)).fetchone()[0]
     if total:
@@ -1298,7 +1305,7 @@ def criar_pet():
             registrar_historico("pets", novo["id"], "criado", serializar_row(novo), connection)
             connection.commit()
             connection.close()
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             connection.close()
             flash("Não foi possível salvar o animal. Revise a espécie e a raça selecionadas.", "erro")
             return render_template("pets/form.html", pet=pet, acao="Novo Animal", secao="pets", breadcrumbs=breadcrumbs_padrao(("Animais", url_for("listar_pets")), ("Novo animal", None)), **contexto)
@@ -1334,7 +1341,7 @@ def editar_pet(pet_id):
             return render_template("pets/form.html", pet=pet, acao="Editar Animal", secao="pets", breadcrumbs=breadcrumbs_padrao(("Animais", url_for("listar_pets")), ("Editar animal", None)), **contexto)
         try:
             connection = get_db_connection()
-            connection.execute('BEGIN IMMEDIATE')
+            begin_write(connection)
             original = connection.execute("SELECT * FROM pets WHERE id = ?", (pet_id,)).fetchone()
             connection.execute(
                 "UPDATE pets SET nome = ?, especie_id = ?, especie = ?, raca_id = ?, raca = ?, idade = ?, tutor_id = ?, historico = ? WHERE id = ?",
@@ -1343,7 +1350,7 @@ def editar_pet(pet_id):
             registrar_historico("pets", pet_id, "editado", {"antes": serializar_row(original), "depois": pet}, connection)
             connection.commit()
             connection.close()
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             flash("Não foi possível atualizar o animal. Revise a espécie e a raça selecionadas.", "erro")
             return render_template("pets/form.html", pet=pet, acao="Editar Animal", secao="pets", breadcrumbs=breadcrumbs_padrao(("Animais", url_for("listar_pets")), ("Editar animal", None)), **contexto)
         flash("Animal atualizado com sucesso.", "sucesso")
@@ -1355,7 +1362,7 @@ def editar_pet(pet_id):
 @login_obrigatorio
 def excluir_pet(pet_id):
     connection = get_db_connection()
-    connection.execute('BEGIN IMMEDIATE')
+    begin_write(connection)
     pet = connection.execute("SELECT * FROM pets WHERE id = ?", (pet_id,)).fetchone()
     total = connection.execute("SELECT COUNT(*) FROM consultas WHERE pet_id = ?", (pet_id,)).fetchone()[0]
     conditions = connection.execute('SELECT 1 FROM condicoes_clinicas WHERE pet_id=?', (pet_id,)).fetchone()
@@ -1509,7 +1516,7 @@ def salvar_consulta(formulario, consulta_id=None):
     if not connection.execute('SELECT 1 FROM pets WHERE id=?', (pet_id,)).fetchone() or not connection.execute('SELECT 1 FROM veterinarios WHERE id=?', (veterinario_id,)).fetchone():
         connection.close()
         return False, "Paciente ou veterinário inexistente.", consulta, []
-    connection.execute('BEGIN IMMEDIATE')
+    begin_write(connection)
     disponivel, sugestoes = verificar_disponibilidade(connection, veterinario_id, inicio_dt, duracao, consulta_id)
     if not disponivel:
         connection.close()
@@ -1569,11 +1576,11 @@ def salvar_consulta(formulario, consulta_id=None):
                     confirmacao_status,
                 ),
             )
-        record_id = consulta_id or connection.execute('SELECT last_insert_rowid()').fetchone()[0]
+        record_id = consulta_id or last_insert_id(connection)
         registro = connection.execute('SELECT * FROM consultas WHERE id=?', (record_id,)).fetchone()
         registrar_historico('consultas', record_id, 'editado' if consulta_id else 'criado', serializar_row(registro), connection)
         connection.commit()
-    except sqlite3.IntegrityError:
+    except INTEGRITY_ERRORS:
         connection.rollback()
         connection.close()
         return False, "Não foi possível gravar: verifique vínculos e conflito de horário.", consulta, []
@@ -1666,7 +1673,7 @@ def adicionar_produto_consulta(consulta_id):
             request.form.get("valor_unitario_praticado", ""),
         )
         flash("Produto utilizado registrado e estoque atualizado por FEFO.", "sucesso")
-    except (EstoqueError, EstoqueInsuficiente, sqlite3.IntegrityError) as erro:
+    except (EstoqueError, EstoqueInsuficiente, *INTEGRITY_ERRORS) as erro:
         flash(str(erro) or "Não foi possível registrar o produto utilizado.", "erro")
     finally:
         connection.close()
@@ -1678,7 +1685,7 @@ def adicionar_produto_consulta(consulta_id):
 def excluir_consulta(consulta_id):
     connection = get_db_connection()
     try:
-        connection.execute('BEGIN IMMEDIATE')
+        begin_write(connection)
         consulta = connection.execute("SELECT * FROM consultas WHERE id = ?", (consulta_id,)).fetchone()
         if consulta and consulta['status'] == 'Concluida':
             connection.rollback()
@@ -1855,7 +1862,7 @@ def editar_servico(servico_id):
             flash("Informe um nome e duração mínima de 20 minutos.", "erro")
             return render_template("servicos/form.html", servico=dados, acao="Editar serviço", secao="servicos", breadcrumbs=breadcrumbs_padrao(("Serviços", url_for("listar_servicos_page")), ("Editar serviço", None)))
         connection = get_db_connection()
-        connection.execute('BEGIN IMMEDIATE')
+        begin_write(connection)
         original = connection.execute("SELECT * FROM servicos WHERE id = ?", (servico_id,)).fetchone()
         connection.execute("UPDATE servicos SET nome = ?, duracao_minutos = ? WHERE id = ?", (nome, duracao, servico_id))
         registrar_historico("servicos", servico_id, "editado", {"antes": serializar_row(original), "depois": dados}, connection)
@@ -1871,7 +1878,7 @@ def editar_servico(servico_id):
 @login_obrigatorio
 def excluir_servico(servico_id):
     connection = get_db_connection()
-    connection.execute('BEGIN IMMEDIATE')
+    begin_write(connection)
     servico = connection.execute("SELECT * FROM servicos WHERE id = ?", (servico_id,)).fetchone()
     uso = connection.execute("SELECT COUNT(*) FROM consultas WHERE servico_id = ?", (servico_id,)).fetchone()[0]
     if uso:
@@ -1904,7 +1911,7 @@ def editar_veterinario(veterinario_id):
             flash("Informe o nome do veterinário.", "erro")
             return render_template("veterinarios/form.html", veterinario=dados, acao="Editar veterinário", secao="veterinarios", breadcrumbs=breadcrumbs_padrao(("Veterinários", url_for("listar_veterinarios_page")), ("Editar veterinário", None)))
         connection = get_db_connection()
-        connection.execute('BEGIN IMMEDIATE')
+        begin_write(connection)
         original = connection.execute("SELECT * FROM veterinarios WHERE id = ?", (veterinario_id,)).fetchone()
         connection.execute("UPDATE veterinarios SET nome = ? WHERE id = ?", (nome, veterinario_id))
         registrar_historico("veterinarios", veterinario_id, "editado", {"antes": serializar_row(original), "depois": dados}, connection)
@@ -1923,7 +1930,7 @@ def excluir_veterinario(veterinario_id):
         flash("Confirme a exclusão para continuar.", "erro")
         return redirect(url_for("listar_veterinarios_page"))
     connection = get_db_connection()
-    connection.execute('BEGIN IMMEDIATE')
+    begin_write(connection)
     veterinario = connection.execute("SELECT * FROM veterinarios WHERE id = ?", (veterinario_id,)).fetchone()
     clinical = connection.execute("SELECT 1 FROM consultas c WHERE c.veterinario_id=? AND (c.status != 'Agendada' OR EXISTS (SELECT 1 FROM itens_consulta i WHERE i.consulta_id=c.id)) LIMIT 1", (veterinario_id,)).fetchone()
     if clinical:
@@ -1967,7 +1974,7 @@ def excluir_veterinario(veterinario_id):
              "novo_veterinario_nome": substituto["nome"] if uso and substituto else None}, connection,
         )
         connection.commit()
-    except sqlite3.IntegrityError:
+    except INTEGRITY_ERRORS:
         connection.rollback()
         connection.close()
         flash("Não foi possível excluir o veterinário por causa de vínculos ativos no banco de dados.", "erro")

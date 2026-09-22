@@ -1,20 +1,44 @@
 """Configuração explícita. Nunca selecionar o banco de outro ambiente como fallback."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import os
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlsplit, parse_qs
 
 
 @dataclass(frozen=True)
 class Settings:
     environment: str
-    database: Path
+    database: Path | str = field(repr=False)
+
+
+def database_target(url):
+    parsed = urlsplit(url)
+    if parsed.scheme in ('postgresql','postgres'):
+        if not parsed.hostname or not parsed.username or not parsed.path.strip('/'):
+            raise RuntimeError('DATABASE_URL PostgreSQL incompleta.')
+        query = parse_qs(parsed.query)
+        allowed = {'sslmode','sslrootcert','channel_binding'}
+        if set(query) - allowed or any(len(v)!=1 for v in query.values()):
+            raise RuntimeError('Parâmetros PostgreSQL não permitidos.')
+        if parsed.hostname not in ('127.0.0.1','localhost','::1') and query.get('sslmode') != ['verify-full']:
+            raise RuntimeError('PostgreSQL remoto exige sslmode=verify-full e certificado confiável.')
+        return url.replace('postgres://','postgresql://',1)
+    return sqlite_path(url)
+
+
+def same_database(first, second):
+    if isinstance(first, Path) and isinstance(second, Path):
+        return first == second or (first.exists() and second.exists() and first.samefile(second))
+    if isinstance(first,str) and isinstance(second,str):
+        a,b = urlsplit(first),urlsplit(second)
+        return (a.hostname.replace('-pooler',''), a.port or 5432, unquote(a.path)) == (b.hostname.replace('-pooler',''), b.port or 5432, unquote(b.path))
+    return False
 
 
 def sqlite_path(url):
     parsed = urlsplit(url)
     if parsed.scheme != 'sqlite' or parsed.netloc or parsed.query or parsed.fragment:
-        raise RuntimeError('URL não suportada: use sqlite:////caminho/absoluto. PostgreSQL ainda requer migração da aplicação.')
+        raise RuntimeError('URL não suportada. Use PostgreSQL ou SQLite absoluto local.')
     path = unquote(parsed.path)
     if not path.startswith('//') or path in ('//', '//:memory:'):
         raise RuntimeError('O banco configurado deve ter caminho absoluto e persistente.')
@@ -30,24 +54,31 @@ def load_settings(environ=None):
         variable = 'DEMO_DATABASE_URL' if mode == 'demo' else 'DATABASE_URL'
         if not env.get(variable):
             raise RuntimeError(f'{variable} é obrigatória; não existe fallback entre ambientes.')
-        database = sqlite_path(env[variable])
+        database = database_target(env[variable])
         if env.get('UNIVET_DATABASE'):
             raise RuntimeError('UNIVET_DATABASE é permitida apenas em desenvolvimento/testes.')
         if env.get('DEMO_DATABASE_URL') and env.get('DATABASE_URL'):
-            demo = sqlite_path(env['DEMO_DATABASE_URL'])
-            production = sqlite_path(env['DATABASE_URL'])
-            if demo == production or (demo.exists() and production.exists() and demo.samefile(production)):
+            demo = database_target(env['DEMO_DATABASE_URL'])
+            production = database_target(env['DATABASE_URL'])
+            if same_database(demo,production):
                 raise RuntimeError('DEMO e produção não podem compartilhar o banco.')
-        if mode == 'production':
+        if mode == 'production' and isinstance(database,Path):
             if env.get('RENDER') or env.get('UNIVET_SQLITE_PERSISTENT') != '1':
                 raise RuntimeError('SQLite de produção exige disco local persistente declarado; não é permitido no Render. Homologação ainda necessária.')
     else:
-        database = Path(env.get('UNIVET_DATABASE', Path(__file__).resolve().parent / 'banco.db')).resolve()
+        if env.get('DATABASE_URL') and env.get('UNIVET_DATABASE'):
+            raise RuntimeError('Defina somente DATABASE_URL ou UNIVET_DATABASE no ambiente local.')
+        database = database_target(env['DATABASE_URL']) if env.get('DATABASE_URL') else Path(env.get('UNIVET_DATABASE', Path(__file__).resolve().parent / 'banco.db')).resolve()
     return Settings(mode, database)
 
 
 def verify_database_environment(connection, mode, initialize=False):
     """Marca durável impede abrir uma cópia demo com configuração de produção."""
+    if getattr(connection,'dialect',None) == 'postgresql':
+        row = connection.execute('SELECT environment FROM univet_environment WHERE id=1').fetchone()
+        if row is None or row[0] != mode:
+            raise RuntimeError('Banco pertence a outro ambiente; acesso recusado.')
+        return
     exists = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='univet_environment'").fetchone()
     if exists:
         row = connection.execute('SELECT environment FROM univet_environment WHERE id=1').fetchone()
