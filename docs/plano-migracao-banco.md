@@ -1,12 +1,12 @@
-# Plano de persistência e migração — proposta, não implementada
+# Plano de persistência e migração — execução local concluída, homologação remota pendente
 
-## Atualização de execução — 21/09/2026
+## Atualização de execução — 22/09/2026
 
-Docker disponível permitiu POC **isolada**, PostgreSQL 16 local sem volumes reais/serviço remoto: `perf/postgres_poc.py`. Cinco saídas concorrentes de 7 unidades contra saldo 10: uma aceita, saldo 3, um movimento, sem negativo. Artefato `artifacts/postgres-poc.log`, resultado explícito `application_migrated=false`. Contêiner descartável próprio encerrado pelo script.
+Docker disponível permitiu PostgreSQL 16 local descartável, sem volumes reais/serviço remoto. A aplicação agora possui adaptador psycopg, migrações Alembic, testes HTTP/estoque/concorrência e backup/restore custom-format com fingerprint coincidente em 22 tabelas. Os artefatos atuais estão em `artifacts/postgres-http-final.log` e `artifacts/postgres-stock-concurrency-final.log`.
 
-Isso supera a limitação inicial de binários descrita abaixo, mas **não adapta a aplicação, não testa migração integral e não valida dump/restore PostgreSQL**. Conexão central agora em `config.py`, apenas URLs SQLite absolutas suportadas; URL PostgreSQL é recusada explicitamente. Produção SQLite no Render é bloqueada. SQLite em disco local existente exige declaração explícita e homologação operacional; não é aprovação automática.
+Isso supera a limitação inicial de binários descrita abaixo, mas **não homologa serviço remoto**. Produção SQLite no Render continua bloqueada. SQLite em disco local existente exige declaração explícita e homologação operacional; não é aprovação automática.
 
-Migração completa ainda PENDENTE: SQL parametrizado/dialeto, tipos/datas, transações/locks, schema versionado, dados fictícios íntegros, integração HTTP, restart e restore. Não usar tradutor genérico de SQL como substituto dos retestes. Nenhum provedor foi integrado/contratado. Condições gratuitas abaixo devem ser revalidadas antes da escolha; nenhuma cobrança autorizada.
+Migração remota, restart/redeploy, backup/restore no destino e fluxo clínico completo ainda PENDENTES. Não usar tradutor genérico de SQL como substituto dos retestes. Nenhum provedor foi integrado/contratado. A recomendação atual está em `docs/provedor-postgresql.md`; nenhuma cobrança foi autorizada.
 
 ## Pesquisa original preservada
 
@@ -43,9 +43,9 @@ SQLite em máquina já disponível continua sendo a alternativa de menor mudanç
 
 ## Compatibilidade Flask e inventário da migração
 
-A skill local `univet-project-context` orientou o vínculo desta proposta à arquitetura. A leitura de `app.py`, `init_db.py`, `estoque/schema.py`, `estoque/services.py` e `requirements.txt` confirma SQL SQLite direto, sem ORM nem driver PostgreSQL declarado. Trocar apenas uma URL não migra o sistema. Os guias oficiais de [Python no Neon](https://neon.com/docs/guides/python) e [Python no Aiven](https://aiven.io/docs/products/postgresql/howto/connect-python) demonstram compatibilidade do protocolo com drivers Python; a aplicação UniVet ainda não foi testada nesses bancos.
+A skill local `univet-project-context` orientou o vínculo desta proposta à arquitetura. A leitura inicial confirmou SQL SQLite direto, sem ORM. Desde então, Psycopg 3, adaptador PostgreSQL e migrações Alembic foram adicionados. A aplicação foi testada em PostgreSQL 16 descartável local; trocar apenas uma URL continua não sendo suficiente para homologar um provedor remoto.
 
-Proposta futura: manter Flask/Jinja e centralizar conexão/configuração (hoje `DATABASE` é definido em dois módulos), com `DATABASE_URL` externa e segredo fora de logs e Git. Escolher e versionar um driver, por exemplo Psycopg 3, somente na etapa de implementação. Usar TLS com validação de certificado/hostname conforme provedor; `sslmode=require` sozinho não valida a identidade do servidor. Não criar conexão global compartilhada entre processos Gunicorn. Prever fechamento por requisição, rollback em exceções, timeout e limite total de conexões somando todos os workers e tarefas administrativas. No Aiven, reservar margem dentro das 20 conexões.
+Estado atual: `DATABASE_URL`/`DEMO_DATABASE_URL` usam Psycopg 3; o pool é limitado por processo, com rollback/fechamento e timeouts. Usar TLS com validação de certificado/hostname conforme provedor; `sslmode=require` sozinho não valida a identidade do servidor. Na homologação remota, revisar o certificado e dimensionar conexões somando workers Gunicorn, migrações e rotinas de backup.
 
 | SQLite/estado atual | Destino proposto e validação exigida |
 |---|---|

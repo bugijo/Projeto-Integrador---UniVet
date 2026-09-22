@@ -1,4 +1,4 @@
-# Checklist de liberação — 21/09/2026
+# Checklist de liberação — 22/09/2026
 
 **NÃO APTO PARA DADOS REAIS.** [Auditoria](auditoria-seguranca.md) contém evidências e classificação. Marcado significa verificado localmente com dados fictícios, não implantado.
 
@@ -14,12 +14,13 @@
 - [x] Agenda concorrente e histórico de cadastros na mesma transação.
 - [x] Consultas canceladas sem exclusão; proteção de concluídas/condições/autoria.
 - [x] Backup E restore SQLite fictícios comparando conteúdo.
+- [x] Backup e restore PostgreSQL local fictício com fingerprint de 22 tabelas.
 - [x] 27 testes originais preservados; regressões novas incluídas.
 
 ## Bloqueadores e pendências obrigatórias
 
-- [ ] PostgreSQL completo (conexão, SQL, migrações, testes, backup/restore); POC isolada não basta.
-- [ ] Escolher/confirmar infraestrutura gratuita persistente, URLs distintas e acesso do operador.
+- [x] PostgreSQL completo local (conexão, SQL, migrações, testes, backup/restore); homologação remota ainda pendente.
+- [ ] Confirmar Neon Free (ou alternativa) sem cartão, criar bancos Demo/Clínica independentes e URLs distintas.
 - [ ] Homologar persistência em restart E redeploy do alvo.
 - [ ] Backup fora da instância, agendamento, responsável, retenção/RPO/RTO e restore do alvo.
 - [ ] Confirmar HTTPS/secrets/SHA/configuração efetiva dos dois serviços.

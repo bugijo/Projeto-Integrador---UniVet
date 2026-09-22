@@ -1,11 +1,41 @@
-# Piloto controlado — ainda não autorizado para dados reais
+# Plano de piloto controlado — UniVet Clínica
 
-Entrada: zerar bloqueadores do checklist, provar persistência no serviço escolhido, restore do ambiente-alvo, HTTPS, segredo privado, contas individuais, CSRF/autorização, estoque consistente e testes verdes. Resultado local ou POC não equivale a cumprir estes critérios na clínica.
+Documento preparatório. O piloto ainda não está liberado.
 
-Proposta a validar com responsáveis: duas contas individuais (admin e veterinária), treinamento com dados fictícios, depois duas semanas de piloto de escopo pequeno. Manter o processo anterior em paralelo e reconciliação diária; não depender exclusivamente do UniVet durante o piloto.
+## Condições de entrada
 
-Backup diário e antes de manutenção, com cópias fora da instância; testar restauração antes do primeiro dado real e semanalmente no piloto. Nomear responsável por backup, suporte e decisão clínica. Registrar bugs com versão, horário e passos redigidos; feedback sem dados identificáveis em issue pública.
+- PostgreSQL persistente gratuito homologado e separado do Demo;
+- schema aplicado por migration, sem seed fictício;
+- backup diário externo e restore ensaiado em banco separado;
+- HTTPS, secrets exclusivos, DEBUG desligado e cookies seguros;
+- conta individual criada somente após aprovação técnica;
+- contingência manual da clínica definida.
 
-Interromper escrita real se houver perda/divergência de saldo ou prontuário, acesso indevido, falta de backup válido, indisponibilidade que prejudique atendimento ou bloqueador de segurança. Preservar evidências e usar plano de incidente.
+## Primeira semana
 
-Critério de saída proposto: período acordado concluído, sem bloqueadores e sem divergência não resolvida, feedback formal da clínica, responsáveis/rotina de backup estabelecidos e recuperação ensaiada. Somente então avaliar “apto para uso operacional”. Datas, metas de disponibilidade, prazo de recuperação e perda tolerável precisam ser acordados; não inventar aprovação da clínica.
+- começar com poucos usuários autorizados;
+- manter o processo anterior como contingência;
+- realizar backup diário e registrar hash/horário sem dados pessoais;
+- acompanhar erros 500, falhas de conexão, latência e execução dos backups;
+- registrar bugs, dúvidas e incidentes em documento privado do projeto;
+- não executar carga artificial nem cadastrar dados desnecessários.
+
+## Revisão após a primeira semana
+
+- conferir se os backups foram produzidos e se um restore de teste foi possível;
+- revisar consumo de armazenamento, CU-hours/limites e reinícios;
+- revisar acessos, sessões, exportações e logs;
+- coletar feedback dos usuários;
+- decidir se o piloto continua, volta à contingência ou é encerrado.
+
+## Monitoramento gratuito e simples
+
+- health check HTTP de baixa frequência;
+- logs do Render sem dados pessoais;
+- planilha local de backup, incidentes e indisponibilidade;
+- alerta manual por e-mail institucional quando houver falha;
+- sem adicionar ferramenta paga ou serviço que exija cartão.
+
+## Saída do piloto
+
+O resultado deve registrar: incidentes, tempo de indisponibilidade, backups realizados, restores testados, erros, latência observada e decisão da clínica. **Apto para piloto controlado** não significa aprovação para uso operacional definitivo.

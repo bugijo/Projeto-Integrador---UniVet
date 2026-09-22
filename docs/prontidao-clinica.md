@@ -1,4 +1,4 @@
-# Prontidão da clínica — 21/09/2026
+# Prontidão da clínica — 22/09/2026
 
 ## Parecer
 
@@ -10,9 +10,9 @@ Mesmo código Flask/Jinja/JS; processos e configurações diferentes; sem chavea
 
 | Item | DEMO | PRODUÇÃO |
 |---|---|---|
-| URL | Backend por confirmar. URL anteriormente conhecida `https://univet-frontend.onrender.com/login` retornou 404 em 19/09. | Não provisionada/confirmada |
+| URL | `https://univet.onrender.com` (serviço atual na `main`; não é homologação clínica) | Não provisionada/confirmada |
 | Configuração | `UNIVET_ENV=demo`, `DEMO_DATABASE_URL` | `UNIVET_ENV=production`, `DATABASE_URL` |
-| Banco | SQLite fictício exclusivo no ensaio local | Sem banco remoto homologado. PostgreSQL ainda não suportado pela aplicação. SQLite somente candidato em disco local persistente; recusado no Render. |
+| Banco | SQLite fictício exclusivo no ensaio local | Sem banco remoto homologado. PostgreSQL suportado e validado localmente; SQLite recusado no Render. |
 | Usuário | `admin`, conta de avaliação existente no seed demo; não se tentou login online | Primeiro administrador e `DrFernanda` NÃO criados |
 | Dados | Exclusivamente fictícios; demo online não modificada | Base real não criada/manipulada; ensaios de produção usam base descartável vazia/fictícia |
 | Situação | Navegação/estoque/consultas demonstrativos passam localmente | Bloqueada para uso real |
@@ -31,7 +31,7 @@ Checkpoint final da rodada: **77 testes = 27 anteriores +50 novos; 77 passaram, 
 
 - Backup/restore SQLite implementados por snapshot consistente, origem read-only, destino novo 0600 e hash/integridade/FKs. Ensaios com comparação de schema e conteúdo, restauração após remover somente origem temporária do teste. **Produção ainda sem backup/restore homologados**.
 - Concorrência SQLite: 2/5/10 conexões, FEFO, saídas/uso clínico, ajustes/estornos, saldo insuficiente, rollback e agenda. Estorno único por restrição no banco. Nenhum dado real utilizado.
-- PostgreSQL: POC de cinco concorrentes aprovada; aplicação/migração/dump/restore não implementados. Ver `plano-migracao-banco.md`.
+- PostgreSQL: aplicação/migração/dump/restore locais aprovados em containers descartáveis; provedor remoto, restart/redeploy e recuperação do alvo ainda pendentes. Ver `plano-migracao-banco.md`.
 - Migrações SQLite ainda incluem rotinas legadas; revisar todas as constraints incrementais e evolução antes da clínica. Marca de versão de segurança não substitui pipeline completo.
 
 ## Carga e ferramentas

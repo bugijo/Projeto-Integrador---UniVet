@@ -1,6 +1,6 @@
 # Auditoria defensiva e prontidão de produção — UniVet
 
-## Atualização corretiva — 21/09/2026
+## Atualização corretiva — 22/09/2026
 
 Branch `security/demo-producao-isolados`, sucessora local da branch de contexto por solicitação do roteiro. Nenhum deploy/push, conta real ou importação real. **NÃO APTO PARA DADOS REAIS**; esta atualização substitui as afirmações de estado do relatório inicial abaixo, que fica preservado como evidência anterior.
 
@@ -14,14 +14,18 @@ Branch `security/demo-producao-isolados`, sucessora local da branch de contexto 
 | SEC-07 | RESOLVIDO no escopo testado | Secure/HSTS HTTPS, CSP com nonce, cache no-store, inatividade, limites distribuídos pelo banco. Timing de enumeração e operação real não integralmente avaliados. |
 | SEC-08 | RESOLVIDO localmente | Neutralização de fórmulas textuais no CSV e exportação restrita ao administrador. |
 | SEC-09 | PENDENTE — MÉDIO | Finitude, limites e validações corrigidos; precisão REAL/float e revisão completa dos campos ainda pendentes. |
-| SEC-10 | BLOQUEADOR | SQLite efêmero recusado em produção/Render; persistência remota e adaptação PostgreSQL completas ainda não existem. POC não homologa aplicação. |
-| SEC-11 | BLOQUEADOR de liberação | URL/backend/SHA ativos e redeploy persistente não comprovados; não publicar manifesto atual como se estivesse pronto. |
+| SEC-10 | BLOQUEADOR | SQLite efêmero recusado em produção/Render; adaptação PostgreSQL, migrações e restore foram validados apenas localmente. Não há provedor remoto persistente homologado. |
+| SEC-11 | BLOQUEADOR de liberação | Serviço Render `univet` está na `main`, commit `95d1369`, sem serviço Clínica separado. URL responde HTTPS, mas headers de segurança esperados não foram confirmados remotamente. |
 | SEC-12 | PENDENTE — MÉDIO / restrição de publicação | PDFs continuam em ancestralidade remota; requer decisão/autorização específica de saneamento. |
 | SEC-13 | PENDENTE — ALTO | Agenda e histórico de cadastros atômicos, lastrowid, cancelamento sem apagar consulta, preservação de concluídas/condições/autoria. Política de adendos/edição de prontuários concluídos e constraints legadas ainda não concluída. |
 | SEC-14 | PENDENTE — MÉDIO | Consumo bruto e efeito de estornos ainda precisam semântica explícita/validação. |
 | SEC-15 | PENDENTE — ALTO | Documentação e restore local ampliados; responsáveis, retenção, destino externo e ensaio do ambiente real não confirmados. |
 
 Contagem de pendências nesta classificação de liberação: **2 bloqueadores, 2 altos, 3 médios, 0 baixos**. Não é contagem de toda vulnerabilidade possível. Resolvido localmente não afirma que a correção foi implantada.
+
+### Verificação remota somente leitura
+
+Em 22/09/2026, o workspace Render confirmado foi consultado sem mutação. Existe somente o serviço UniVet identificado como `univet`, plano Free, branch `main`, região Oregon, URL `https://univet.onrender.com`, sem PostgreSQL Render no workspace. O deploy live informado pelo Render é o commit `95d1369`. Um `HEAD /login` retornou 200 via HTTPS, porém a resposta observada não apresentou CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, proteção contra frame ou HSTS. Não foram inspecionados valores de variáveis, não houve login, deploy, restart, alteração de banco ou criação de conta.
 
 Checkpoint final: **77 testes passaram (27 anteriores +50), 0 falhas, 18,673 s**, sem depender de PYTHONPATH, inclusive primeiro acesso HTTPS e restart em produção fictícia. Log `artifacts/final-ci-command-tests.log`. Backup/restore compara schema/conteúdo de tabelas fictícias, não apenas contagens; concorrência inclui ajuste, estorno, saída e uso clínico. Navegador local anterior confirmou login/formulários e XSS escapado sem execução. Mudanças posteriores de primeiro acesso ainda precisam QA visual final.
 
