@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "render": {
+      "url": "https://mcp.render.com/mcp"
+    },
+    "neon": {
+      "url": "https://mcp.neon.tech/mcp"
+    }
+  }
+}
