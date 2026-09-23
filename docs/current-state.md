@@ -8,9 +8,11 @@
 - Demo recebeu somente seed fictício. Verificação: `usuarios=2`, `tutores=5`, `pets=8`, `consultas=4`, `produtos=5`, `lotes=7`, `movimentacoes_estoque=10`.
 - Clínica recebeu apenas o schema e dados estruturais de referência; os contadores de negócio verificados estão zerados. Não houve seed demo nem importação real.
 - `pg_dump` remoto foi gerado com cliente PostgreSQL 17 em container descartável. O restore em banco de teste separado ainda não foi aprovado devido a incompatibilidades/instabilidade do ensaio descartável; não declarar backup/restore operacional até repetir com evidência limpa.
+- Restore remoto foi posteriormente concluído em projeto temporário separado e removido após a validação: 22 tabelas, 28 foreign keys, versão Alembic `002_session_indexes`, contagens equivalentes e fingerprints iguais nas 22 tabelas. `univet-demo` e `univet-clinica` não foram usados como destino.
 - O MCP Neon não está exposto como ferramenta nesta sessão do Codex; a CLI oficial autenticada foi o fallback. Nenhum token foi colocado no Git, na documentação ou no chat.
 - Nenhum segundo serviço Render foi criado. O serviço Demo existente permaneceu inalterado; a criação de um serviço clínico Free foi bloqueada preventivamente pelos riscos de cobrança suplementar, suspensão e ausência de persistência adequada do plano Free.
-- **Classificação: NÃO APTO PARA DADOS REAIS.** Persistem bloqueadores de serviço clínico isolado, headers/HTTPS efetivos, restart/redeploy, backup/restore, fluxo remoto, carga e revisão operacional.
+- **Classificação: NÃO APTO PARA DADOS REAIS.** O procedimento de backup/restore remoto foi validado em banco separado. Persistem bloqueadores de serviço clínico isolado, headers/HTTPS efetivos, restart/redeploy, fluxo remoto, carga e revisão operacional.
+- Regressão focada após esta rodada: **20 testes OK** (`tests.test_environments` + `tests.test_security`) em 73,542 s, usando `PYTHONPATH=tests`; nenhum código de aplicação foi alterado.
 
 ## Atualização da validação PostgreSQL e carga local — 22/09/2026
 

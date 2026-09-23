@@ -7,10 +7,12 @@
 | Neon | **PARCIALMENTE VALIDADO** | Organização Free e dois projetos separados criados pela CLI oficial; MCP Neon não ficou exposto como ferramenta callable nesta sessão. |
 | Migrations | **PASSOU** | Schema aplicado remotamente em Demo e Clínica com SSL `verify-full`; não valida ainda o serviço publicado. |
 | Isolamento | **PASSOU no banco** | Demo tem apenas dados fictícios seed; Clínica não recebeu seed demo nem dados reais. |
-| Backup | **PARCIAL** | `pg_dump` remoto gerado com cliente PostgreSQL 17 descartável; restore em banco separado ainda inconclusivo. |
+| Backup | **PASSOU no procedimento ensaiado** | `pg_dump` remoto e restore em projeto temporário separado; 22 tabelas, 28 FKs, mesma migration e fingerprints iguais. O ensaio não substitui rotina agendada no serviço clínico, ainda inexistente. |
 | Render Clínica | **NÃO CRIADO** | Evitado por risco do plano Free e por ainda não haver homologação de recuperação/headers. Demo existente não foi alterado. |
 
-Os bloqueadores SEC-10, SEC-11 e SEC-15 permanecem para liberação clínica. A existência de bancos Neon não equivale a persistência/recovery homologados do serviço web. Nenhuma conta `DrFernanda` foi criada.
+Os bloqueadores SEC-11 e SEC-15 permanecem para liberação clínica. SEC-10 foi reduzido no aspecto de backup/restore remoto, mas a persistência do serviço web, rotina agendada, retenção e operação ainda não foram homologadas. Nenhuma conta `DrFernanda` foi criada.
+
+Regressão focada após o ensaio: **20 testes passaram, 0 falharam**, cobrindo ambientes e segurança (`PYTHONPATH=tests .venv/bin/python -m unittest tests.test_environments tests.test_security`). Scanners `pip-audit`/Bandit não estão instalados como comandos no ambiente atual; os resultados anteriores permanecem registrados nos artefatos existentes.
 
 ## Atualização corretiva — 22/09/2026
 
@@ -26,7 +28,7 @@ Branch `security/demo-producao-isolados`, sucessora local da branch de contexto 
 | SEC-07 | RESOLVIDO no escopo testado | Secure/HSTS HTTPS, CSP com nonce, cache no-store, inatividade, limites distribuídos pelo banco. Timing de enumeração e operação real não integralmente avaliados. |
 | SEC-08 | RESOLVIDO localmente | Neutralização de fórmulas textuais no CSV e exportação restrita ao administrador. |
 | SEC-09 | PENDENTE — MÉDIO | Finitude, limites e validações corrigidos; precisão REAL/float e revisão completa dos campos ainda pendentes. |
-| SEC-10 | BLOQUEADOR | SQLite efêmero recusado em produção/Render; adaptação PostgreSQL, migrações e restore foram validados apenas localmente. Não há provedor remoto persistente homologado. |
+| SEC-10 | PENDENTE — ALTO | SQLite efêmero continua recusado em produção/Render; Neon remoto, migrations e restore separado foram validados. Persistência do serviço web e rotina operacional ainda não foram homologadas. |
 | SEC-11 | BLOQUEADOR de liberação | Serviço Render `univet` está na `main`, commit `95d1369`, sem serviço Clínica separado. URL responde HTTPS, mas headers de segurança esperados não foram confirmados remotamente. |
 | SEC-12 | PENDENTE — MÉDIO / restrição de publicação | PDFs continuam em ancestralidade remota; requer decisão/autorização específica de saneamento. |
 | SEC-13 | PENDENTE — ALTO | Agenda e histórico de cadastros atômicos, lastrowid, cancelamento sem apagar consulta, preservação de concluídas/condições/autoria. Política de adendos/edição de prontuários concluídos e constraints legadas ainda não concluída. |

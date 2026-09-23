@@ -12,7 +12,7 @@ Mesmo código Flask/Jinja/JS; processos e configurações diferentes; sem chavea
 |---|---|---|
 | URL | `https://univet.onrender.com` (serviço atual na `main`; não é homologação clínica) | Não provisionada/confirmada |
 | Configuração | `UNIVET_ENV=demo`, `DEMO_DATABASE_URL` | `UNIVET_ENV=production`, `DATABASE_URL` |
-| Banco | Neon `univet-demo`, seed exclusivamente fictício | Neon `univet-clinica`, schema migrado e dados de negócio zerados; restore ainda pendente |
+| Banco | Neon `univet-demo`, seed exclusivamente fictício | Neon `univet-clinica`, schema migrado e dados de negócio zerados; restore ensaiado em banco separado |
 | Usuário | `admin`, conta de avaliação existente no seed demo; não se tentou login online | Primeiro administrador e `DrFernanda` NÃO criados |
 | Dados | Exclusivamente fictícios; demo online não modificada | Base real não criada/manipulada; ensaios de produção usam base descartável vazia/fictícia |
 | Situação | Navegação/estoque/consultas demonstrativos passam localmente | Bloqueada para uso real |
@@ -29,9 +29,9 @@ Checkpoint final da rodada: **77 testes = 27 anteriores +50 novos; 77 passaram, 
 
 ## Banco, backup, restore e concorrência
 
-- Backup/restore SQLite implementados por snapshot consistente, origem read-only, destino novo 0600 e hash/integridade/FKs. Ensaios com comparação de schema e conteúdo, restauração após remover somente origem temporária do teste. **Produção ainda sem backup/restore homologados**.
+- Backup/restore SQLite implementados por snapshot consistente, origem read-only, destino novo 0600 e hash/integridade/FKs. O procedimento remoto também foi ensaiado em projeto Neon separado com 22 tabelas, 28 FKs e fingerprints equivalentes; ainda falta agendamento, retenção e restore operacional do serviço clínico.
 - Concorrência SQLite: 2/5/10 conexões, FEFO, saídas/uso clínico, ajustes/estornos, saldo insuficiente, rollback e agenda. Estorno único por restrição no banco. Nenhum dado real utilizado.
-- PostgreSQL: aplicação/migração/dump/restore locais aprovados em containers descartáveis; provedor remoto, restart/redeploy e recuperação do alvo ainda pendentes. Ver `plano-migracao-banco.md`.
+- PostgreSQL: aplicação/migração/dump/restore remoto e local aprovados em ambientes separados; serviço web, restart/redeploy e recuperação operacional do alvo ainda pendentes. Ver `plano-migracao-banco.md`.
 - Migrações SQLite ainda incluem rotinas legadas; revisar todas as constraints incrementais e evolução antes da clínica. Marca de versão de segurança não substitui pipeline completo.
 
 ## Carga e ferramentas

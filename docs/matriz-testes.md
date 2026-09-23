@@ -12,7 +12,7 @@ Atualizada em 23/09/2026. `OK local` não significa aprovação de produção.
 | Uso em consulta e baixa | OK local | OK | Pendente | Pendente | Integridade local comprovada |
 | Estorno, ajuste e saldo não negativo | OK local | OK | Pendente | Pendente | Concorrência local comprovada |
 | Migrações Alembic | SQLite legado | OK local | OK remoto | OK remoto | SSL `verify-full`, sem seed clínico |
-| Backup/restore | OK local | OK local | Dump remoto gerado; restore pendente | Não homologado | Não aprovar até restore separado |
+| Backup/restore | OK local | OK local | Dump/restore remoto em projeto separado | Procedimento ainda não ligado ao serviço | 22 tabelas e fingerprints equivalentes |
 | Restart/redeploy preservando dados | Não aplicável ao alvo | Não homologado remoto | Pendente | Pendente | Bloqueador |
 | HTTPS, cookies e headers | Teste local | Não remoto | Pendente | Pendente | URL atual não é clínica |
 | Carga 1/5/10/20/30/50 | Snapshot SQLite | Parcial local: 1/5 OK; maiores limitados por mesma conta | Pendente | Não executar sem limites | Repetir com contas independentes |

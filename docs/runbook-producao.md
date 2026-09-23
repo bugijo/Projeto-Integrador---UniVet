@@ -1,6 +1,6 @@
 # Runbook — preparação local, não liberação da clínica
 
-Atualizado em 23/09/2026. **NÃO APTO PARA DADOS REAIS.** Ver `prontidao-clinica.md`, `provedor-postgresql.md` e critérios de liberação. Neon Free foi provisionado em dois projetos, com migrations remotas; nenhum serviço web clínico foi publicado. Não executar estes exemplos sobre banco real sem confirmação, backup e janela operacional.
+Atualizado em 23/09/2026. **NÃO APTO PARA DADOS REAIS.** Ver `prontidao-clinica.md`, `provedor-postgresql.md`, `hospedagem-clinica.md` e critérios de liberação. Neon Free foi provisionado em dois projetos, com migrations remotas e restore ensaiado em banco separado; nenhum serviço web clínico foi publicado. Não executar estes exemplos sobre banco real sem confirmação, backup e janela operacional.
 
 ## Ambientes
 

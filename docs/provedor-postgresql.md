@@ -39,7 +39,7 @@ Fontes oficiais consultadas em 22/09/2026:
 3. Não enviar URLs, senhas ou certificados pelo chat; configurar `DEMO_DATABASE_URL` e `DATABASE_URL` como secrets distintos.
 4. Confirmar ao responsável do projeto se o plano permanece Free e se a política de retenção atende ao piloto.
 
-Estado atual: `univet-demo` e `univet-clinica` existem no plano Free, com bancos separados e migrations aplicadas. O Demo recebeu somente dados fictícios; a Clínica está sem dados de negócio. Ainda não há `CLINICA_URL`, secrets configurados em serviço web, nem restore remoto aprovado. O status permanece **NÃO APTO PARA DADOS REAIS**.
+Estado atual: `univet-demo` e `univet-clinica` existem no plano Free, com bancos separados e migrations aplicadas. O Demo recebeu somente dados fictícios; a Clínica está sem dados de negócio. O restore remoto foi aprovado em banco temporário separado, que foi removido depois do ensaio. Ainda não há `CLINICA_URL` nem secrets configurados em serviço web. O status permanece **NÃO APTO PARA DADOS REAIS**.
 
 ## Regras de custo
 

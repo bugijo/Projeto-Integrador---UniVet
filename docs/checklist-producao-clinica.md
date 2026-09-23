@@ -16,12 +16,12 @@
 - [x] Backup E restore SQLite fictícios comparando conteúdo.
 - [x] PostgreSQL remoto Neon Free criado em projetos separados; migrations aplicadas e isolamento inicial verificado.
 - [x] Backup PostgreSQL remoto gerado em formato custom, sem expor credenciais.
-- [ ] Restore do backup remoto em banco separado aprovado.
+- [x] Restore do backup remoto em banco separado aprovado: 22 tabelas, 28 FKs, Alembic `002_session_indexes` e fingerprints equivalentes.
 - [x] 27 testes originais preservados; regressões novas incluídas.
 
 ## Bloqueadores e pendências obrigatórias
 
-- [x] PostgreSQL completo local e migrations remotas; backup/restore remoto ainda pendente.
+- [x] PostgreSQL completo local e migrations remotas; backup/restore remoto ensaiado em projeto separado.
 - [x] Neon Free confirmado e bancos Demo/Clínica independentes criados; ausência de cobrança automática ainda requer confirmação operacional.
 - [ ] Criar/homologar serviço Clínica isolado sem substituir o Demo.
 - [ ] Homologar persistência em restart E redeploy do alvo.
