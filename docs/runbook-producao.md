@@ -1,6 +1,6 @@
 # Runbook — preparação local, não liberação da clínica
 
-Atualizado em 22/09/2026. **NÃO APTO PARA DADOS REAIS.** Ver `prontidao-clinica.md`, `provedor-postgresql.md` e critérios de liberação. Nada desta rodada foi publicado. Não executar estes exemplos sobre banco real sem confirmação, backup e janela operacional.
+Atualizado em 23/09/2026. **NÃO APTO PARA DADOS REAIS.** Ver `prontidao-clinica.md`, `provedor-postgresql.md` e critérios de liberação. Neon Free foi provisionado em dois projetos, com migrations remotas; nenhum serviço web clínico foi publicado. Não executar estes exemplos sobre banco real sem confirmação, backup e janela operacional.
 
 ## Ambientes
 
@@ -9,7 +9,7 @@ Mesmo código; processos, URLs, bancos, chaves e backups distintos. Não existe 
 - Desenvolvimento: `UNIVET_ENV=development`, `UNIVET_DATABASE` local; demo somente com seed explícito.
 - Demo: `UNIVET_ENV=demo`, `DEMO_DATABASE_URL=sqlite:////caminho/absoluto/demo.db`; segredo próprio estável para múltiplos workers. Somente dados fictícios.
 - Produção local candidata: `UNIVET_ENV=production`, `DATABASE_URL=sqlite:////caminho/absoluto/clinica.db`, `UNIVET_SQLITE_PERSISTENT=1`, `SECRET_KEY` privada com pelo menos 32 caracteres, HTTPS. A flag é declaração do operador, não prova de persistência.
-- **Render + SQLite de produção é recusado**, mesmo com a flag. PostgreSQL é obrigatório em produção publicada; URL inválida falha explicitamente, nunca cai silenciosamente em SQLite. Migração local existe; homologação remota permanece pendente.
+- **Render + SQLite de produção é recusado**, mesmo com a flag. PostgreSQL é obrigatório em produção publicada; URL inválida falha explicitamente, nunca cai silenciosamente em SQLite. Neon remoto foi migrado; serviço clínico e recovery permanecem pendentes.
 - Não definir `UNIVET_DATABASE` nos ambientes publicados. Não compartilhar caminhos (inclusive aliases), chaves, dumps ou diretórios. Marcação interna do banco recusa outro ambiente e recusa adotar banco legado sem revisão.
 - `UNIVET_TRUST_PROXY=1` somente atrás de um proxy confiável, sem acesso direto ao backend. Cookies de produção Secure/HttpOnly/Lax, DEBUG desligado.
 

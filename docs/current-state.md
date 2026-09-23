@@ -1,4 +1,16 @@
-# Estado atual — 22/09/2026
+# Estado atual — 23/09/2026
+
+## Homologação remota parcial — Neon Free — 23/09/2026
+
+- A conta/organização Neon foi confirmada pela CLI oficial no plano **Free**. A API de limite de gastos não está disponível nesse plano; não houve upgrade, cartão cadastrado por esta tarefa ou recurso pago criado.
+- Foram criados dois projetos PostgreSQL independentes, ambos sem dados reais: `univet-demo` (`winter-resonance-45187411`) e `univet-clinica` (`bold-truth-16986362`).
+- Conexões remotas foram validadas com SSL `verify-full` e CA do sistema. Migrations Alembic concluídas nos dois bancos.
+- Demo recebeu somente seed fictício. Verificação: `usuarios=2`, `tutores=5`, `pets=8`, `consultas=4`, `produtos=5`, `lotes=7`, `movimentacoes_estoque=10`.
+- Clínica recebeu apenas o schema e dados estruturais de referência; os contadores de negócio verificados estão zerados. Não houve seed demo nem importação real.
+- `pg_dump` remoto foi gerado com cliente PostgreSQL 17 em container descartável. O restore em banco de teste separado ainda não foi aprovado devido a incompatibilidades/instabilidade do ensaio descartável; não declarar backup/restore operacional até repetir com evidência limpa.
+- O MCP Neon não está exposto como ferramenta nesta sessão do Codex; a CLI oficial autenticada foi o fallback. Nenhum token foi colocado no Git, na documentação ou no chat.
+- Nenhum segundo serviço Render foi criado. O serviço Demo existente permaneceu inalterado; a criação de um serviço clínico Free foi bloqueada preventivamente pelos riscos de cobrança suplementar, suspensão e ausência de persistência adequada do plano Free.
+- **Classificação: NÃO APTO PARA DADOS REAIS.** Persistem bloqueadores de serviço clínico isolado, headers/HTTPS efetivos, restart/redeploy, backup/restore, fluxo remoto, carga e revisão operacional.
 
 ## Atualização da validação PostgreSQL e carga local — 22/09/2026
 

@@ -4,7 +4,7 @@ Documento preparatório. O piloto ainda não está liberado.
 
 ## Condições de entrada
 
-- PostgreSQL persistente gratuito homologado e separado do Demo;
+- PostgreSQL Neon Free separado do Demo, com migrations aplicadas; recovery remoto ainda precisa ser homologado;
 - schema aplicado por migration, sem seed fictício;
 - backup diário externo e restore ensaiado em banco separado;
 - HTTPS, secrets exclusivos, DEBUG desligado e cookies seguros;

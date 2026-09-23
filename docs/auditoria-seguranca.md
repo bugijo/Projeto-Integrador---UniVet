@@ -1,5 +1,17 @@
 # Auditoria defensiva e prontidão de produção — UniVet
 
+## Atualização de homologação remota — 23/09/2026
+
+| Evidência | Resultado | Limite |
+|---|---|---|
+| Neon | **PARCIALMENTE VALIDADO** | Organização Free e dois projetos separados criados pela CLI oficial; MCP Neon não ficou exposto como ferramenta callable nesta sessão. |
+| Migrations | **PASSOU** | Schema aplicado remotamente em Demo e Clínica com SSL `verify-full`; não valida ainda o serviço publicado. |
+| Isolamento | **PASSOU no banco** | Demo tem apenas dados fictícios seed; Clínica não recebeu seed demo nem dados reais. |
+| Backup | **PARCIAL** | `pg_dump` remoto gerado com cliente PostgreSQL 17 descartável; restore em banco separado ainda inconclusivo. |
+| Render Clínica | **NÃO CRIADO** | Evitado por risco do plano Free e por ainda não haver homologação de recuperação/headers. Demo existente não foi alterado. |
+
+Os bloqueadores SEC-10, SEC-11 e SEC-15 permanecem para liberação clínica. A existência de bancos Neon não equivale a persistência/recovery homologados do serviço web. Nenhuma conta `DrFernanda` foi criada.
+
 ## Atualização corretiva — 22/09/2026
 
 Branch `security/demo-producao-isolados`, sucessora local da branch de contexto por solicitação do roteiro. Nenhum deploy/push, conta real ou importação real. **NÃO APTO PARA DADOS REAIS**; esta atualização substitui as afirmações de estado do relatório inicial abaixo, que fica preservado como evidência anterior.

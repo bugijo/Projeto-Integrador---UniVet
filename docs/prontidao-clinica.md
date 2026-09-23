@@ -1,8 +1,8 @@
-# Prontidão da clínica — 22/09/2026
+# Prontidão da clínica — 23/09/2026
 
 ## Parecer
 
-**NÃO APTO PARA DADOS REAIS.** Preparação parcial implementada e testada localmente. A tarefa ampla não está concluída: PostgreSQL integral, operação dos dois serviços, recuperação no alvo e validação final permanecem pendentes. Não confundir teste verde com liberação clínica.
+**NÃO APTO PARA DADOS REAIS.** Os bancos Neon Free foram criados e o schema remoto foi migrado, mas operação dos dois serviços, recuperação no alvo e validação final permanecem pendentes. Não confundir banco provisionado ou teste verde com liberação clínica.
 
 ## Arquitetura atual e pretendida
 
@@ -12,7 +12,7 @@ Mesmo código Flask/Jinja/JS; processos e configurações diferentes; sem chavea
 |---|---|---|
 | URL | `https://univet.onrender.com` (serviço atual na `main`; não é homologação clínica) | Não provisionada/confirmada |
 | Configuração | `UNIVET_ENV=demo`, `DEMO_DATABASE_URL` | `UNIVET_ENV=production`, `DATABASE_URL` |
-| Banco | SQLite fictício exclusivo no ensaio local | Sem banco remoto homologado. PostgreSQL suportado e validado localmente; SQLite recusado no Render. |
+| Banco | Neon `univet-demo`, seed exclusivamente fictício | Neon `univet-clinica`, schema migrado e dados de negócio zerados; restore ainda pendente |
 | Usuário | `admin`, conta de avaliação existente no seed demo; não se tentou login online | Primeiro administrador e `DrFernanda` NÃO criados |
 | Dados | Exclusivamente fictícios; demo online não modificada | Base real não criada/manipulada; ensaios de produção usam base descartável vazia/fictícia |
 | Situação | Navegação/estoque/consultas demonstrativos passam localmente | Bloqueada para uso real |

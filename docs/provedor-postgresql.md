@@ -1,6 +1,6 @@
 # Provedor PostgreSQL para o piloto — decisão técnica
 
-Atualizado em 22/09/2026. Nenhuma conta foi criada, nenhum cartão foi cadastrado e nenhum provedor foi alterado.
+Atualizado em 23/09/2026. A organização Neon Free foi confirmada pela CLI oficial e os dois projetos foram criados. Nenhum upgrade, cartão ou recurso pago foi feito por esta tarefa. A confirmação de cobrança automática não foi obtida por endpoint da conta; não assumir ausência de cobrança fora dos limites Free.
 
 ## Decisão
 
@@ -39,7 +39,7 @@ Fontes oficiais consultadas em 22/09/2026:
 3. Não enviar URLs, senhas ou certificados pelo chat; configurar `DEMO_DATABASE_URL` e `DATABASE_URL` como secrets distintos.
 4. Confirmar ao responsável do projeto se o plano permanece Free e se a política de retenção atende ao piloto.
 
-Enquanto essa ação não ocorrer, não existe `DEMO_URL`/`CLINICA_URL` nova homologada e o status permanece **NÃO APTO PARA DADOS REAIS**.
+Estado atual: `univet-demo` e `univet-clinica` existem no plano Free, com bancos separados e migrations aplicadas. O Demo recebeu somente dados fictícios; a Clínica está sem dados de negócio. Ainda não há `CLINICA_URL`, secrets configurados em serviço web, nem restore remoto aprovado. O status permanece **NÃO APTO PARA DADOS REAIS**.
 
 ## Regras de custo
 
