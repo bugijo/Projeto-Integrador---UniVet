@@ -63,6 +63,14 @@ class EnvironmentTests(unittest.TestCase):
         })
         self.assertTrue(str(quoted.database).startswith('postgresql://'))
 
+        for wrapped in (
+            "psql 'postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full'",
+            'DATABASE_URL=postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full',
+        ):
+            with self.subTest(wrapped=wrapped):
+                settings = load_settings({'UNIVET_ENV': 'production', 'DATABASE_URL': wrapped})
+                self.assertTrue(str(settings.database).startswith('postgresql://'))
+
         with self.assertRaises(RuntimeError):
             load_settings({
                 'UNIVET_ENV': 'production',

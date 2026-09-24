@@ -22,6 +22,10 @@ def database_target(url):
     if not isinstance(url, str):
         raise RuntimeError('URL não suportada (valor ausente); use PostgreSQL ou SQLite absoluto local.')
     url = url.strip()
+    if url.startswith('DATABASE_URL='):
+        url = url.split('=', 1)[1].strip()
+    if url.startswith('psql '):
+        url = url[5:].strip()
     if len(url) >= 2 and url[0] == url[-1] and url[0] in ('"', "'"):
         url = url[1:-1].strip()
     parsed = urlsplit(url)
