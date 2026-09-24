@@ -43,6 +43,22 @@ class EnvironmentTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             load_settings(dict(env, DATABASE_URL='postgresql://secret:secret@invalid/db'))
 
+    def test_neon_sqlalchemy_scheme_is_normalized_for_psycopg(self):
+        for scheme in ('postgres://', 'postgresql://', 'postgres+psycopg://', 'postgresql+psycopg://'):
+            with self.subTest(scheme=scheme):
+                settings = load_settings({
+                    'UNIVET_ENV': 'production',
+                    'DATABASE_URL': scheme + 'owner:password@ep-example.neon.tech/neondb?sslmode=verify-full',
+                })
+                self.assertEqual(settings.environment, 'production')
+                self.assertTrue(str(settings.database).startswith('postgresql://'))
+
+        with self.assertRaises(RuntimeError):
+            load_settings({
+                'UNIVET_ENV': 'production',
+                'DATABASE_URL': 'postgresql+asyncpg://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full',
+            })
+
     def test_database_identity_cannot_be_relabelled(self):
         with sqlite3.connect(':memory:') as conn:
             verify_database_environment(conn, 'demo', initialize=True)

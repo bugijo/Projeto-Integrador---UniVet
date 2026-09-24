@@ -5,6 +5,12 @@ import os
 from urllib.parse import unquote, urlsplit, parse_qs
 
 
+POSTGRES_SCHEMES = frozenset({
+    'postgres', 'postgresql',
+    'postgres+psycopg', 'postgresql+psycopg',
+})
+
+
 @dataclass(frozen=True)
 class Settings:
     environment: str
@@ -13,7 +19,7 @@ class Settings:
 
 def database_target(url):
     parsed = urlsplit(url)
-    if parsed.scheme in ('postgresql','postgres'):
+    if parsed.scheme in POSTGRES_SCHEMES:
         if not parsed.hostname or not parsed.username or not parsed.path.strip('/'):
             raise RuntimeError('DATABASE_URL PostgreSQL incompleta.')
         query = parse_qs(parsed.query)
@@ -22,7 +28,11 @@ def database_target(url):
             raise RuntimeError('Parâmetros PostgreSQL não permitidos.')
         if parsed.hostname not in ('127.0.0.1','localhost','::1') and query.get('sslmode') != ['verify-full']:
             raise RuntimeError('PostgreSQL remoto exige sslmode=verify-full e certificado confiável.')
-        return url.replace('postgres://','postgresql://',1)
+        # Neon e outros provedores podem fornecer URL com o driver SQLAlchemy
+        # no esquema (postgresql+psycopg://). O adaptador DB-API usa psycopg
+        # diretamente, então normalizamos somente o esquema, preservando
+        # host, credenciais codificadas, banco e parâmetros aprovados.
+        return parsed._replace(scheme='postgresql').geturl()
     return sqlite_path(url)
 
 

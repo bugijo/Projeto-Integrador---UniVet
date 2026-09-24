@@ -9,6 +9,7 @@ import os
 import re
 import sqlite3
 import threading
+from urllib.parse import urlsplit
 
 import psycopg
 from psycopg_pool import ConnectionPool
@@ -24,7 +25,9 @@ _pool_lock = threading.Lock()
 
 
 def is_postgres(target):
-    return isinstance(target, str) and target.startswith(('postgresql://','postgres://'))
+    return isinstance(target, str) and urlsplit(target).scheme in {
+        'postgres', 'postgresql', 'postgres+psycopg', 'postgresql+psycopg'
+    }
 
 
 def bind_markers(statement):
