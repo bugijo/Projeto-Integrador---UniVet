@@ -52,7 +52,18 @@ def database_target(url):
     if parsed.scheme == 'sqlite':
         return sqlite_path(url)
     scheme = parsed.scheme or '<vazio>'
-    raise RuntimeError(f'URL não suportada (esquema: {scheme}); use PostgreSQL ou SQLite absoluto local.')
+    stripped = url.strip()
+    if stripped.startswith('\ufeff'):
+        shape = 'BOM'
+    elif stripped[:1] in ('"', "'", '“', '‘'):
+        shape = 'aspas'
+    elif stripped.startswith('<'):
+        shape = 'placeholder'
+    elif '://' in stripped[:80]:
+        shape = 'prefixo antes do protocolo'
+    else:
+        shape = 'formato desconhecido'
+    raise RuntimeError(f'URL não suportada (esquema: {scheme}; formato: {shape}); use PostgreSQL ou SQLite absoluto local.')
 
 
 def same_database(first, second):
