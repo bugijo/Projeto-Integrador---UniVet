@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 import os
+import re
 from urllib.parse import unquote, urlsplit, parse_qs
 
 
@@ -24,8 +25,9 @@ def database_target(url):
     url = url.strip()
     for _ in range(4):
         previous = url
-        if url.startswith('DATABASE_URL='):
-            url = url.split('=', 1)[1].strip()
+        assignment = re.match(r'^(?:export\s+)?DATABASE_URL\s*[:=]\s*(.*)$', url, re.S)
+        if assignment:
+            url = assignment.group(1).strip()
         if url.startswith('psql '):
             url = url[5:].strip()
         if len(url) >= 2 and url[0] == url[-1] and url[0] in ('"', "'"):

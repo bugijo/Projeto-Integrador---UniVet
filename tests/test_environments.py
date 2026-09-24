@@ -67,6 +67,8 @@ class EnvironmentTests(unittest.TestCase):
             "psql 'postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full'",
             'DATABASE_URL=postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full',
             '"psql \'postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full\'"',
+            'DATABASE_URL = "postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full"',
+            'export DATABASE_URL=postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full',
         ):
             with self.subTest(wrapped=wrapped):
                 settings = load_settings({'UNIVET_ENV': 'production', 'DATABASE_URL': wrapped})
