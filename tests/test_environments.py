@@ -44,7 +44,11 @@ class EnvironmentTests(unittest.TestCase):
             load_settings(dict(env, DATABASE_URL='postgresql://secret:secret@invalid/db'))
 
     def test_neon_sqlalchemy_scheme_is_normalized_for_psycopg(self):
-        for scheme in ('postgres://', 'postgresql://', 'postgres+psycopg://', 'postgresql+psycopg://'):
+        for scheme in (
+            'postgres://', 'postgresql://', 'postgres+psycopg://',
+            'postgresql+psycopg://', 'postgres+psycopg2://',
+            'postgresql+psycopg2://', 'postgresql+asyncpg://',
+        ):
             with self.subTest(scheme=scheme):
                 settings = load_settings({
                     'UNIVET_ENV': 'production',
@@ -56,7 +60,7 @@ class EnvironmentTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             load_settings({
                 'UNIVET_ENV': 'production',
-                'DATABASE_URL': 'postgresql+asyncpg://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full',
+                'DATABASE_URL': 'mysql+psycopg://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full',
             })
 
     def test_database_identity_cannot_be_relabelled(self):

@@ -5,10 +5,11 @@ import os
 from urllib.parse import unquote, urlsplit, parse_qs
 
 
-POSTGRES_SCHEMES = frozenset({
-    'postgres', 'postgresql',
-    'postgres+psycopg', 'postgresql+psycopg',
-})
+POSTGRES_SCHEMES = frozenset({'postgres', 'postgresql'})
+
+
+def is_postgres_scheme(scheme):
+    return scheme in POSTGRES_SCHEMES or scheme.startswith(('postgres+', 'postgresql+'))
 
 
 @dataclass(frozen=True)
@@ -19,7 +20,7 @@ class Settings:
 
 def database_target(url):
     parsed = urlsplit(url)
-    if parsed.scheme in POSTGRES_SCHEMES:
+    if is_postgres_scheme(parsed.scheme):
         if not parsed.hostname or not parsed.username or not parsed.path.strip('/'):
             raise RuntimeError('DATABASE_URL PostgreSQL incompleta.')
         query = parse_qs(parsed.query)

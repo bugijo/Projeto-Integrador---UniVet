@@ -25,9 +25,10 @@ _pool_lock = threading.Lock()
 
 
 def is_postgres(target):
-    return isinstance(target, str) and urlsplit(target).scheme in {
-        'postgres', 'postgresql', 'postgres+psycopg', 'postgresql+psycopg'
-    }
+    if not isinstance(target, str):
+        return False
+    scheme = urlsplit(target).scheme
+    return scheme in ('postgres', 'postgresql') or scheme.startswith(('postgres+', 'postgresql+'))
 
 
 def bind_markers(statement):
