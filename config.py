@@ -34,7 +34,10 @@ def database_target(url):
         # diretamente, então normalizamos somente o esquema, preservando
         # host, credenciais codificadas, banco e parâmetros aprovados.
         return parsed._replace(scheme='postgresql').geturl()
-    return sqlite_path(url)
+    if parsed.scheme == 'sqlite':
+        return sqlite_path(url)
+    scheme = parsed.scheme or '<vazio>'
+    raise RuntimeError(f'URL não suportada (esquema: {scheme}); use PostgreSQL ou SQLite absoluto local.')
 
 
 def same_database(first, second):
