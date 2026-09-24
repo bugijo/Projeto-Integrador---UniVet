@@ -57,6 +57,12 @@ class EnvironmentTests(unittest.TestCase):
                 self.assertEqual(settings.environment, 'production')
                 self.assertTrue(str(settings.database).startswith('postgresql://'))
 
+        quoted = load_settings({
+            'UNIVET_ENV': 'production',
+            'DATABASE_URL': '"postgresql+psycopg://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full"',
+        })
+        self.assertTrue(str(quoted.database).startswith('postgresql://'))
+
         with self.assertRaises(RuntimeError):
             load_settings({
                 'UNIVET_ENV': 'production',

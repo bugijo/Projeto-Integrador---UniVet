@@ -19,6 +19,11 @@ class Settings:
 
 
 def database_target(url):
+    if not isinstance(url, str):
+        raise RuntimeError('URL não suportada (valor ausente); use PostgreSQL ou SQLite absoluto local.')
+    url = url.strip()
+    if len(url) >= 2 and url[0] == url[-1] and url[0] in ('"', "'"):
+        url = url[1:-1].strip()
     parsed = urlsplit(url)
     if is_postgres_scheme(parsed.scheme):
         if not parsed.hostname or not parsed.username or not parsed.path.strip('/'):
