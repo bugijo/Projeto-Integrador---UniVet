@@ -1,5 +1,18 @@
 # Auditoria defensiva e prontidão de produção — UniVet
 
+## Atualização do redeploy da Clínica — 26/09/2026
+
+| Evidência | Resultado | Limite |
+|---|---|---|
+| Build Render | **PASSOU** | Commit `716d29e`; dependências foram instaladas e o artefato foi gerado. |
+| Inicialização | **FALHOU** | O processo encerrou antes de abrir a porta com `DATABASE_URL PostgreSQL incompleta.` |
+| Segredos | **NÃO EXPOSTOS** | A mensagem registrada é sanitizada; o valor completo não foi consultado nem documentado. |
+| Serviço Clínica | **NÃO HOMOLOGADO** | `univet-clinica` continua Free, mas login, HTTPS efetivo, headers, cookies, persistência, restart/redeploy e fluxos remotos não podem ser validados enquanto o app não iniciar. |
+
+O redeploy foi disparado pelo Render MCP após a correção manual informada no painel. A evidência do processo mostra que a aplicação recebeu um PostgreSQL sem host/usuário/banco suficientes. A hipótese operacional mais provável é valor incompleto ou não salvo no campo secreto do serviço; isso exige revisão humana no Render. Nenhuma nova alteração de código foi feita nesta rodada e não será adicionada outra normalização específica sem observar o valor seguro do formato.
+
+SEC-10/SEC-11 permanecem bloqueadores de liberação clínica. `DrFernanda` não foi criada. A classificação permanece **NÃO APTO PARA DADOS REAIS**.
+
 ## Atualização de homologação remota — 23/09/2026
 
 | Evidência | Resultado | Limite |

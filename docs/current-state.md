@@ -1,5 +1,14 @@
 # Estado atual — 23/09/2026
 
+## Atualização do redeploy da Clínica — 26/09/2026
+
+- O serviço Render `univet-clinica` foi criado e permanece no plano Free, sem alteração do serviço Demo `univet`.
+- Redeploy controlado do commit `716d29e859a87d2fc45263b212744e835eb306b3` concluiu o build, mas falhou na inicialização (`update_failed`).
+- O log não expôs segredo e registrou `DATABASE_URL PostgreSQL incompleta.`; portanto o valor efetivamente recebido pelo processo ainda não contém uma URL PostgreSQL completa, apesar da correção manual informada. A causa não foi resolvida por código.
+- A URL pública clínica ainda não está homologável: login, persistência HTTP, restart/redeploy, fluxo fictício, isolamento remoto, carga e concorrência remota permanecem pendentes. Não houve dados reais nem criação de `DrFernanda`.
+- Testes locais continuam válidos: SQLite 116 OK; PostgreSQL HTTP 14 OK; estoque/concorrência PostgreSQL 24 OK; regressão de configuração/segurança 21 OK; `git diff --check` OK.
+- **Classificação: NÃO APTO PARA DADOS REAIS.** Ação humana necessária no Render: revisar o campo secreto `DATABASE_URL`, colar a URL Neon completa (sem aspas, sem `DATABASE_URL=`, sem placeholder), salvar e só então solicitar novo redeploy.
+
 ## Homologação remota parcial — Neon Free — 23/09/2026
 
 - A conta/organização Neon foi confirmada pela CLI oficial no plano **Free**. A API de limite de gastos não está disponível nesse plano; não houve upgrade, cartão cadastrado por esta tarefa ou recurso pago criado.
