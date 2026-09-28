@@ -7,10 +7,12 @@ import os
 from io import StringIO
 from pathlib import Path
 import json
+import logging
 import sqlite3
 import unicodedata
 
 from flask import Flask, Response, flash, g, has_request_context, jsonify, redirect, render_template, request, session, url_for
+import psycopg
 from werkzeug.security import check_password_hash
 from security import register_security, start_session, end_session, password_hash
 from config import load_settings, verify_database_environment
@@ -57,6 +59,14 @@ PERFIS_AUTORIZADOS = ("admin", "veterinaria")
 LOGIN_DRA_FERNANDA = "fernanda.calixto"
 
 app = Flask(__name__)
+logger = logging.getLogger(__name__)
+
+if is_postgres(DATABASE):
+    logger.info(
+        'PostgreSQL runtime: psycopg=%s libpq=%s tls=verify-full '
+        'sslrootcert=system channel_binding=require',
+        psycopg.__version__, psycopg.pq.version_pretty(psycopg.pq.version()),
+    )
 
 
 def garantir_banco_inicializado():
