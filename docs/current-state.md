@@ -4,6 +4,20 @@
 
 ## Homologação remota QA concluída — 28/09/2026
 
+## Homologação técnica final — 28/09/2026
+
+- Auditoria final: branch `security/demo-producao-isolados`, HEAD `f0289b51f43fadb1cfdc3c920f5ed42dc0d9e87e`, árvore limpa antes desta atualização; Render live no mesmo commit documental.
+- Suítes atuais: `unittest` completo executou 119 testes, 81 passaram, 0 falharam, 0 errors e 38 foram skipped por PostgreSQL opt-in; PostgreSQL opt-in executou 38 testes e 74 subtestes, todos aprovados. `compileall` e `git diff --check` passaram.
+- Segurança estática atual: `pip-audit` sem vulnerabilidades conhecidas; Bandit com 0 HIGH, 2 MEDIUM conhecidos (bind de desenvolvimento em `app.py:2067` e SQL interno de paginação em `estoque/services.py:103`) e 0 LOW.
+- Backup lógico final: `pg_dump` custom via container PostgreSQL 17, origem Neon production, timestamp UTC `2026-09-28T20:25:46Z`, 64.038 bytes, SHA-256 `c9c6eba3a3c85eaa47e4b9d22ca26ef8d0ed7e786c73a10497e5cedd9b8992a1`; `pg_restore --list` encontrou 177 objetos.
+- Restore isolado: PostgreSQL 17 temporário, `--no-owner --no-acl`, restore concluído; sanity `002_session_indexes|22 tabelas|28 FKs|0 usuários|1 ambiente`. Container e arquivos temporários foram removidos ao terminar. A falha inicial por role `neondb_owner` foi específica do ownership do ambiente temporário e não afetou o backup.
+- Soak remoto conservador: 601 s, 212 requests, 212 sucessos, 0 errors, 0 timeouts, 0 respostas 5xx, p50 276,0 ms, p95 646,3 ms, p99 744,7 ms.
+- Carga remota `/health`: níveis 2/5/10/15/20, todos sem erro ou 5xx; o nível 2 registrou cold start p99 21.863 ms, enquanto 5–20 ficaram com p99 entre 711 e 799 ms.
+- Carga local oficial: perfis 1/5/10 passaram sem falhas; no perfil 20 ocorreram 10 falhas de login por rate limit legítimo de conta compartilhada pelo gerador, com integridade e FKs OK. O runner interrompeu antes de 30/50 conforme protocolo; esses níveis são NOT_AVAILABLE nesta rodada.
+- Fluxo remoto adicional: troca de senha passou, senha antiga falhou, senha nova passou, usuário veterinário recebeu 403 em escrita administrativa, CSRF inválido 400, CSV sem sessão 302 e markers sensíveis ausentes.
+- Não existe capability Render separada de restart nas ferramentas autenticadas disponíveis; classificado `NOT_AVAILABLE_SEPARATELY`. O redeploy live reiniciou o runtime e preservou o banco Neon.
+- **Classificação: NÃO APTO PARA DADOS REAIS.** O bloqueador técnico restante é a carga local progressiva interrompida em 20 por rate limit, além da aprovação humana/clínica; `DrFernanda` não foi criada.
+
 - O Neon MCP autenticado confirmou `univet-clinica` (`bold-truth-16986362`), ambiente `production` e `alembic_version=002_session_indexes`, igual ao head local. Nenhuma migration foi aplicada nesta etapa.
 - Foi criado o snapshot Neon `homologacao-pre-qa-20260928` (`snap-withered-unit-arp2b8xz`) antes dos testes. O Neon recusou um segundo snapshot por limite do projeto; nenhum restore sobre a branch live foi executado.
 - Foram inseridos somente registros QA explicitamente fictícios, incluindo login temporário, tutor, pet, veterinário, consulta e estoque. Eles sobreviveram ao redeploy `dep-datbt38u01pc73e1e10g` e foram removidos por IDs explícitos; a verificação final deixou os contadores QA e `auth_sessions` em zero.

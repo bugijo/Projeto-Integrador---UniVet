@@ -4,6 +4,17 @@
 
 ## Evidência remota QA pós-redeploy — 28/09/2026
 
+## Fechamento técnico da homologação — 28/09/2026
+
+- Suíte completa atual: 119 testes executados, 81 passados, 38 skipped opt-in, 0 falhas/errors; PostgreSQL opt-in: 38 testes e 74 subtestes passados. `compileall` e `git diff --check` passaram.
+- `pip-audit`: 0 advisories conhecidos. Bandit: 0 HIGH, 2 MEDIUM conhecidos e justificados (`app.py:2067`, `estoque/services.py:103`), 0 LOW.
+- Backup verificável: `pg_dump -Fc` via PostgreSQL 17 em `2026-09-28T20:25:46Z`, 64.038 bytes, SHA-256 `c9c6eba3a3c85eaa47e4b9d22ca26ef8d0ed7e786c73a10497e5cedd9b8992a1`, `pg_restore --list` com 177 objetos.
+- Restore isolado temporário passou com schema de 22 tabelas, 28 FKs, migration `002_session_indexes`, sanity sem usuários e ambiente único. O container e o arquivo temporário foram removidos.
+- Soak remoto conservador passou em 601 s/212 requests: 212 sucessos, 0 erros, 0 timeouts, 0 5xx; p50/p95/p99 = 276,0/646,3/744,7 ms.
+- A carga local parou no nível 20 após 10 recusas de login pelo rate limit legítimo do gerador que compartilha uma conta; 1/5/10 passaram e integridade/FKs permaneceram OK. Níveis 30/50 ficaram não executados por segurança; não declarar capacidade local completa.
+- Troca de senha, rejeição da senha antiga, autorização veterinária 403, CSRF 400, CSV sem sessão e ausência de markers sensíveis foram validados remotamente. Nenhuma alteração de código foi necessária.
+- Restart separado: `NOT_AVAILABLE_SEPARATELY` no Render MCP; redeploy live reiniciou o runtime e preservou o banco externo. `DrFernanda` não criada; classificação permanece **NÃO APTO PARA DADOS REAIS**.
+
 - Alembic Neon: `002_session_indexes`, igual ao head local; ambiente clínico `production`. O projeto Demo separado reportou `demo`; não houve escrita nele.
 - Redeploy `dep-datbt38u01pc73e1e10g` terminou `live`. Logs confirmaram psycopg 3.3.6, libpq 18.6, `sslmode=verify-full`, `sslrootcert=system` e `channel_binding=require`. `/health` e `/login` retornaram 200 após o processo reiniciar.
 - QA remoto 100% fictício sobreviveu ao redeploy. Login, primeiro acesso, API 401/200, exportação CSV, cookies e logout foram exercitados. Os registros QA, sessões e eventos de teste foram removidos por IDs explícitos; consulta final confirmou zero resíduos QA.
