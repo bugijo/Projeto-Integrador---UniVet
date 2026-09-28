@@ -1,5 +1,14 @@
 # Auditoria defensiva e prontidão de produção — UniVet
 
+## Checkpoint de homologação — 28/09/2026
+
+- Runtime Render confirmado: psycopg 3.3.6, libpq 18.6, `sslmode=verify-full`, CA confiável e `channel_binding=require`.
+- Serviço clínico: `/health`, `/login` e `/` retornam 200; cookie observado com `Secure`, `HttpOnly` e `SameSite=Lax`; HSTS, CSP, nosniff, X-Frame-Options, Permissions-Policy, Referrer-Policy e no-store presentes.
+- Suíte PostgreSQL local: **38 testes / 74 subtestes aprovados**. O travamento foi reproduzido como resíduo de containers descartáveis após interrupção, não como deadlock funcional; após limpeza, a suíte completou.
+- Scanners: `pip-audit` sem advisories conhecidos; Bandit com dois achados médios previamente conhecidos, sem altos.
+- Bloqueadores: acesso Neon para confirmar Alembic diretamente, persistência após restart/redeploy, isolamento remoto, backup/restore final, carga controlada e contas fictícias independentes.
+- `DrFernanda` não foi criada. Classificação: **NÃO APTO PARA DADOS REAIS**.
+
 ## Estado do deploy TLS da Clínica — 28/09/2026
 
 | Evidência | Resultado | Limite |

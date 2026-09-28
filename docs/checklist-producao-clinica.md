@@ -1,6 +1,16 @@
-# Checklist de liberação — 23/09/2026
+# Checklist de liberação — 28/09/2026
 
-**NÃO APTO PARA DADOS REAIS.** [Auditoria](auditoria-seguranca.md) contém evidências e classificação. Marcado significa verificado localmente com dados fictícios, não implantado.
+**NÃO APTO PARA DADOS REAIS.** [Auditoria](auditoria-seguranca.md) contém evidências e classificação. O serviço clínico agora responde 200, mas a homologação de continuidade, isolamento e carga ainda está pendente.
+
+## Checkpoint remoto
+
+- [x] Render `univet-clinica` live com psycopg 3.3.6/libpq 18.6.
+- [x] Neon conectado com `verify-full`, CA confiável e `channel_binding=require`.
+- [x] `/health`, `/login` e `/` retornando 200; headers e cookie seguro observados.
+- [x] Suíte PostgreSQL local: 38 testes, 74 subtestes, 0 falhas.
+- [x] `pip-audit`: nenhum advisory conhecido.
+- [ ] Confirmar `alembic_version` diretamente no Neon.
+- [ ] Criar dados fictícios e validar fluxo remoto completo.
 
 ## Controles locais
 

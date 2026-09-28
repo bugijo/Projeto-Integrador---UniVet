@@ -1,5 +1,13 @@
 # Estado atual — 28/09/2026
 
+## Homologação remota parcial — 28/09/2026
+
+- A conexão Render → Neon está operacional no commit corretivo `10e09dc`: `/health`, `/login` e `/` retornam 200; psycopg 3.3.6 e libpq 18.6 foram confirmados nos logs.
+- A suíte PostgreSQL local foi concluída: **38 testes e 74 subtestes aprovados em 365,87 s**. O travamento anterior foi causado por containers descartáveis `univet-test-*` órfãos após interrupção do runner; eles foram removidos e a execução normal passou.
+- `pip-audit` não encontrou vulnerabilidades conhecidas. Bandit encontrou dois médios já conhecidos: bind local em `app.py` e SQL interno de paginação em `estoque/services.py`; nenhum alto.
+- Acesso Neon MCP está sem autenticação nesta sessão, portanto a leitura direta de `alembic_version`, criação de dados fictícios, backup/restore final e validação remota de persistência não foram executados.
+- **Classificação: NÃO APTO PARA DADOS REAIS.**
+
 ## Verificação do deploy TLS da Clínica — 28/09/2026
 
 - O commit `2901932` foi solicitado no serviço Render `univet-clinica`, após `DATABASE_URL` receber `sslmode=verify-full`, `sslrootcert=system` e `channel_binding=require`. Nenhum segredo foi registrado nesta documentação.

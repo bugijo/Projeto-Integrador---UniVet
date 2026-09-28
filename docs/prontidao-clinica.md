@@ -1,4 +1,8 @@
-# Prontidão da clínica — 23/09/2026
+# Prontidão da clínica — 28/09/2026
+
+## Checkpoint da homologação remota
+
+O serviço `univet-clinica` está operacional com PostgreSQL Neon, TLS forte e runtime confirmado (`psycopg 3.3.6`, `libpq 18.6`). `/health`, `/login` e `/` retornam 200; cookies e headers foram observados remotamente. A classificação permanece **NÃO APTO PARA DADOS REAIS** porque ainda não há confirmação direta do `alembic_version`, persistência após restart/redeploy, isolamento remoto, backup/restore final e carga com contas independentes. `DrFernanda` não foi criada.
 
 ## Parecer
 

@@ -1,6 +1,6 @@
 # Plano de piloto controlado — UniVet Clínica
 
-Documento preparatório. O piloto ainda não está liberado.
+Documento preparatório. Atualizado em 28/09/2026. O piloto ainda não está liberado; a conexão Render → Neon e a suíte PostgreSQL local estão aprovadas, mas persistência, isolamento, backup/restore final, carga e revisão direta da migration permanecem pendentes.
 
 ## Condições de entrada
 

@@ -1,6 +1,10 @@
 # Matriz de testes e homologação
 
-Atualizada em 23/09/2026. `OK local` não significa aprovação de produção.
+Atualizada em 28/09/2026. `OK local` não significa aprovação de produção.
+
+## Atualização remota
+
+Render/Neon estão operacionais no serviço clínico: runtime psycopg 3.3.6/libpq 18.6, TLS `verify-full`, `/health` 200, `/login` 200 e `/` 200. A suíte PostgreSQL local foi concluída com **38 testes e 74 subtestes aprovados** após remover containers descartáveis órfãos que causavam o travamento anterior. A versão Alembic no Neon, persistência, isolamento, carga e backup/restore final continuam pendentes.
 
 | Funcionalidade | SQLite | PostgreSQL | DEMO | PRODUÇÃO | Resultado |
 |---|---:|---:|---:|---:|---|
