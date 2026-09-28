@@ -52,27 +52,45 @@ class EnvironmentTests(unittest.TestCase):
             with self.subTest(scheme=scheme):
                 settings = load_settings({
                     'UNIVET_ENV': 'production',
-                    'DATABASE_URL': scheme + 'owner:password@ep-example.neon.tech/neondb?sslmode=verify-full',
+                    'DATABASE_URL': scheme + 'owner:password@ep-example.neon.tech/neondb?sslmode=verify-full&sslrootcert=system&channel_binding=require',
                 })
                 self.assertEqual(settings.environment, 'production')
                 self.assertTrue(str(settings.database).startswith('postgresql://'))
 
         quoted = load_settings({
             'UNIVET_ENV': 'production',
-            'DATABASE_URL': '"postgresql+psycopg://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full"',
+            'DATABASE_URL': '"postgresql+psycopg://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full&sslrootcert=system&channel_binding=require"',
         })
         self.assertTrue(str(quoted.database).startswith('postgresql://'))
 
         for wrapped in (
-            "psql 'postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full'",
-            'DATABASE_URL=postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full',
-            '"psql \'postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full\'"',
-            'DATABASE_URL = "postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full"',
-            'export DATABASE_URL=postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full',
+            "psql 'postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full&sslrootcert=system&channel_binding=require'",
+            'DATABASE_URL=postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full&sslrootcert=system&channel_binding=require',
+            '"psql \'postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full&sslrootcert=system&channel_binding=require\'"',
+            'DATABASE_URL = "postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full&sslrootcert=system&channel_binding=require"',
+            'export DATABASE_URL=postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full&sslrootcert=system&channel_binding=require',
         ):
             with self.subTest(wrapped=wrapped):
                 settings = load_settings({'UNIVET_ENV': 'production', 'DATABASE_URL': wrapped})
                 self.assertTrue(str(settings.database).startswith('postgresql://'))
+
+    def test_remote_postgres_requires_full_tls_identity_validation(self):
+        base = 'postgresql://owner:password@ep-example.neon.tech/neondb?'
+        for query in (
+            'sslmode=require&sslrootcert=system&channel_binding=require',
+            'sslmode=verify-full&channel_binding=require',
+            'sslmode=verify-full&sslrootcert=system',
+        ):
+            with self.subTest(query=query), self.assertRaisesRegex(RuntimeError, 'TLS|sslmode|channel_binding'):
+                load_settings({'UNIVET_ENV': 'production', 'DATABASE_URL': base + query})
+
+        secure = load_settings({
+            'UNIVET_ENV': 'production',
+            'DATABASE_URL': base + 'sslmode=verify-full&sslrootcert=system&channel_binding=require',
+        })
+        self.assertIn('sslmode=verify-full', str(secure.database))
+        self.assertIn('sslrootcert=system', str(secure.database))
+        self.assertIn('channel_binding=require', str(secure.database))
 
         with self.assertRaises(RuntimeError):
             load_settings({

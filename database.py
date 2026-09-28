@@ -9,7 +9,7 @@ import os
 import re
 import sqlite3
 import threading
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 
 import psycopg
 from psycopg_pool import ConnectionPool
@@ -171,6 +171,13 @@ def connect(target, pool_size=4):
         return conn
     if not 1 <= pool_size <= 16:
         raise ValueError('Limite de conexões inválido.')
+    parsed = urlsplit(target)
+    query = parse_qs(parsed.query)
+    if parsed.hostname not in ('127.0.0.1', 'localhost', '::1'):
+        if query.get('sslmode') != ['verify-full'] or query.get('sslrootcert') != ['system'] or query.get('channel_binding') != ['require']:
+            raise RuntimeError('PostgreSQL remoto exige TLS com verify-full, sslrootcert=system e channel_binding=require.')
+        if psycopg.pq.version() < 160000:
+            raise RuntimeError('libpq >= 16 é necessária para sslrootcert=system; nenhum downgrade TLS foi aplicado.')
     key = (os.getpid(), target, pool_size)
     with _pool_lock:
         if key not in _pools:

@@ -7,10 +7,29 @@ from urllib.parse import unquote, urlsplit, parse_qs
 
 
 POSTGRES_SCHEMES = frozenset({'postgres', 'postgresql'})
+LOCAL_POSTGRES_HOSTS = frozenset({'127.0.0.1', 'localhost', '::1'})
+REMOTE_TLS_REQUIRED = {
+    'sslmode': 'verify-full',
+    'sslrootcert': 'system',
+    'channel_binding': 'require',
+}
 
 
 def is_postgres_scheme(scheme):
     return scheme in POSTGRES_SCHEMES or scheme.startswith(('postgres+', 'postgresql+'))
+
+
+def validate_remote_tls(parsed, query):
+    """Require identity validation for every non-local PostgreSQL target."""
+    if parsed.hostname in LOCAL_POSTGRES_HOSTS:
+        return
+    for key, expected in REMOTE_TLS_REQUIRED.items():
+        if query.get(key) != [expected]:
+            raise RuntimeError(
+                'PostgreSQL remoto exige '
+                'sslmode=verify-full, sslrootcert=system e '
+                'channel_binding=require.'
+            )
 
 
 @dataclass(frozen=True)
@@ -42,8 +61,7 @@ def database_target(url):
         allowed = {'sslmode','sslrootcert','channel_binding'}
         if set(query) - allowed or any(len(v)!=1 for v in query.values()):
             raise RuntimeError('Parâmetros PostgreSQL não permitidos.')
-        if parsed.hostname not in ('127.0.0.1','localhost','::1') and query.get('sslmode') != ['verify-full']:
-            raise RuntimeError('PostgreSQL remoto exige sslmode=verify-full e certificado confiável.')
+        validate_remote_tls(parsed, query)
         # Neon e outros provedores podem fornecer URL com o driver SQLAlchemy
         # no esquema (postgresql+psycopg://). O adaptador DB-API usa psycopg
         # diretamente, então normalizamos somente o esquema, preservando
