@@ -6,6 +6,15 @@
 
 ## Homologação técnica final — 28/09/2026
 
+## Última rodada — carga local corrigida no harness — 28/09/2026
+
+- O resultado anterior foi classificado como `TEST_HARNESS_LIMITATION`: as 10 recusas do nível 20 vieram do login compartilhado e do rate limit esperado, sem 5xx, timeout, corrupção ou falha de banco.
+- O harness foi corrigido, sem alteração da aplicação: 50 contas `bench_qa_*` fictícias em banco temporário e IPs locais distintos via `UNIVET_TRUST_PROXY=1`; o rate limit permaneceu ativo. Commit `9a3340b`.
+- Carga local final: 20 usuários `2857/2857`, 30 usuários `1929/1929`, 50 usuários `3304/3304`; zero erros em todos, integridade OK e zero foreign-key errors. p50/p95/p99: 20 = 13/270/1400 ms; 30 = 88/1800/3000 ms; 50 = 89/1000/3100 ms. CPU média no nível 50: 92,85%, sem 5xx ou timeout.
+- Sanidade Neon pós-carga: usuários, sessões, tutores, pets, consultas, produtos, lotes e movimentações = zero; `alembic_version=002_session_indexes`; ambiente `production`. `/health` e `/login` remotos = 200.
+- Bandit: `app.py:2067` = `ACCEPTED_RISK` (bind exclusivo do servidor de desenvolvimento); `estoque/services.py:103` = `FALSE_POSITIVE/ACCEPTED_RISK` (SQL estrutural interno com valores parametrizados). HIGH=0.
+- **Classificação: TECNICAMENTE APTO — AGUARDANDO APROVAÇÃO CLÍNICA.** Não criar `DrFernanda` nem inserir dados reais sem autorização humana explícita.
+
 - Auditoria final: branch `security/demo-producao-isolados`, HEAD `f0289b51f43fadb1cfdc3c920f5ed42dc0d9e87e`, árvore limpa antes desta atualização; Render live no mesmo commit documental.
 - Suítes atuais: `unittest` completo executou 119 testes, 81 passaram, 0 falharam, 0 errors e 38 foram skipped por PostgreSQL opt-in; PostgreSQL opt-in executou 38 testes e 74 subtestes, todos aprovados. `compileall` e `git diff --check` passaram.
 - Segurança estática atual: `pip-audit` sem vulnerabilidades conhecidas; Bandit com 0 HIGH, 2 MEDIUM conhecidos (bind de desenvolvimento em `app.py:2067` e SQL interno de paginação em `estoque/services.py:103`) e 0 LOW.

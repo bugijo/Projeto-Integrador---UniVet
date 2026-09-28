@@ -6,6 +6,15 @@
 
 ## Fechamento técnico da homologação — 28/09/2026
 
+## Última rodada de carga — 28/09/2026
+
+- As 10 recusas anteriores foram `TEST_HARNESS_LIMITATION`: login compartilhado acionou corretamente o rate limit; não houve evidência de 5xx, timeout ou corrupção.
+- Harness final isolado no commit `9a3340b`: 50 contas QA locais fictícias e IPs de cliente distintos simulados pelo `ProxyFix` já existente; rate limit permaneceu habilitado. Nenhum código da aplicação foi alterado.
+- Carga final: 20 = 2.857/2.857; 30 = 1.929/1.929; 50 = 3.304/3.304. Todos sem erros, 5xx ou timeouts, com integridade e FKs válidas. O perfil 50 atingiu CPU média de 92,85% e foi o limite máximo executado com segurança.
+- Pós-carga remoto: Neon respondeu, migration `002_session_indexes` permaneceu, banco clínico continuou sem registros QA e `/health`/`/login` responderam 200.
+- Bandit: `app.py:2067` `ACCEPTED_RISK`; `estoque/services.py:103` `FALSE_POSITIVE/ACCEPTED_RISK`; HIGH=0. Não houve necessidade de correção funcional.
+- **Checklist técnico crítico: PASS. Classificação: TECNICAMENTE APTO — AGUARDANDO APROVAÇÃO CLÍNICA.** `DrFernanda` não criada e dados reais não inseridos.
+
 - Suíte completa atual: 119 testes executados, 81 passados, 38 skipped opt-in, 0 falhas/errors; PostgreSQL opt-in: 38 testes e 74 subtestes passados. `compileall` e `git diff --check` passaram.
 - `pip-audit`: 0 advisories conhecidos. Bandit: 0 HIGH, 2 MEDIUM conhecidos e justificados (`app.py:2067`, `estoque/services.py:103`), 0 LOW.
 - Backup verificável: `pg_dump -Fc` via PostgreSQL 17 em `2026-09-28T20:25:46Z`, 64.038 bytes, SHA-256 `c9c6eba3a3c85eaa47e4b9d22ca26ef8d0ed7e786c73a10497e5cedd9b8992a1`, `pg_restore --list` com 177 objetos.
