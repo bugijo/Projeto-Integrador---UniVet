@@ -13,6 +13,7 @@ from unittest.mock import patch
 from flask import Flask
 from itsdangerous import BadSignature
 from config import load_settings, verify_database_environment
+from database import effective_postgres_target
 from security import EnvironmentSessionInterface
 
 
@@ -97,6 +98,18 @@ class EnvironmentTests(unittest.TestCase):
                 'UNIVET_ENV': 'production',
                 'DATABASE_URL': 'mysql+psycopg://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full',
             })
+
+    def test_system_ca_is_resolved_to_readable_os_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / 'ca-certificates.crt'
+            bundle.write_text('test CA bundle')
+            with patch('database.SYSTEM_CA_BUNDLE_CANDIDATES', (bundle,)):
+                target = 'postgresql://owner:password@ep-example.neon.tech/neondb?sslmode=verify-full&sslrootcert=system&channel_binding=require'
+                effective = effective_postgres_target(target)
+                self.assertIn('sslmode=verify-full', effective)
+                self.assertIn('channel_binding=require', effective)
+                self.assertIn('sslrootcert=%2F', effective)
+                self.assertNotIn('sslrootcert=system', effective)
 
     def test_database_identity_cannot_be_relabelled(self):
         with sqlite3.connect(':memory:') as conn:

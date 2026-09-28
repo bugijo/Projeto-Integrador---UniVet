@@ -9,7 +9,8 @@ import os
 import re
 import sqlite3
 import threading
-from urllib.parse import urlsplit, parse_qs
+from pathlib import Path
+from urllib.parse import urlsplit, parse_qs, parse_qsl, urlencode, urlunsplit
 
 import psycopg
 from psycopg_pool import ConnectionPool
@@ -22,6 +23,10 @@ ID_TABLES = frozenset(('usuarios','tutores','especies','racas','veterinarios','s
     'fornecedores','produtos','lotes','movimentacoes_estoque','itens_consulta','security_events'))
 _pools = {}
 _pool_lock = threading.Lock()
+SYSTEM_CA_BUNDLE_CANDIDATES = (
+    Path('/etc/ssl/certs/ca-certificates.crt'),
+    Path('/etc/pki/tls/certs/ca-bundle.crt'),
+)
 
 
 def is_postgres(target):
@@ -29,6 +34,33 @@ def is_postgres(target):
         return False
     scheme = urlsplit(target).scheme
     return scheme in ('postgres', 'postgresql') or scheme.startswith(('postgres+', 'postgresql+'))
+
+
+def trusted_system_ca_bundle():
+    """Return a readable OS CA bundle for libpq binary builds, if present."""
+    for candidate in SYSTEM_CA_BUNDLE_CANDIDATES:
+        if candidate.is_file() and os.access(candidate, os.R_OK):
+            return str(candidate)
+    return None
+
+
+def effective_postgres_target(target):
+    """Keep strong TLS parameters and make the system CA explicit when needed.
+
+    psycopg-binary bundles libpq/OpenSSL. Some images accept the libpq
+    ``system`` keyword but do not resolve the image's default CA directory.
+    An explicit, readable OS bundle preserves certificate and hostname
+    validation without shipping or trusting a private certificate.
+    """
+    parsed = urlsplit(target)
+    params = parse_qsl(parsed.query, keep_blank_values=True)
+    if dict(params).get('sslrootcert') != 'system':
+        return target
+    ca_bundle = trusted_system_ca_bundle()
+    if not ca_bundle:
+        return target
+    params = [(key, ca_bundle if key == 'sslrootcert' else value) for key, value in params]
+    return urlunsplit(parsed._replace(query=urlencode(params)))
 
 
 def bind_markers(statement):
@@ -178,10 +210,11 @@ def connect(target, pool_size=4):
             raise RuntimeError('PostgreSQL remoto exige TLS com verify-full, sslrootcert=system e channel_binding=require.')
         if psycopg.pq.version() < 160000:
             raise RuntimeError('libpq >= 16 é necessária para sslrootcert=system; nenhum downgrade TLS foi aplicado.')
-    key = (os.getpid(), target, pool_size)
+    pool_target = effective_postgres_target(target)
+    key = (os.getpid(), pool_target, pool_size)
     with _pool_lock:
         if key not in _pools:
-            _pools[key] = ConnectionPool(target, min_size=0,max_size=pool_size,timeout=5,
+            _pools[key] = ConnectionPool(pool_target, min_size=0,max_size=pool_size,timeout=5,
                 kwargs={'row_factory':row_factory,'prepare_threshold':None,'connect_timeout':5,
                         'options':'-c statement_timeout=10000 -c lock_timeout=5000 -c idle_in_transaction_session_timeout=15000 -c timezone=America/Sao_Paulo'},
                 open=True)
