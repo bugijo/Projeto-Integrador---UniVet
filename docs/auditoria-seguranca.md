@@ -13,6 +13,19 @@
 
 O bloqueador atual é a indisponibilidade do banco no serviço publicado. Até que os logs confirmem a inicialização PostgreSQL com TLS forte e uma rota de saúde 200, ficam suspensos login, persistência, restart/redeploy, isolamento remoto, carga e criação de usuário inicial. A classificação permanece **BLOQUEADO / NÃO APTO PARA DADOS REAIS**.
 
+## Fechamento da conexão Render → Neon — 28/09/2026
+
+| Evidência | Resultado | Limite |
+|---|---|---|
+| Erro inicial | **CA corrigida** | `SSL error: certificate verify failed`; bundle CA do sistema passou a ser explicitado sem desabilitar verificação. |
+| Erro secundário | **CORRIGIDO** | Pooler Neon rejeitava `statement_timeout` no startup; opções de sessão foram removidas somente para hosts `-pooler.`. |
+| Runtime | **CONFIRMADO** | psycopg 3.3.6, libpq 18.6, Python 3.14. |
+| TLS | **CONFIRMADO** | `verify-full`, `sslrootcert=system`, `channel_binding=require`; nenhum downgrade. |
+| Aplicação | **PASSOU** | Deploy `10e09dc`; `/health`, `/login` e `/` retornaram 200. |
+| Schema | **OPERACIONAL** | A aplicação realizou consultas e login fictício inválido sem 500; a versão Alembic não é exposta publicamente. |
+
+Não foram alterados usuário, senha, projeto Neon ou dados. Persistem como etapas separadas a conferência independente do `alembic_version`, restart/redeploy com prova de persistência, isolamento Demo/Clínica e carga controlada. `DrFernanda` permanece não criada.
+
 ## Atualização do redeploy da Clínica — 26/09/2026
 
 | Evidência | Resultado | Limite |

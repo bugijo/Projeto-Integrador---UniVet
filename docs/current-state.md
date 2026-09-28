@@ -9,6 +9,16 @@
 - `DrFernanda` não foi criada e nenhuma senha temporária foi gerada.
 - **Classificação: BLOQUEADO / NÃO APTO PARA DADOS REAIS.** Não prosseguir para homologação destrutiva, carga remota ou criação de conta enquanto o banco não estiver saudável.
 
+## Correção Render → Neon — 28/09/2026
+
+- Logs autenticados do Render confirmaram inicialmente `SSL error: certificate verify failed` para o endpoint pooler Neon e tentativas IPv6 sem rota. O runtime foi identificado como Python 3.14, psycopg `3.3.6` e, após probe sanitizado, libpq `18.6`.
+- A resolução `sslrootcert=system` foi mantida na configuração declarada, mas o código passou a explicitar um bundle CA somente quando legível no sistema (`/etc/ssl/certs/ca-certificates.crt` ou equivalente). Não há certificado privado no repositório.
+- O erro seguinte foi `unsupported startup parameter in options: statement_timeout`, rejeitado pelo pooler Neon. Os parâmetros de startup foram removidos apenas para hosts `-pooler.`; o pool e os timeouts de aquisição permanecem ativos. Endpoints diretos mantêm os timeouts de sessão.
+- O commit `10e09dc` está live no serviço `univet-clinica`. O log sanitizado confirma `psycopg=3.3.6`, `libpq=18.6`, `tls=verify-full`, `sslrootcert=system` e `channel_binding=require`.
+- Verificação pública pós-deploy: `/health` 200, `/login` 200 e `/` 200. Login com identidade fictícia inexistente foi rejeitado sem inserir dados. O schema respondeu às consultas da aplicação; a versão Alembic não é exposta por endpoint e permanece baseada na migração remota previamente aplicada.
+- Nenhum dado real foi inserido, nenhuma credencial foi alterada e `DrFernanda` não foi criada. Carga, concorrência, restart operacional e validação independente da versão Alembic continuam fora desta correção.
+- **Classificação: NÃO APTO PARA DADOS REAIS.** A conexão está operacional, mas a homologação clínica completa ainda não foi aprovada.
+
 ## Atualização do redeploy da Clínica — 26/09/2026
 
 - O serviço Render `univet-clinica` foi criado e permanece no plano Free, sem alteração do serviço Demo `univet`.
