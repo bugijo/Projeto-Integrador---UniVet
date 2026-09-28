@@ -239,6 +239,7 @@ def main():
                ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "VIRTUAL_ENV", "UNIVET_BENCH_LOGIN", "UNIVET_BENCH_PASSWORD")}
         env.update(UNIVET_BENCH_ROOT=str(root), UNIVET_ENV="development",
                    SECRET_KEY=secrets.token_hex(32), UNIVET_SECRET_KEY=secrets.token_hex(32),
+                   UNIVET_TRUST_PROXY="1",
                    PYTHONDONTWRITEBYTECODE="1", NO_PROXY="127.0.0.1,localhost")
         if args.disable_rate_limit:
             env["UNIVET_RATE_LIMIT_ENABLED"] = "0"

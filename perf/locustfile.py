@@ -2,12 +2,16 @@
 from datetime import date
 from html.parser import HTMLParser
 import os
+from itertools import count
 from pathlib import Path
 from urllib.parse import urlparse
 from uuid import uuid4
 
 from locust import HttpUser, between, events, task
 from locust.exception import StopUser
+
+
+_BENCH_ACCOUNT_COUNTER = count()
 
 
 class CSRFParser(HTMLParser):
@@ -59,11 +63,13 @@ class ClinicaUser(HttpUser):
         token = self.token_for("/login")
         if not token:
             raise StopUser()
+        account_index = next(_BENCH_ACCOUNT_COUNTER) % 50
+        client_headers = {"X-Forwarded-For": f"198.51.100.{account_index + 1}"}
         with self.client.post("/login", data={
-            "login": os.environ.get("UNIVET_BENCH_LOGIN", "admin"),
-            "senha": os.environ.get("UNIVET_BENCH_PASSWORD", "123456"),
+            "login": f"bench_qa_{account_index:02d}",
+            "senha": os.environ.get("UNIVET_BENCH_PASSWORD", "QA-Benchmark-Local-2026!"),
             "csrf_token": token,
-        }, allow_redirects=False, timeout=10, catch_response=True) as response:
+        }, headers=client_headers, allow_redirects=False, timeout=10, catch_response=True) as response:
             if (response.status_code not in (302, 303)
                     or urlparse(response.headers.get("Location", "")).path != "/pagina-inicial"):
                 response.failure("Login recusado ou redirecionamento inesperado")
