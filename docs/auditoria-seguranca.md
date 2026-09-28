@@ -2,6 +2,15 @@
 
 ## Checkpoint de homologação — 28/09/2026
 
+## Evidência remota QA pós-redeploy — 28/09/2026
+
+- Alembic Neon: `002_session_indexes`, igual ao head local; ambiente clínico `production`. O projeto Demo separado reportou `demo`; não houve escrita nele.
+- Redeploy `dep-datbt38u01pc73e1e10g` terminou `live`. Logs confirmaram psycopg 3.3.6, libpq 18.6, `sslmode=verify-full`, `sslrootcert=system` e `channel_binding=require`. `/health` e `/login` retornaram 200 após o processo reiniciar.
+- QA remoto 100% fictício sobreviveu ao redeploy. Login, primeiro acesso, API 401/200, exportação CSV, cookies e logout foram exercitados. Os registros QA, sessões e eventos de teste foram removidos por IDs explícitos; consulta final confirmou zero resíduos QA.
+- Snapshot pré-teste: `homologacao-pre-qa-20260928` (`snap-withered-unit-arp2b8xz`). O limite de snapshots do projeto impediu um segundo snapshot pós-teste e, portanto, o restore isolado final não foi repetido nesta rodada.
+- Concorrência remota curta de `/health`: 2/5/10 requisições concorrentes, todas 200. Não representa soak ou aprovação de capacidade clínica.
+- Bloqueadores para dados reais: backup/restore final em branch temporária e restart operacional independente ainda sem evidência desta rodada; carga remota longa e revisão operacional de produção permanecem pendentes. `DrFernanda` não criada. Classificação: **NÃO APTO PARA DADOS REAIS**.
+
 - Runtime Render confirmado: psycopg 3.3.6, libpq 18.6, `sslmode=verify-full`, CA confiável e `channel_binding=require`.
 - Serviço clínico: `/health`, `/login` e `/` retornam 200; cookie observado com `Secure`, `HttpOnly` e `SameSite=Lax`; HSTS, CSP, nosniff, X-Frame-Options, Permissions-Policy, Referrer-Policy e no-store presentes.
 - Suíte PostgreSQL local: **38 testes / 74 subtestes aprovados**. O travamento foi reproduzido como resíduo de containers descartáveis após interrupção, não como deadlock funcional; após limpeza, a suíte completou.

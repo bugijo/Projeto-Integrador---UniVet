@@ -2,6 +2,17 @@
 
 ## Homologação remota parcial — 28/09/2026
 
+## Homologação remota QA concluída — 28/09/2026
+
+- O Neon MCP autenticado confirmou `univet-clinica` (`bold-truth-16986362`), ambiente `production` e `alembic_version=002_session_indexes`, igual ao head local. Nenhuma migration foi aplicada nesta etapa.
+- Foi criado o snapshot Neon `homologacao-pre-qa-20260928` (`snap-withered-unit-arp2b8xz`) antes dos testes. O Neon recusou um segundo snapshot por limite do projeto; nenhum restore sobre a branch live foi executado.
+- Foram inseridos somente registros QA explicitamente fictícios, incluindo login temporário, tutor, pet, veterinário, consulta e estoque. Eles sobreviveram ao redeploy `dep-datbt38u01pc73e1e10g` e foram removidos por IDs explícitos; a verificação final deixou os contadores QA e `auth_sessions` em zero.
+- Fluxos remotos observados: login 302→dashboard 200, primeiro acesso 302→`/conta/senha`, API sem sessão 401, API autenticada 200, CSV autenticado 200, cookie `Secure; HttpOnly; SameSite=Lax`, logout POST 302 e acesso posterior protegido 302→`/login`.
+- Isolamento de banco confirmado pelos projetos Neon independentes: Clínica `environment=production`; Demo `environment=demo`. Não houve escrita no projeto Demo.
+- Carga remota curta de `/health`: concorrência 2/5/10, todos HTTP 200, sem soak prolongado. A carga local PostgreSQL permanece em 38 testes/74 subtestes aprovados.
+- Limites restantes: rotina completa de backup/restore final em branch temporária não repetida por limite de snapshots; restart manual separado não exposto pelo Render MCP; carga remota longa não executada. `DrFernanda` não foi criada.
+- **Classificação: NÃO APTO PARA DADOS REAIS.**
+
 - A conexão Render → Neon está operacional no commit corretivo `10e09dc`: `/health`, `/login` e `/` retornam 200; psycopg 3.3.6 e libpq 18.6 foram confirmados nos logs.
 - A suíte PostgreSQL local foi concluída: **38 testes e 74 subtestes aprovados em 365,87 s**. O travamento anterior foi causado por containers descartáveis `univet-test-*` órfãos após interrupção do runner; eles foram removidos e a execução normal passou.
 - `pip-audit` não encontrou vulnerabilidades conhecidas. Bandit encontrou dois médios já conhecidos: bind local em `app.py` e SQL interno de paginação em `estoque/services.py`; nenhum alto.
