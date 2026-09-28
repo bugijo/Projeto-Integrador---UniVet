@@ -7,7 +7,6 @@ import os
 from io import StringIO
 from pathlib import Path
 import json
-import logging
 import sqlite3
 import unicodedata
 
@@ -59,13 +58,13 @@ PERFIS_AUTORIZADOS = ("admin", "veterinaria")
 LOGIN_DRA_FERNANDA = "fernanda.calixto"
 
 app = Flask(__name__)
-logger = logging.getLogger(__name__)
 
 if is_postgres(DATABASE):
-    logger.info(
+    print(
         'PostgreSQL runtime: psycopg=%s libpq=%s tls=verify-full '
         'sslrootcert=system channel_binding=require',
         psycopg.__version__, psycopg.pq.version_pretty(psycopg.pq.version()),
+        flush=True,
     )
 
 
