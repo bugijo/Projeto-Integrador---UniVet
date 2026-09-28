@@ -13,7 +13,7 @@ from unittest.mock import patch
 from flask import Flask
 from itsdangerous import BadSignature
 from config import load_settings, verify_database_environment
-from database import effective_postgres_target
+from database import effective_postgres_target, postgres_connection_kwargs
 from security import EnvironmentSessionInterface
 
 
@@ -110,6 +110,12 @@ class EnvironmentTests(unittest.TestCase):
                 self.assertIn('channel_binding=require', effective)
                 self.assertIn('sslrootcert=%2F', effective)
                 self.assertNotIn('sslrootcert=system', effective)
+
+    def test_neon_pooler_does_not_receive_unsupported_startup_options(self):
+        pooled = 'postgresql://owner:password@ep-example-pooler.us-west-2.aws.neon.tech/neondb?sslmode=verify-full&sslrootcert=system&channel_binding=require'
+        direct = 'postgresql://owner:password@ep-example.us-west-2.aws.neon.tech/neondb?sslmode=verify-full&sslrootcert=system&channel_binding=require'
+        self.assertNotIn('options', postgres_connection_kwargs(pooled))
+        self.assertIn('options', postgres_connection_kwargs(direct))
 
     def test_database_identity_cannot_be_relabelled(self):
         with sqlite3.connect(':memory:') as conn:

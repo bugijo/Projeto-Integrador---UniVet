@@ -63,6 +63,21 @@ def effective_postgres_target(target):
     return urlunsplit(parsed._replace(query=urlencode(params)))
 
 
+def postgres_connection_kwargs(target):
+    """Build connection kwargs compatible with direct and Neon pooled endpoints."""
+    kwargs = {
+        'row_factory': row_factory,
+        'prepare_threshold': None,
+        'connect_timeout': 5,
+    }
+    # Neon poolers reject arbitrary startup parameters. Direct PostgreSQL
+    # endpoints can retain the local safety timeouts; pool-level timeouts
+    # remain enforced by ConnectionPool(timeout=5).
+    if '-pooler.' not in (urlsplit(target).hostname or ''):
+        kwargs['options'] = '-c statement_timeout=10000 -c lock_timeout=5000 -c idle_in_transaction_session_timeout=15000 -c timezone=America/Sao_Paulo'
+    return kwargs
+
+
 def bind_markers(statement):
     # Literais/identificadores SQL preservados; nenhum valor de usuário entra aqui.
     # Compatibilidade pontual para a expressão de data usada pelo legado SQLite
@@ -215,8 +230,7 @@ def connect(target, pool_size=4):
     with _pool_lock:
         if key not in _pools:
             _pools[key] = ConnectionPool(pool_target, min_size=0,max_size=pool_size,timeout=5,
-                kwargs={'row_factory':row_factory,'prepare_threshold':None,'connect_timeout':5,
-                        'options':'-c statement_timeout=10000 -c lock_timeout=5000 -c idle_in_transaction_session_timeout=15000 -c timezone=America/Sao_Paulo'},
+                kwargs=postgres_connection_kwargs(pool_target),
                 open=True)
         pool = _pools[key]
     return PostgresConnection(pool)
