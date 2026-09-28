@@ -1,4 +1,13 @@
-# Estado atual — 23/09/2026
+# Estado atual — 28/09/2026
+
+## Verificação do deploy TLS da Clínica — 28/09/2026
+
+- O commit `2901932` foi solicitado no serviço Render `univet-clinica`, após `DATABASE_URL` receber `sslmode=verify-full`, `sslrootcert=system` e `channel_binding=require`. Nenhum segredo foi registrado nesta documentação.
+- A URL pública `https://univet-clinica.onrender.com` responde via HTTPS, mas `/`, `/login` e `/health` retornam **503** com `Banco temporariamente indisponível.`. O processo Gunicorn está acessível, porém a aplicação não está operacional.
+- A resposta pública observada contém `Strict-Transport-Security`, `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Permissions-Policy`, `Referrer-Policy`, `Cache-Control: no-store` e `server: cloudflare`; isso confirma a camada HTTP observada, não a saúde do banco nem a versão de libpq.
+- Ainda não há evidência dos logs do Render confirmando a versão efetiva de libpq, conexão Neon, migrations, login, cookies, persistência após restart/redeploy, isolamento remoto ou carga. Esses itens permanecem bloqueadores.
+- `DrFernanda` não foi criada e nenhuma senha temporária foi gerada.
+- **Classificação: BLOQUEADO / NÃO APTO PARA DADOS REAIS.** Não prosseguir para homologação destrutiva, carga remota ou criação de conta enquanto o banco não estiver saudável.
 
 ## Atualização do redeploy da Clínica — 26/09/2026
 

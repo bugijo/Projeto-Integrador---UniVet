@@ -1,5 +1,18 @@
 # Auditoria defensiva e prontidão de produção — UniVet
 
+## Estado do deploy TLS da Clínica — 28/09/2026
+
+| Evidência | Resultado | Limite |
+|---|---|---|
+| Commit solicitado | `2901932` | O deploy foi solicitado no Render; a conclusão precisa ser confirmada no log do serviço. |
+| TLS da URL | **OBSERVADO** | HTTPS responde; não substitui a confirmação da conexão PostgreSQL. |
+| Saúde da aplicação | **FALHOU** | `/`, `/login` e `/health` retornaram HTTP 503: `Banco temporariamente indisponível.` |
+| Headers públicos | **OBSERVADOS** | HSTS, CSP, nosniff, X-Frame-Options, Permissions-Policy, Referrer-Policy e no-store presentes na resposta observada. |
+| libpq/Neon/migrations | **NÃO CONFIRMADOS** | Falta acesso aos logs autenticados do Render; não inferir versão ou conexão a partir do 503. |
+| Dados e conta clínica | **NÃO TOCADOS** | `DrFernanda` não foi criada; nenhum segredo foi exposto. |
+
+O bloqueador atual é a indisponibilidade do banco no serviço publicado. Até que os logs confirmem a inicialização PostgreSQL com TLS forte e uma rota de saúde 200, ficam suspensos login, persistência, restart/redeploy, isolamento remoto, carga e criação de usuário inicial. A classificação permanece **BLOQUEADO / NÃO APTO PARA DADOS REAIS**.
+
 ## Atualização do redeploy da Clínica — 26/09/2026
 
 | Evidência | Resultado | Limite |
