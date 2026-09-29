@@ -1,5 +1,13 @@
 # Auditoria defensiva e prontidão de produção — UniVet
 
+## Go-live controlado — 29/09/2026
+
+- Aprovação humana/clínica registrada. Backup pré-go-live verificado (`pg_dump -Fc`, 63.993 bytes, SHA-256 `f501bad491a0acff13637a806d64ac15525a346790d9f4831144c149d03c901b`, 177 objetos).
+- `DrFernanda` criada como única conta nova, perfil `admin`, ativa e com `must_change_password=1`; hash armazenado, sem senha plaintext. O primeiro login redirecionou corretamente para troca de senha e a sessão de homologação foi revogada.
+- Smoke final: `/health` e `/login` 200, API sem sessão 401, CSV sem sessão 302, headers de segurança presentes. Banco production saudável, Alembic `002_session_indexes`, QA/sessões/dados clínicos em zero.
+- Demo permanece em projeto separado (`environment=demo`). Nenhum dado real foi inserido. TLS e configuração de segurança não foram reduzidos.
+- **Classificação: APTO PARA INÍCIO DE OPERAÇÃO CLÍNICA.** Senha definitiva deve ser escolhida pela usuária no primeiro acesso.
+
 ## Checkpoint de homologação — 28/09/2026
 
 ## Evidência remota QA pós-redeploy — 28/09/2026

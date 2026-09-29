@@ -1,5 +1,15 @@
 # Estado atual — 28/09/2026
 
+## Go-live controlado autorizado — 29/09/2026
+
+- Aprovação humana/clínica concedida. Deploy live no commit `860978e` no início da operação; TLS preservado (`verify-full`, `sslrootcert=system`, `channel_binding=require`).
+- Backup pré-go-live aprovado: `pg_dump -Fc`, timestamp UTC `2026-09-29T00:01:47Z`, 63.993 bytes, SHA-256 `f501bad491a0acff13637a806d64ac15525a346790d9f4831144c149d03c901b`, `pg_restore --list` com 177 objetos.
+- Conta `DrFernanda` criada uma única vez, papel `admin`, ativa, senha armazenada somente como hash e `must_change_password=1`. A senha temporária foi gerada aleatoriamente e entregue fora deste repositório/documentação; não foi registrada em texto, logs ou Git.
+- Primeiro login controlado passou e redirecionou para `/conta/senha`; a sessão de teste foi revogada. A senha definitiva não foi definida pelo sistema.
+- Smoke pós-go-live: `/health=200`, `/login=200`, API sem sessão `401`, CSV sem sessão `302`; headers de segurança presentes. Neon `production` mantém Alembic `002_session_indexes`, zero sessões, zero QA e zero registros clínicos.
+- Demo continua no projeto Neon separado com `environment=demo`. Nenhum cliente, animal, prontuário, estoque, consulta ou dado real foi inserido.
+- **Classificação: APTO PARA INÍCIO DE OPERAÇÃO CLÍNICA.** Operação clínica deve começar somente com a usuária escolhendo sua senha definitiva no primeiro acesso.
+
 ## Homologação remota parcial — 28/09/2026
 
 ## Homologação remota QA concluída — 28/09/2026
