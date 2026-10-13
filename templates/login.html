@@ -16,7 +16,7 @@
             <div class="welcome-brand">
                 <img src="{{ logo_url }}" alt="Logo da Clinica Veterinaria Fernanda Calixto">
                 <div>
-                    <span class="pill">Acesso seguro da clínica</span>
+                    <span class="pill">{{ 'Ambiente de demonstração — dados fictícios' if config.UNIVET_ENV == 'demo' else 'Acesso seguro da clínica' }}</span>
                     <h1>Bem-vinda ao UniVet</h1>
                     <p>
                         Entre com usuário e senha para acessar a rotina clínica com
@@ -36,21 +36,17 @@
             {% endwith %}
 
             <form method="post" class="welcome-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="field-group">
                     <label for="login">Usuário</label>
-                    <input type="text" id="login" name="login" placeholder="admin ou fernanda.calixto" required>
+                    <input type="text" id="login" name="login" placeholder="Seu usuário" autocomplete="username" required>
                 </div>
                 <div class="field-group">
                     <label for="senha">Senha</label>
-                    <input type="password" id="senha" name="senha" placeholder="Digite sua senha" required>
+                    <input type="password" id="senha" name="senha" placeholder="Digite sua senha" autocomplete="current-password" maxlength="128" required>
                 </div>
                 <button class="btn" type="submit">Entrar na página inicial</button>
             </form>
-
-            <div class="highlight-box">
-                Acesso de testes: <strong>admin / 123456</strong><br>
-                Acesso da clínica: <strong>fernanda.calixto / Fer123</strong>
-            </div>
         </section>
     </main>
 </body>

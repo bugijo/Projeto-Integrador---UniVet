@@ -1,0 +1,13 @@
+{% extends 'primeiro_acesso_base.html' if primeiro_acesso else 'base.html' %}
+{% block content %}
+<section class="page-header"><div><h1>{{ 'Defina sua nova senha' if primeiro_acesso else 'Alterar senha' }}</h1>
+<p>{{ 'Por segurança, você precisa criar uma nova senha antes de continuar.' if primeiro_acesso else 'Use uma senha exclusiva com pelo menos 12 caracteres. Após salvar, entre novamente.' }}</p></div></section>
+<section class="card form-card"><div class="card-body">
+<form method="post" class="form-grid">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="field-group"><label for="senha_atual">Senha atual</label><input id="senha_atual" type="password" name="senha_atual" autocomplete="current-password" required maxlength="128"></div>
+<div class="field-group"><label for="nova_senha">Nova senha</label><input id="nova_senha" type="password" name="nova_senha" autocomplete="new-password" required minlength="12" maxlength="128"></div>
+<div class="field-group"><label for="confirmacao">Confirme a nova senha</label><input id="confirmacao" type="password" name="confirmacao" autocomplete="new-password" required minlength="12" maxlength="128"></div>
+<div class="actions"><button class="btn" type="submit">Salvar senha</button></div>
+</form></div></section>
+{% endblock %}

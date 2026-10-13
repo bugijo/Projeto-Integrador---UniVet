@@ -48,7 +48,8 @@
                                             <a class="btn btn-secondary" href="{{ url_for('editar_tutor', tutor_id=tutor['id']) }}">Editar</a>
                                             <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='tutores', registro_id=tutor['id']) }}">Histórico</a>
                                             <form method="post" action="{{ url_for('excluir_tutor', tutor_id=tutor['id']) }}">
-                                                <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este tutor?')">Excluir</button>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button class="btn btn-danger" type="submit" data-confirm="Deseja excluir este tutor?">Excluir</button>
                                             </form>
                                         </div>
                                     </td>

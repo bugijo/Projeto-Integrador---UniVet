@@ -10,8 +10,12 @@ import json
 import sqlite3
 import unicodedata
 
-from flask import Flask, Response, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, flash, g, has_request_context, jsonify, redirect, render_template, request, session, url_for
+import psycopg
 from werkzeug.security import check_password_hash
+from security import register_security, start_session, end_session, password_hash
+from config import load_settings, verify_database_environment
+from database import connect, is_postgres, begin_write, last_insert_id, INTEGRITY_ERRORS
 
 from estoque.services import (
     EstoqueError,
@@ -37,7 +41,8 @@ from estoque.services import (
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATABASE = BASE_DIR / "banco.db"
+SETTINGS = load_settings()
+DATABASE = SETTINGS.database
 STATUSS_CONSULTA = ("Agendada", "Concluida", "Cancelada")
 STATUSS_CONFIRMACAO = ("Pendente", "Confirmada", "Nao confirmada")
 TIPOS_ATENDIMENTO = ("Presencial", "Domiciliar")
@@ -53,21 +58,35 @@ PERFIS_AUTORIZADOS = ("admin", "veterinaria")
 LOGIN_DRA_FERNANDA = "fernanda.calixto"
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "univet-chave-inicial-dev")
+
+if is_postgres(DATABASE):
+    print(
+        'PostgreSQL runtime: psycopg=%s libpq=%s tls=verify-full '
+        'sslrootcert=system channel_binding=require',
+        psycopg.__version__, psycopg.pq.version_pretty(psycopg.pq.version()),
+        flush=True,
+    )
 
 
 def garantir_banco_inicializado():
-    # Em produção o SQLite pode iniciar vazio; neste caso, criamos a estrutura automaticamente.
+    if is_postgres(DATABASE):
+        return  # Schema PostgreSQL somente por migração explícita.
+    # Somente desenvolvimento auto-inicializa. Ambientes publicados exigem migração explícita.
+    if SETTINGS.environment in ('demo', 'production') and not DATABASE.is_file():
+        raise RuntimeError('Banco não inicializado; execute migração explícita.')
     connection = sqlite3.connect(DATABASE)
     try:
+        verify_database_environment(connection, SETTINGS.environment)
         tabela = connection.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('usuarios', 'produtos', 'condicoes_clinicas')"
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('usuarios', 'produtos', 'condicoes_clinicas', 'auth_sessions')"
         ).fetchall()
         colunas_produto = {item[1] for item in connection.execute("PRAGMA table_info(produtos)").fetchall()}
     finally:
         connection.close()
-    if len(tabela) == 3 and "margem_lucro_percentual" in colunas_produto:
+    if len(tabela) == 4 and "margem_lucro_percentual" in colunas_produto:
         return
+    if SETTINGS.environment in ('demo', 'production'):
+        raise RuntimeError('Schema incompleto; execute migração explícita.')
     from init_db import init_db
 
     init_db()
@@ -75,10 +94,26 @@ def garantir_banco_inicializado():
 
 def get_db_connection():
     garantir_banco_inicializado()
-    connection = sqlite3.connect(DATABASE)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON;")
+    connection = connect(DATABASE)
+    if is_postgres(DATABASE):
+        try:
+            verify_database_environment(connection, SETTINGS.environment)
+        except Exception:
+            connection.close()
+            raise
+    if has_request_context():
+        g.setdefault('database_connections', []).append(connection)
     return connection
+
+
+@app.teardown_request
+def close_request_connections(error=None):
+    # close() também reverte escritas não confirmadas em caminhos excepcionais.
+    for connection in g.pop('database_connections', []):
+        connection.close()
+
+
+register_security(app, get_db_connection)
 
 
 def login_obrigatorio(view_function):
@@ -115,7 +150,11 @@ def csv_response(nome, cabecalho, linhas):
     saida = StringIO()
     escritor = csv.writer(saida, delimiter=";", lineterminator="\r\n")
     escritor.writerow(cabecalho)
-    escritor.writerows(linhas)
+    def safe_cell(value):
+        if isinstance(value, str) and value.lstrip().startswith(('=', '+', '-', '@', '\t', '\r', '\n')):
+            return "'" + value
+        return value
+    escritor.writerows([[safe_cell(value) for value in row] for row in linhas])
     conteudo = "\ufeff" + saida.getvalue()
     return Response(conteudo, mimetype="text/csv", headers={"Content-Disposition": f"attachment; filename={nome}"})
 
@@ -229,8 +268,10 @@ def serializar_row(row):
     return {chave: row[chave] for chave in row.keys()}
 
 
-def registrar_historico(entidade, registro_id, acao, dados):
-    connection = get_db_connection()
+def registrar_historico(entidade, registro_id, acao, dados, connection=None):
+    own_connection = connection is None
+    if own_connection:
+        connection = get_db_connection()
     connection.execute(
         """
         INSERT INTO historico_alteracoes (entidade, registro_id, acao, usuario_nome, dados_json, criado_em)
@@ -241,12 +282,13 @@ def registrar_historico(entidade, registro_id, acao, dados):
             registro_id,
             acao,
             session.get("usuario_nome") or session.get("usuario_login", "Sistema"),
-            json.dumps(dados, ensure_ascii=False),
+            json.dumps(dados, ensure_ascii=False, default=str),
             datetime.now().strftime("%Y-%m-%dT%H:%M"),
         ),
     )
-    connection.commit()
-    connection.close()
+    if own_connection:
+        connection.commit()
+        connection.close()
 
 
 @lru_cache(maxsize=1)
@@ -405,7 +447,7 @@ def consultas_do_mes(ano, mes):
         INNER JOIN tutores ON tutores.id = pets.tutor_id
         INNER JOIN veterinarios ON veterinarios.id = consultas.veterinario_id
         INNER JOIN servicos ON servicos.id = consultas.servico_id
-        WHERE substr(consultas.data_hora, 1, 7) = ?
+        WHERE substr(CAST(consultas.data_hora AS TEXT), 1, 7) = ?
         ORDER BY consultas.data_hora ASC
         """,
         (prefixo,),
@@ -425,7 +467,7 @@ def consultas_do_dia(data_iso):
         INNER JOIN tutores ON tutores.id = pets.tutor_id
         INNER JOIN veterinarios ON veterinarios.id = consultas.veterinario_id
         INNER JOIN servicos ON servicos.id = consultas.servico_id
-        WHERE date(consultas.data_hora) = ?
+        WHERE substr(CAST(consultas.data_hora AS TEXT),1,10) = ?
         ORDER BY consultas.data_hora ASC
         """,
         (data_iso,),
@@ -493,15 +535,16 @@ def login():
         return redirect(url_for("pagina_inicial"))
     if request.method == "POST":
         identificador = request.form.get("login", "").strip()
-        senha = request.form.get("senha", "").strip()
+        senha = request.form.get("senha", "")
         usuario = usuario_por_login(identificador) if identificador else None
         if not identificador or not senha:
             flash("Informe o usuário e a senha para entrar.", "erro")
-        elif usuario and check_password_hash(usuario["senha_hash"], senha):
-            session["usuario_id"] = usuario["id"]
-            session["usuario_login"] = usuario["login"]
-            session["usuario_nome"] = usuario["nome"] or usuario["login"]
-            session["usuario_perfil"] = usuario["perfil"]
+        elif usuario and (not app.config['PRODUCTION'] or len(senha) >= 12) and check_password_hash(usuario["senha_hash"], senha):
+            connection = get_db_connection()
+            try:
+                start_session(connection, usuario)
+            finally:
+                connection.close()
             flash("Acesso liberado com sucesso.", "sucesso")
             return redirect(url_for("pagina_inicial"))
         else:
@@ -636,14 +679,14 @@ def criar_produto():
                 (nome, codigo, tipo, categoria_id, unidade, estoque_minimo, margem_lucro),
             )
             connection.commit()
-        except (ValueError, sqlite3.IntegrityError):
+        except (ValueError, *INTEGRITY_ERRORS):
             connection.close()
             flash("Preencha corretamente os dados do produto. O código deve ser único.", "erro")
             form_connection = get_db_connection()
             dados = _dados_form_produto(form_connection, produto_form)
             form_connection.close()
             return render_template("estoque/produtos/form.html", acao="Novo produto", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Produtos", url_for("listar_produtos_page")), ("Novo produto", None)), **dados)
-        produto_id = connection.execute("SELECT last_insert_rowid()").fetchone()[0]
+        produto_id = last_insert_id(connection)
         connection.close()
         flash("Produto cadastrado com sucesso.", "sucesso")
         return redirect(url_for("detalhar_produto", produto_id=produto_id))
@@ -680,7 +723,7 @@ def editar_produto(produto_id):
                 (nome, codigo, tipo, categoria_id, unidade, estoque_minimo, margem_lucro, produto_id),
             )
             connection.commit()
-        except (ValueError, sqlite3.IntegrityError):
+        except (ValueError, *INTEGRITY_ERRORS):
             connection.close()
             flash("Preencha corretamente os dados do produto. O código deve ser único.", "erro")
             form_connection = get_db_connection()
@@ -749,7 +792,7 @@ def listar_categorias_page():
             connection.execute("INSERT INTO categorias (nome, descricao) VALUES (?, ?)", (nome, descricao))
             connection.commit()
             flash("Categoria cadastrada com sucesso.", "sucesso")
-        except (ValueError, sqlite3.IntegrityError):
+        except (ValueError, *INTEGRITY_ERRORS):
             connection.rollback()
             flash("Informe um nome de categoria único.", "erro")
         connection.close()
@@ -776,7 +819,7 @@ def editar_categoria(categoria_id):
                 raise ValueError
             connection.execute("UPDATE categorias SET nome = ?, descricao = ? WHERE id = ?", (nome, descricao, categoria_id))
             connection.commit()
-        except (ValueError, sqlite3.IntegrityError):
+        except (ValueError, *INTEGRITY_ERRORS):
             connection.close()
             flash("Informe um nome de categoria único.", "erro")
             return render_template("estoque/categorias/form.html", categoria={"id": categoria_id, "nome": nome, "descricao": descricao}, acao="Editar categoria", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Categorias", url_for("listar_categorias_page")), ("Editar categoria", None)))
@@ -810,7 +853,7 @@ def listar_fornecedores_page():
             connection.execute("INSERT INTO fornecedores (nome, documento, telefone, email, endereco) VALUES (?, ?, ?, ?, ?)", dados)
             connection.commit()
             flash("Fornecedor cadastrado com sucesso.", "sucesso")
-        except (ValueError, sqlite3.IntegrityError):
+        except (ValueError, *INTEGRITY_ERRORS):
             connection.rollback()
             flash("Informe um nome de fornecedor único.", "erro")
         connection.close()
@@ -839,7 +882,7 @@ def editar_fornecedor(fornecedor_id):
                 raise ValueError
             connection.execute("UPDATE fornecedores SET nome = ?, documento = ?, telefone = ?, email = ?, endereco = ? WHERE id = ?", (*dados, fornecedor_id))
             connection.commit()
-        except (ValueError, sqlite3.IntegrityError):
+        except (ValueError, *INTEGRITY_ERRORS):
             connection.close()
             flash("Informe um nome de fornecedor único.", "erro")
             return render_template("estoque/fornecedores/form.html", fornecedor=dict(zip(("nome", "documento", "telefone", "email", "endereco"), dados)), acao="Editar fornecedor", secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Fornecedores", url_for("listar_fornecedores_page")), ("Editar fornecedor", None)))
@@ -880,7 +923,7 @@ def registrar_entrada_estoque():
                 session.get("usuario_id"),
                 request.form.get("motivo", "Compra"),
             )
-        except (EstoqueError, sqlite3.IntegrityError) as erro:
+        except (EstoqueError, *INTEGRITY_ERRORS) as erro:
             connection.close()
             flash(str(erro) or "Não foi possível registrar a entrada.", "erro")
             return render_template("estoque/lotes/entrada.html", produtos=produtos, fornecedores=fornecedores, dados=request.form, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Entrada de lote", None)))
@@ -906,7 +949,7 @@ def registrar_saida_estoque():
                 request.form.get("motivo", "Saída manual"),
                 valor_unitario_praticado=request.form.get("valor_unitario_praticado", ""),
             )
-        except (EstoqueError, EstoqueInsuficiente, sqlite3.IntegrityError) as erro:
+        except (EstoqueError, EstoqueInsuficiente, *INTEGRITY_ERRORS) as erro:
             connection.close()
             flash(str(erro) or "Não foi possível registrar a saída.", "erro")
             return render_template("estoque/saidas/form.html", produtos=produtos, dados=request.form, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Saída manual", None)))
@@ -947,7 +990,7 @@ def ajustar_lote(lote_id):
         try:
             registrar_ajuste(connection, lote_id, request.form.get("nova_quantidade", ""), session.get("usuario_id"), request.form.get("motivo", ""))
             flash("Ajuste registrado com sucesso.", "sucesso")
-        except (EstoqueError, sqlite3.IntegrityError) as erro:
+        except (EstoqueError, *INTEGRITY_ERRORS) as erro:
             flash(str(erro) or "Não foi possível registrar o ajuste.", "erro")
         finally:
             connection.close()
@@ -986,10 +1029,10 @@ def relatorios_estoque():
     inicio = (hoje - timedelta(days=dias - 1)).isoformat()
     consumo_diario = connection.execute(
         """
-        SELECT date(criado_em) AS dia, COALESCE(SUM(quantidade), 0) AS quantidade
+        SELECT substr(CAST(criado_em AS TEXT),1,10) AS dia, COALESCE(SUM(quantidade), 0) AS quantidade
         FROM movimentacoes_estoque
-        WHERE tipo = 'Saída' AND date(criado_em) >= date(?)
-        GROUP BY date(criado_em)
+        WHERE tipo = 'Saída' AND substr(CAST(criado_em AS TEXT),1,10) >= ?
+        GROUP BY substr(CAST(criado_em AS TEXT),1,10)
         ORDER BY dia ASC
         """,
         (inicio,),
@@ -1157,18 +1200,15 @@ def criar_tutor():
             return render_template("tutores/form.html", tutor=tutor, acao="Novo Tutor", secao="tutores", breadcrumbs=breadcrumbs_padrao(("Tutores", url_for("listar_tutores")), ("Novo tutor", None)))
         connection = get_db_connection()
         try:
-            connection.execute("INSERT INTO tutores (nome, telefone, cpf, endereco) VALUES (?, ?, ?, ?)", (nome, telefone, formatar_cpf(cpf), endereco))
+            inserted = connection.execute("INSERT INTO tutores (nome, telefone, cpf, endereco) VALUES (?, ?, ?, ?)", (nome, telefone, formatar_cpf(cpf), endereco))
+            novo = connection.execute("SELECT * FROM tutores WHERE id = ?", (inserted.lastrowid,)).fetchone()
+            registrar_historico("tutores", novo["id"], "criado", serializar_row(novo), connection)
             connection.commit()
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             connection.close()
             flash("Já existe um tutor cadastrado com este CPF.", "erro")
             return render_template("tutores/form.html", tutor=tutor, acao="Novo Tutor", secao="tutores", breadcrumbs=breadcrumbs_padrao(("Tutores", url_for("listar_tutores")), ("Novo tutor", None)))
         connection.close()
-        connection = get_db_connection()
-        novo = connection.execute("SELECT * FROM tutores WHERE cpf = ?", (formatar_cpf(cpf),)).fetchone()
-        connection.close()
-        if novo:
-            registrar_historico("tutores", novo["id"], "criado", serializar_row(novo))
         flash("Tutor cadastrado com sucesso.", "sucesso")
         return redirect(url_for("listar_tutores"))
     return render_template("tutores/form.html", tutor=None, acao="Novo Tutor", secao="tutores", breadcrumbs=breadcrumbs_padrao(("Tutores", url_for("listar_tutores")), ("Novo tutor", None)))
@@ -1194,14 +1234,15 @@ def editar_tutor(tutor_id):
             return render_template("tutores/form.html", tutor=dados, acao="Editar Tutor", secao="tutores", breadcrumbs=breadcrumbs_padrao(("Tutores", url_for("listar_tutores")), ("Editar tutor", None)))
         try:
             connection = get_db_connection()
+            begin_write(connection)
             original = connection.execute("SELECT * FROM tutores WHERE id = ?", (tutor_id,)).fetchone()
             connection.execute("UPDATE tutores SET nome = ?, telefone = ?, cpf = ?, endereco = ? WHERE id = ?", (nome, telefone, formatar_cpf(cpf), endereco, tutor_id))
+            registrar_historico("tutores", tutor_id, "editado", {"antes": serializar_row(original), "depois": dados}, connection)
             connection.commit()
             connection.close()
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             flash("Já existe outro tutor cadastrado com este CPF.", "erro")
             return render_template("tutores/form.html", tutor=dados, acao="Editar Tutor", secao="tutores", breadcrumbs=breadcrumbs_padrao(("Tutores", url_for("listar_tutores")), ("Editar tutor", None)))
-        registrar_historico("tutores", tutor_id, "editado", {"antes": serializar_row(original), "depois": dados})
         flash("Tutor atualizado com sucesso.", "sucesso")
         return redirect(url_for("listar_tutores"))
     return render_template("tutores/form.html", tutor=tutor, acao="Editar Tutor", secao="tutores", breadcrumbs=breadcrumbs_padrao(("Tutores", url_for("listar_tutores")), ("Editar tutor", None)))
@@ -1211,6 +1252,7 @@ def editar_tutor(tutor_id):
 @login_obrigatorio
 def excluir_tutor(tutor_id):
     connection = get_db_connection()
+    begin_write(connection)
     tutor = connection.execute("SELECT * FROM tutores WHERE id = ?", (tutor_id,)).fetchone()
     total = connection.execute("SELECT COUNT(*) FROM pets WHERE tutor_id = ?", (tutor_id,)).fetchone()[0]
     if total:
@@ -1218,10 +1260,10 @@ def excluir_tutor(tutor_id):
         flash("Não é possível excluir um tutor que possui animais cadastrados.", "erro")
         return redirect(url_for("listar_tutores"))
     connection.execute("DELETE FROM tutores WHERE id = ?", (tutor_id,))
+    if tutor:
+        registrar_historico("tutores", tutor_id, "excluido", serializar_row(tutor), connection)
     connection.commit()
     connection.close()
-    if tutor:
-        registrar_historico("tutores", tutor_id, "excluido", serializar_row(tutor))
     flash("Tutor excluido com sucesso.", "sucesso")
     return redirect(url_for("listar_tutores"))
 
@@ -1259,26 +1301,23 @@ def criar_pet():
         raca = None if not raca_id else next((item for item in listar_racas_por_especie(especie_id) if item["id"] == raca_id), None)
         nome_raca = raca_personalizada if not raca else raca["nome"]
         pet = {"nome": nome, "especie_id": especie_id, "raca_id": raca_id, "raca_personalizada": raca_personalizada, "idade": idade, "tutor_id": tutor_id, "historico": historico}
-        if not nome or not especie_id or not tutor_id or not nome_raca:
+        if not nome or not especie or not tutor_id or not nome_raca:
             flash("Preencha os campos obrigatórios do animal.", "erro")
             return render_template("pets/form.html", pet=pet, acao="Novo Animal", secao="pets", breadcrumbs=breadcrumbs_padrao(("Animais", url_for("listar_pets")), ("Novo animal", None)), **contexto)
         connection = get_db_connection()
         try:
-            connection.execute(
+            inserted = connection.execute(
                 "INSERT INTO pets (nome, especie_id, especie, raca_id, raca, idade, tutor_id, historico) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (nome, especie_id, especie["nome"], raca_id, nome_raca, idade, tutor_id, historico),
             )
+            novo = connection.execute("SELECT * FROM pets WHERE id = ?", (inserted.lastrowid,)).fetchone()
+            registrar_historico("pets", novo["id"], "criado", serializar_row(novo), connection)
             connection.commit()
             connection.close()
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             connection.close()
             flash("Não foi possível salvar o animal. Revise a espécie e a raça selecionadas.", "erro")
             return render_template("pets/form.html", pet=pet, acao="Novo Animal", secao="pets", breadcrumbs=breadcrumbs_padrao(("Animais", url_for("listar_pets")), ("Novo animal", None)), **contexto)
-        connection = get_db_connection()
-        novo = connection.execute("SELECT * FROM pets ORDER BY id DESC LIMIT 1").fetchone()
-        connection.close()
-        if novo:
-            registrar_historico("pets", novo["id"], "criado", serializar_row(novo))
         flash("Animal cadastrado com sucesso.", "sucesso")
         return redirect(url_for("listar_pets"))
     return render_template("pets/form.html", pet=None, acao="Novo Animal", secao="pets", breadcrumbs=breadcrumbs_padrao(("Animais", url_for("listar_pets")), ("Novo animal", None)), **contexto)
@@ -1306,22 +1345,23 @@ def editar_pet(pet_id):
         raca = None if not raca_id else next((item for item in listar_racas_por_especie(especie_id) if item["id"] == raca_id), None)
         nome_raca = raca_personalizada if not raca else raca["nome"]
         pet = {"id": pet_id, "nome": nome, "especie_id": especie_id, "raca_id": raca_id, "raca_personalizada": raca_personalizada, "idade": idade, "tutor_id": tutor_id, "historico": historico}
-        if not nome or not especie_id or not tutor_id or not nome_raca:
+        if not nome or not especie or not tutor_id or not nome_raca:
             flash("Preencha os campos obrigatórios do animal.", "erro")
             return render_template("pets/form.html", pet=pet, acao="Editar Animal", secao="pets", breadcrumbs=breadcrumbs_padrao(("Animais", url_for("listar_pets")), ("Editar animal", None)), **contexto)
         try:
             connection = get_db_connection()
+            begin_write(connection)
             original = connection.execute("SELECT * FROM pets WHERE id = ?", (pet_id,)).fetchone()
             connection.execute(
                 "UPDATE pets SET nome = ?, especie_id = ?, especie = ?, raca_id = ?, raca = ?, idade = ?, tutor_id = ?, historico = ? WHERE id = ?",
                 (nome, especie_id, especie["nome"], raca_id, nome_raca, idade, tutor_id, historico, pet_id),
             )
+            registrar_historico("pets", pet_id, "editado", {"antes": serializar_row(original), "depois": pet}, connection)
             connection.commit()
             connection.close()
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             flash("Não foi possível atualizar o animal. Revise a espécie e a raça selecionadas.", "erro")
             return render_template("pets/form.html", pet=pet, acao="Editar Animal", secao="pets", breadcrumbs=breadcrumbs_padrao(("Animais", url_for("listar_pets")), ("Editar animal", None)), **contexto)
-        registrar_historico("pets", pet_id, "editado", {"antes": serializar_row(original), "depois": pet})
         flash("Animal atualizado com sucesso.", "sucesso")
         return redirect(url_for("listar_pets"))
     return render_template("pets/form.html", pet=pet_db, acao="Editar Animal", secao="pets", breadcrumbs=breadcrumbs_padrao(("Animais", url_for("listar_pets")), ("Editar animal", None)), **contexto)
@@ -1331,17 +1371,19 @@ def editar_pet(pet_id):
 @login_obrigatorio
 def excluir_pet(pet_id):
     connection = get_db_connection()
+    begin_write(connection)
     pet = connection.execute("SELECT * FROM pets WHERE id = ?", (pet_id,)).fetchone()
     total = connection.execute("SELECT COUNT(*) FROM consultas WHERE pet_id = ?", (pet_id,)).fetchone()[0]
-    if total:
+    conditions = connection.execute('SELECT 1 FROM condicoes_clinicas WHERE pet_id=?', (pet_id,)).fetchone()
+    if total or conditions or (pet and pet['historico']):
         connection.close()
-        flash("Não é possível excluir um animal com consultas cadastradas.", "erro")
+        flash("Não é possível excluir um animal com consultas, condições ou histórico clínico.", "erro")
         return redirect(url_for("listar_pets"))
     connection.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
+    if pet:
+        registrar_historico("pets", pet_id, "excluido", serializar_row(pet), connection)
     connection.commit()
     connection.close()
-    if pet:
-        registrar_historico("pets", pet_id, "excluido", serializar_row(pet))
     flash("Animal excluido com sucesso.", "sucesso")
     return redirect(url_for("listar_pets"))
 
@@ -1470,12 +1512,20 @@ def salvar_consulta(formulario, consulta_id=None):
     if not data_hora or not pet_id or not servico_id or not veterinario_id or tipo_atendimento not in TIPOS_ATENDIMENTO or confirmacao_status not in STATUSS_CONFIRMACAO or status not in STATUSS_CONSULTA:
         return False, "Preencha corretamente os campos obrigatórios da consulta.", consulta, []
     duracao, servico = calcular_duracao_total(servico_id, tipo_atendimento)
+    if not servico:
+        return False, "Serviço inexistente.", consulta, []
     try:
         inicio_dt = parse_datetime_iso(data_hora)
+        if not 1900 <= inicio_dt.year <= 2100:
+            raise ValueError('Data fora do intervalo permitido.')
     except ValueError:
         return False, "Informe uma data e hora válidas para a consulta.", consulta, []
     fim_dt = inicio_dt + timedelta(minutes=duracao)
     connection = get_db_connection()
+    if not connection.execute('SELECT 1 FROM pets WHERE id=?', (pet_id,)).fetchone() or not connection.execute('SELECT 1 FROM veterinarios WHERE id=?', (veterinario_id,)).fetchone():
+        connection.close()
+        return False, "Paciente ou veterinário inexistente.", consulta, []
+    begin_write(connection)
     disponivel, sugestoes = verificar_disponibilidade(connection, veterinario_id, inicio_dt, duracao, consulta_id)
     if not disponivel:
         connection.close()
@@ -1535,16 +1585,18 @@ def salvar_consulta(formulario, consulta_id=None):
                     confirmacao_status,
                 ),
             )
+        record_id = consulta_id or last_insert_id(connection)
+        registro = connection.execute('SELECT * FROM consultas WHERE id=?', (record_id,)).fetchone()
+        registrar_historico('consultas', record_id, 'editado' if consulta_id else 'criado', serializar_row(registro), connection)
         connection.commit()
-    except sqlite3.IntegrityError:
+    except INTEGRITY_ERRORS:
+        connection.rollback()
         connection.close()
-        return False, "Horário inicial já utilizado para este veterinário.", consulta, []
-    if consulta_id:
-        registro = connection.execute("SELECT * FROM consultas WHERE id = ?", (consulta_id,)).fetchone()
-        registrar_historico("consultas", consulta_id, "editado", serializar_row(registro))
-    else:
-        registro = connection.execute("SELECT * FROM consultas ORDER BY id DESC LIMIT 1").fetchone()
-        registrar_historico("consultas", registro["id"], "criado", serializar_row(registro))
+        return False, "Não foi possível gravar: verifique vínculos e conflito de horário.", consulta, []
+    except Exception:
+        connection.rollback()
+        connection.close()
+        raise
     connection.close()
     return True, "", consulta, []
 
@@ -1630,7 +1682,7 @@ def adicionar_produto_consulta(consulta_id):
             request.form.get("valor_unitario_praticado", ""),
         )
         flash("Produto utilizado registrado e estoque atualizado por FEFO.", "sucesso")
-    except (EstoqueError, EstoqueInsuficiente, sqlite3.IntegrityError) as erro:
+    except (EstoqueError, EstoqueInsuficiente, *INTEGRITY_ERRORS) as erro:
         flash(str(erro) or "Não foi possível registrar o produto utilizado.", "erro")
     finally:
         connection.close()
@@ -1641,13 +1693,23 @@ def adicionar_produto_consulta(consulta_id):
 @login_obrigatorio
 def excluir_consulta(consulta_id):
     connection = get_db_connection()
-    consulta = connection.execute("SELECT * FROM consultas WHERE id = ?", (consulta_id,)).fetchone()
-    connection.execute("DELETE FROM consultas WHERE id = ?", (consulta_id,))
-    connection.commit()
-    connection.close()
-    if consulta:
-        registrar_historico("consultas", consulta_id, "excluido", serializar_row(consulta))
-    flash("Consulta excluida com sucesso.", "sucesso")
+    try:
+        begin_write(connection)
+        consulta = connection.execute("SELECT * FROM consultas WHERE id = ?", (consulta_id,)).fetchone()
+        if consulta and consulta['status'] == 'Concluida':
+            connection.rollback()
+            flash('Atendimento concluído deve ser preservado. Registre correções no histórico clínico.', 'erro')
+            return redirect(url_for('listar_consultas'))
+        if consulta and consulta['status'] != 'Cancelada':
+            connection.execute("UPDATE consultas SET status='Cancelada' WHERE id = ?", (consulta_id,))
+            registrar_historico("consultas", consulta_id, "cancelado", serializar_row(consulta), connection)
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    flash("Consulta cancelada; histórico e produtos utilizados preservados. Cancelamento não estorna estoque.", "sucesso")
     return redirect(url_for("listar_consultas"))
 
 
@@ -1708,9 +1770,9 @@ def adicionar_condicao_clinica(pet_id):
         (pet_id, condicao, observacoes, status, registrado_em, session.get("usuario_nome") or session.get("usuario_login", "Sistema")),
     )
     condicao_id = cursor.lastrowid
+    registrar_historico("condicoes_clinicas", condicao_id, "criada", {"pet_id": pet_id, "condicao": condicao, "status": status}, connection)
     connection.commit()
     connection.close()
-    registrar_historico("condicoes_clinicas", condicao_id, "criada", {"pet_id": pet_id, "condicao": condicao, "status": status})
     flash("Condição clínica adicionada ao prontuário.", "sucesso")
     return redirect(url_for("historico_clinico_pet_page", pet_id=pet_id))
 
@@ -1805,16 +1867,17 @@ def editar_servico(servico_id):
         nome = request.form.get("nome", "").strip()
         duracao = request.form.get("duracao_minutos", type=int)
         dados = {"id": servico_id, "nome": nome, "duracao_minutos": duracao}
-        if not nome or not duracao or duracao < 20:
+        if not nome or not duracao or not 20 <= duracao <= 1440:
             flash("Informe um nome e duração mínima de 20 minutos.", "erro")
             return render_template("servicos/form.html", servico=dados, acao="Editar serviço", secao="servicos", breadcrumbs=breadcrumbs_padrao(("Serviços", url_for("listar_servicos_page")), ("Editar serviço", None)))
         connection = get_db_connection()
+        begin_write(connection)
         original = connection.execute("SELECT * FROM servicos WHERE id = ?", (servico_id,)).fetchone()
         connection.execute("UPDATE servicos SET nome = ?, duracao_minutos = ? WHERE id = ?", (nome, duracao, servico_id))
+        registrar_historico("servicos", servico_id, "editado", {"antes": serializar_row(original), "depois": dados}, connection)
         connection.commit()
         connection.close()
         limpar_caches_referencia()
-        registrar_historico("servicos", servico_id, "editado", {"antes": serializar_row(original), "depois": dados})
         flash("Serviço atualizado com sucesso.", "sucesso")
         return redirect(url_for("listar_servicos_page"))
     return render_template("servicos/form.html", servico=servico, acao="Editar serviço", secao="servicos", breadcrumbs=breadcrumbs_padrao(("Serviços", url_for("listar_servicos_page")), ("Editar serviço", None)))
@@ -1824,6 +1887,7 @@ def editar_servico(servico_id):
 @login_obrigatorio
 def excluir_servico(servico_id):
     connection = get_db_connection()
+    begin_write(connection)
     servico = connection.execute("SELECT * FROM servicos WHERE id = ?", (servico_id,)).fetchone()
     uso = connection.execute("SELECT COUNT(*) FROM consultas WHERE servico_id = ?", (servico_id,)).fetchone()[0]
     if uso:
@@ -1831,11 +1895,11 @@ def excluir_servico(servico_id):
         flash("Não é possível excluir um serviço já utilizado em consultas.", "erro")
         return redirect(url_for("listar_servicos_page"))
     connection.execute("DELETE FROM servicos WHERE id = ?", (servico_id,))
+    if servico:
+        registrar_historico("servicos", servico_id, "excluido", serializar_row(servico), connection)
     connection.commit()
     connection.close()
     limpar_caches_referencia()
-    if servico:
-        registrar_historico("servicos", servico_id, "excluido", serializar_row(servico))
     flash("Serviço excluído com sucesso.", "sucesso")
     return redirect(url_for("listar_servicos_page"))
 
@@ -1856,12 +1920,13 @@ def editar_veterinario(veterinario_id):
             flash("Informe o nome do veterinário.", "erro")
             return render_template("veterinarios/form.html", veterinario=dados, acao="Editar veterinário", secao="veterinarios", breadcrumbs=breadcrumbs_padrao(("Veterinários", url_for("listar_veterinarios_page")), ("Editar veterinário", None)))
         connection = get_db_connection()
+        begin_write(connection)
         original = connection.execute("SELECT * FROM veterinarios WHERE id = ?", (veterinario_id,)).fetchone()
         connection.execute("UPDATE veterinarios SET nome = ? WHERE id = ?", (nome, veterinario_id))
+        registrar_historico("veterinarios", veterinario_id, "editado", {"antes": serializar_row(original), "depois": dados}, connection)
         connection.commit()
         connection.close()
         limpar_caches_referencia()
-        registrar_historico("veterinarios", veterinario_id, "editado", {"antes": serializar_row(original), "depois": dados})
         flash("Veterinário atualizado com sucesso.", "sucesso")
         return redirect(url_for("listar_veterinarios_page"))
     return render_template("veterinarios/form.html", veterinario=veterinario, acao="Editar veterinário", secao="veterinarios", breadcrumbs=breadcrumbs_padrao(("Veterinários", url_for("listar_veterinarios_page")), ("Editar veterinário", None)))
@@ -1874,7 +1939,13 @@ def excluir_veterinario(veterinario_id):
         flash("Confirme a exclusão para continuar.", "erro")
         return redirect(url_for("listar_veterinarios_page"))
     connection = get_db_connection()
+    begin_write(connection)
     veterinario = connection.execute("SELECT * FROM veterinarios WHERE id = ?", (veterinario_id,)).fetchone()
+    clinical = connection.execute("SELECT 1 FROM consultas c WHERE c.veterinario_id=? AND (c.status != 'Agendada' OR EXISTS (SELECT 1 FROM itens_consulta i WHERE i.consulta_id=c.id)) LIMIT 1", (veterinario_id,)).fetchone()
+    if clinical:
+        connection.close()
+        flash('Veterinário com atendimentos clínicos deve ser preservado para manter a autoria.', 'erro')
+        return redirect(url_for('listar_veterinarios_page'))
     uso = connection.execute("SELECT COUNT(*) FROM consultas WHERE veterinario_id = ?", (veterinario_id,)).fetchone()[0]
     total = connection.execute("SELECT COUNT(*) FROM veterinarios").fetchone()[0]
     if not veterinario:
@@ -1905,26 +1976,20 @@ def excluir_veterinario(veterinario_id):
                 (substituto["id"], veterinario_id),
             )
         connection.execute("DELETE FROM veterinarios WHERE id = ?", (veterinario_id,))
+        registrar_historico(
+            "veterinarios", veterinario_id, "excluido",
+            {**serializar_row(veterinario), "consultas_redistribuidas": uso,
+             "novo_veterinario_id": substituto["id"] if uso and substituto else None,
+             "novo_veterinario_nome": substituto["nome"] if uso and substituto else None}, connection,
+        )
         connection.commit()
-    except sqlite3.IntegrityError:
+    except INTEGRITY_ERRORS:
         connection.rollback()
         connection.close()
         flash("Não foi possível excluir o veterinário por causa de vínculos ativos no banco de dados.", "erro")
         return redirect(url_for("listar_veterinarios_page"))
     connection.close()
     limpar_caches_referencia()
-    if veterinario:
-        registrar_historico(
-            "veterinarios",
-            veterinario_id,
-            "excluido",
-            {
-                **serializar_row(veterinario),
-                "consultas_redistribuidas": uso,
-                "novo_veterinario_id": substituto["id"] if uso and substituto else None,
-                "novo_veterinario_nome": substituto["nome"] if uso and substituto else None,
-            },
-        )
     if uso and substituto:
         flash(
             f"Veterinário excluído com sucesso. {uso} consulta(s) foram transferidas para {substituto['nome']}.",
@@ -1935,11 +2000,58 @@ def excluir_veterinario(veterinario_id):
     return redirect(url_for("listar_veterinarios_page"))
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["POST"])
 def logout():
-    session.clear()
+    connection = get_db_connection()
+    try:
+        end_session(connection)
+    finally:
+        connection.close()
     flash("Sessão encerrada com sucesso.", "sucesso")
     return redirect(url_for("login"))
+
+
+@app.route('/conta/senha', methods=['GET', 'POST'])
+@login_obrigatorio
+def alterar_senha():
+    if request.method == 'POST':
+        if not check_password_hash(g.current_user['senha_hash'], request.form.get('senha_atual', '')):
+            flash('Não foi possível alterar a senha. Confira os dados.', 'erro')
+        elif request.form.get('nova_senha') != request.form.get('confirmacao'):
+            flash('A confirmação da senha não confere.', 'erro')
+        elif check_password_hash(g.current_user['senha_hash'], request.form.get('nova_senha', '')):
+            flash('A nova senha deve ser diferente da senha atual.', 'erro')
+        else:
+            try:
+                hashed = password_hash(request.form.get('nova_senha', ''))
+            except ValueError as error:
+                flash(str(error), 'erro')
+            else:
+                connection = get_db_connection()
+                try:
+                    changed = connection.execute('UPDATE usuarios SET senha_hash=?,session_version=session_version+1,must_change_password=0 WHERE id=? AND ativo=1 AND session_version=?', (hashed, g.current_user['id'], g.current_user['session_version']))
+                    if changed.rowcount != 1:
+                        connection.rollback()
+                        session.clear()
+                        return redirect(url_for('login'))
+                    connection.execute('DELETE FROM auth_sessions WHERE usuario_id=?', (g.current_user['id'],))
+                    connection.execute("INSERT INTO security_events(usuario_id,evento) VALUES (?,'password_changed')", (g.current_user['id'],))
+                    connection.commit()
+                    if g.current_user['must_change_password']:
+                        user = connection.execute('SELECT * FROM usuarios WHERE id=?', (g.current_user['id'],)).fetchone()
+                        start_session(connection, user)
+                        flash('Nova senha definida com sucesso.', 'sucesso')
+                        return redirect(url_for('pagina_inicial'))
+                finally:
+                    connection.close()
+                session.clear()
+                return redirect(url_for('login'))
+    return render_template('conta_senha.html', primeiro_acesso=bool(g.current_user['must_change_password']), secao='conta', breadcrumbs=[('Minha conta', None)])
+
+
+@app.route('/health')
+def health():
+    return jsonify(status='ok', version=os.environ.get('RENDER_GIT_COMMIT', 'local'))
 
 
 @app.errorhandler(404)

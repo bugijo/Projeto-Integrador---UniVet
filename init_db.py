@@ -1,14 +1,19 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 import sqlite3
+import os
+import argparse
 
 from werkzeug.security import generate_password_hash
 
 from estoque.schema import criar_tabelas_estoque
+from security import security_schema
+from config import load_settings, verify_database_environment
+from database import connect, is_postgres, begin_write
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATABASE = BASE_DIR / "banco.db"
+DATABASE = load_settings().database
 
 ESPECIES = [
     ("Cão", None), ("Gato", None), ("Ave", None), ("Réptil", None), ("Roedor", None),
@@ -58,11 +63,11 @@ SERVICOS = [
     ("Cirurgia", 120),
 ]
 
-VETERINARIOS = ["Dra. Fernanda Calixto", "Dr. Rafael Moreira"]
+VETERINARIOS = ["Veterinária Demo", "Veterinário Demo"]
 
 USUARIOS_PADRAO = [
     ("admin", "Administrador de testes", "admin", "123456"),
-    ("fernanda.calixto", "Dra. Fernanda Calixto", "veterinaria", "Fer123"),
+    ("vet.demo", "Veterinária Demo", "veterinaria", "Fer123"),
 ]
 
 CATEGORIAS_ESTOQUE_DEMO = [
@@ -87,17 +92,9 @@ def garantir_coluna(cursor, tabela, coluna, definicao):
 
 def criar_ou_atualizar_usuario(cursor, login, nome, perfil, senha):
     usuario = cursor.execute("SELECT id FROM usuarios WHERE login = ?", (login,)).fetchone()
-    senha_hash = generate_password_hash(senha)
     if usuario:
-        cursor.execute(
-            """
-            UPDATE usuarios
-            SET nome = ?, perfil = ?, senha_hash = ?, ativo = 1
-            WHERE id = ?
-            """,
-            (nome, perfil, senha_hash, usuario[0]),
-        )
         return usuario[0]
+    senha_hash = generate_password_hash(senha)
     cursor.execute(
         """
         INSERT INTO usuarios (login, nome, perfil, senha_hash, ativo)
@@ -108,8 +105,46 @@ def criar_ou_atualizar_usuario(cursor, login, nome, perfil, senha):
     return cursor.lastrowid
 
 
-def init_db():
+def init_db(seed_demo=False):
+    if seed_demo and os.environ.get('UNIVET_ENV') == 'production':
+        raise RuntimeError('Dados demo não são permitidos em produção.')
+    if is_postgres(DATABASE):
+        from migrate import migrate
+        mode = os.environ.get('UNIVET_ENV','development')
+        migrate(DATABASE,mode)
+        connection = connect(DATABASE)
+        try:
+            begin_write(connection)
+            for name, parent in ESPECIES:
+                connection.execute('INSERT INTO especies(nome,parent_id) VALUES (?,?) ON CONFLICT DO NOTHING',(name,parent))
+            especies_map = {r[1]:r[0] for r in connection.execute('SELECT id,nome FROM especies')}
+            for especie, names in RACAS.items():
+                for name in names:
+                    connection.execute('INSERT INTO racas(nome,especie_id) VALUES (?,?) ON CONFLICT DO NOTHING',(name,especies_map[especie]))
+            for name, duration in SERVICOS:
+                connection.execute('INSERT INTO servicos(nome,duracao_minutos) VALUES (?,?) ON CONFLICT DO NOTHING',(name,duration))
+            if seed_demo:
+                for name in VETERINARIOS:
+                    connection.execute('INSERT INTO veterinarios(nome) VALUES (?) ON CONFLICT DO NOTHING',(name,))
+                for login, name, role, password in USUARIOS_PADRAO:
+                    criar_ou_atualizar_usuario(connection,login,name,role,password)
+                seed_dados_ficticios(connection,especies_map)
+                seed_estoque_demo(connection)
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+        return
     connection = sqlite3.connect(DATABASE)
+    try:
+        verify_database_environment(connection, os.environ.get('UNIVET_ENV', 'development'), initialize=True)
+    except Exception:
+        connection.close()
+        raise
+    connection.execute('PRAGMA journal_mode=WAL')
+    connection.execute('PRAGMA busy_timeout=10000')
     cursor = connection.cursor()
     cursor.execute("PRAGMA foreign_keys = ON;")
 
@@ -203,6 +238,7 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_condicoes_pet_status ON condicoes_clinicas (pet_id, status, registrado_em)")
 
     criar_tabelas_estoque(connection)
+    security_schema(connection)
 
     cursor.executescript(
         """
@@ -228,19 +264,19 @@ def init_db():
     )
 
     for nome, parent_id in ESPECIES:
-        cursor.execute("INSERT OR IGNORE INTO especies (nome, parent_id) VALUES (?, ?)", (nome, parent_id))
+        cursor.execute("INSERT INTO especies (nome, parent_id) VALUES (?, ?) ON CONFLICT DO NOTHING", (nome, parent_id))
 
     especies_map = {row[1]: row[0] for row in cursor.execute("SELECT id, nome FROM especies").fetchall()}
     for especie_nome, racas in RACAS.items():
         especie_id = especies_map[especie_nome]
         for raca in racas:
-            cursor.execute("INSERT OR IGNORE INTO racas (nome, especie_id) VALUES (?, ?)", (raca, especie_id))
+            cursor.execute("INSERT INTO racas (nome, especie_id) VALUES (?, ?) ON CONFLICT DO NOTHING", (raca, especie_id))
 
     for servico, duracao in SERVICOS:
-        cursor.execute("INSERT OR IGNORE INTO servicos (nome, duracao_minutos) VALUES (?, ?)", (servico, duracao))
+        cursor.execute("INSERT INTO servicos (nome, duracao_minutos) VALUES (?, ?) ON CONFLICT DO NOTHING", (servico, duracao))
 
-    for veterinario in VETERINARIOS:
-        cursor.execute("INSERT OR IGNORE INTO veterinarios (nome) VALUES (?)", (veterinario,))
+    for veterinario in (VETERINARIOS if seed_demo else []):
+        cursor.execute("INSERT INTO veterinarios (nome) VALUES (?) ON CONFLICT DO NOTHING", (veterinario,))
 
     for especie_nome, especie_id in especies_map.items():
         cursor.execute("UPDATE pets SET especie_id = ? WHERE especie_id IS NULL AND lower(especie) = lower(?)", (especie_id, especie_nome))
@@ -250,20 +286,18 @@ def init_db():
                 (raca_id, especie_id, raca_nome),
             )
 
-    ids_autorizados = []
-    for login, nome, perfil, senha in USUARIOS_PADRAO:
-        ids_autorizados.append(criar_ou_atualizar_usuario(cursor, login, nome, perfil, senha))
-    marcadores = ", ".join("?" for _ in ids_autorizados)
-    cursor.execute(f"DELETE FROM usuarios WHERE id NOT IN ({marcadores})", ids_autorizados)
+    if seed_demo:
+        for login, nome, perfil, senha in USUARIOS_PADRAO:
+            criar_ou_atualizar_usuario(cursor, login, nome, perfil, senha)
 
     consultas_por_horario = cursor.execute(
         "SELECT data_hora, COUNT(*) FROM consultas GROUP BY data_hora ORDER BY COUNT(*) DESC LIMIT 1"
     ).fetchone()
-    max_conflitos = consultas_por_horario[1] if consultas_por_horario else 1
+    max_conflitos = consultas_por_horario[1] if consultas_por_horario else 0
     total_vets = cursor.execute("SELECT COUNT(*) FROM veterinarios").fetchone()[0]
     while total_vets < max_conflitos:
         total_vets += 1
-        cursor.execute("INSERT OR IGNORE INTO veterinarios (nome) VALUES (?)", (f"Profissional de agenda {total_vets}",))
+        cursor.execute("INSERT INTO veterinarios (nome) VALUES (?) ON CONFLICT DO NOTHING", (f"Profissional de agenda {total_vets}",))
 
     cursor.execute("DROP INDEX IF EXISTS idx_consulta_inicio_vet")
     veterinario_ids = [row[0] for row in cursor.execute("SELECT id FROM veterinarios ORDER BY id ASC").fetchall()]
@@ -296,13 +330,13 @@ def init_db():
 
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_consulta_inicio_vet ON consultas (veterinario_id, data_hora)")
 
-    seed_dados_ficticios(cursor, especies_map)
-    seed_estoque_demo(cursor)
+    if seed_demo:
+        seed_dados_ficticios(cursor, especies_map)
+        seed_estoque_demo(cursor)
 
     connection.commit()
     connection.close()
     print("Banco de dados inicializado com sucesso.")
-    print("Logins de desenvolvimento: admin / 123456 e fernanda.calixto / Fer123")
 
 
 def seed_dados_ficticios(cursor, especies_map):
@@ -313,7 +347,7 @@ def seed_dados_ficticios(cursor, especies_map):
     # Insere tutores
     for nome, telefone, cpf, endereco in TUTORES_FICTICIOS:
         cursor.execute(
-            "INSERT OR IGNORE INTO tutores (nome, telefone, cpf, endereco) VALUES (?, ?, ?, ?)",
+            "INSERT INTO tutores (nome, telefone, cpf, endereco) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
             (nome, telefone, cpf, endereco),
         )
 
@@ -395,12 +429,12 @@ def seed_dados_ficticios(cursor, especies_map):
 def seed_estoque_demo(cursor):
     """Garante um cenário fictício de estoque para apresentações acadêmicas."""
     for nome, descricao in CATEGORIAS_ESTOQUE_DEMO:
-        cursor.execute("INSERT OR IGNORE INTO categorias (nome, descricao) VALUES (?, ?)", (nome, descricao))
+        cursor.execute("INSERT INTO categorias (nome, descricao) VALUES (?, ?) ON CONFLICT DO NOTHING", (nome, descricao))
     categorias = {row[0]: row[1] for row in cursor.execute("SELECT nome, id FROM categorias").fetchall()}
 
     for fornecedor in FORNECEDORES_ESTOQUE_DEMO:
         cursor.execute(
-            "INSERT OR IGNORE INTO fornecedores (nome, documento, telefone, email, endereco) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO fornecedores (nome, documento, telefone, email, endereco) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
             fornecedor,
         )
     fornecedores = {row[0]: row[1] for row in cursor.execute("SELECT nome, id FROM fornecedores").fetchall()}
@@ -482,4 +516,6 @@ def seed_estoque_demo(cursor):
 
 
 if __name__ == "__main__":
-    init_db()
+    parser = argparse.ArgumentParser(description='Migração local; sem usuários/dados demo por padrão.')
+    parser.add_argument('--demo', action='store_true', help='Somente banco descartável de demonstração.')
+    init_db(seed_demo=parser.parse_args().demo)

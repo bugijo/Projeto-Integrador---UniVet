@@ -14,6 +14,7 @@
     <section class="card form-card">
         <div class="card-body">
             <form method="post" class="form-grid two-columns" id="consulta-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="field-group">
                     <label for="data_hora">Data e hora inicial</label>
                     <input type="datetime-local" id="data_hora" name="data_hora" value="{{ consulta['data_hora'] if consulta else '' }}" required>
@@ -117,7 +118,7 @@
         </div>
     </section>
 
-    <script>
+    <script nonce="{{ g.csp_nonce }}">
         const camposDisponibilidade = ["data_hora", "servico_id", "tipo_atendimento", "veterinario_id"];
         const feedback = document.getElementById("feedback-disponibilidade");
         const duracaoPreview = document.getElementById("duracao_preview");

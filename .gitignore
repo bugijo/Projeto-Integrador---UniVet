@@ -14,3 +14,11 @@ server.out.log
 server.err.log
 output/pdf/
 tmp/
+artifacts/
+*.dump
+*.backup
+*.sql.gz
+.pgpass
+docs/audit-artifacts/
+perf/results/
+.claude/

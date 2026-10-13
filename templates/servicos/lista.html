@@ -27,7 +27,8 @@
                                         <a class="btn btn-secondary" href="{{ url_for('editar_servico', servico_id=servico['id']) }}">Editar</a>
                                         <a class="btn btn-secondary" href="{{ url_for('visualizar_historico', entidade='servicos', registro_id=servico['id']) }}">Histórico</a>
                                         <form method="post" action="{{ url_for('excluir_servico', servico_id=servico['id']) }}">
-                                            <button class="btn btn-danger" type="submit" onclick="return confirm('Deseja excluir este serviço?')">Excluir</button>
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button class="btn btn-danger" type="submit" data-confirm="Deseja excluir este serviço?">Excluir</button>
                                         </form>
                                     </div>
                                 </td>

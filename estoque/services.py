@@ -1,10 +1,16 @@
 """Consultas e regras de negócio do módulo de estoque."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from database import begin_write
+import math
 
 
 TIPOS_PRODUTO = ("Medicamento", "Vacina", "Material", "Produto")
 TIPOS_MOVIMENTACAO = ("Entrada", "Saída", "Ajuste", "Estorno")
+# Limites por operação/lote e por preço unitário, evitando overflow em totais.
+MAX_QUANTIDADE = 1_000_000_000
+MAX_VALOR = 1_000_000_000
+MAX_MARGEM = 10_000
 
 
 class EstoqueError(Exception):
@@ -19,11 +25,18 @@ def _agora():
     return datetime.now().strftime("%Y-%m-%dT%H:%M")
 
 
-def _quantidade(valor):
+def _numero(valor, nome, limite, minimo=0):
     try:
         valor = float(valor)
-    except (TypeError, ValueError):
-        raise EstoqueError("Informe uma quantidade válida.")
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise EstoqueError(f"Informe {nome} válido.") from exc
+    if not math.isfinite(valor) or not minimo <= valor <= limite:
+        raise EstoqueError(f"Informe {nome} finito entre {minimo:g} e {limite:g}.")
+    return valor
+
+
+def _quantidade(valor):
+    valor = _numero(valor, "uma quantidade", MAX_QUANTIDADE)
     if valor <= 0:
         raise EstoqueError("A quantidade deve ser maior que zero.")
     return valor
@@ -32,13 +45,8 @@ def _quantidade(valor):
 def _valor_praticado(valor, sugerido=0):
     """Normaliza o preço praticado; quando omitido, usa a sugestão do lote."""
     if valor is None or str(valor).strip() == "":
-        return round(float(sugerido or 0), 2)
-    try:
-        valor = float(str(valor).replace(",", "."))
-    except (TypeError, ValueError) as exc:
-        raise EstoqueError("Informe um valor de venda válido.") from exc
-    if valor < 0:
-        raise EstoqueError("O valor de venda não pode ser negativo.")
+        valor = sugerido if sugerido is not None else 0
+    valor = _numero(str(valor).replace(",", "."), "um valor de venda", MAX_VALOR)
     return round(valor, 2)
 
 
@@ -134,9 +142,9 @@ def listar_produtos(connection, filtros=None):
         sql += " AND produtos.estoque_minimo > 0"
     if filtros.get("somente_ativos"):
         sql += " AND produtos.ativo = 1"
-    sql += " GROUP BY produtos.id"
+    sql += " GROUP BY produtos.id, categorias.nome"
     if filtros.get("situacao") == "baixo":
-        sql += " HAVING estoque_total < produtos.estoque_minimo"
+        sql += " HAVING COALESCE(SUM(CASE WHEN lotes.ativo = 1 THEN lotes.quantidade_atual ELSE 0 END), 0) < produtos.estoque_minimo"
     return _paginacao(connection, sql, params, filtros, " ORDER BY produtos.ativo DESC, produtos.nome ASC")
 
 
@@ -151,7 +159,7 @@ def buscar_produto(connection, produto_id):
         LEFT JOIN categorias ON categorias.id = produtos.categoria_id
         LEFT JOIN lotes ON lotes.produto_id = produtos.id
         WHERE produtos.id = ?
-        GROUP BY produtos.id
+        GROUP BY produtos.id, categorias.nome
         """,
         (produto_id,),
     ).fetchone()
@@ -175,15 +183,17 @@ def listar_lotes(connection, filtros=None):
         sql += " AND lotes.fornecedor_id = ?"
         params.append(filtros["fornecedor_id"])
     if filtros.get("proximos"):
-        sql += " AND lotes.validade IS NOT NULL AND date(lotes.validade) <= date('now', '+30 day') AND date(lotes.validade) >= date('now')"
+        sql += " AND lotes.validade IS NOT NULL AND lotes.validade <= ? AND lotes.validade >= ?"
+        params.extend(((datetime.now().date()+timedelta(days=30)).isoformat(),datetime.now().date().isoformat()))
     if filtros.get("vencidos"):
-        sql += " AND lotes.validade IS NOT NULL AND date(lotes.validade) < date('now') AND lotes.quantidade_atual > 0"
+        sql += " AND lotes.validade IS NOT NULL AND lotes.validade < ? AND lotes.quantidade_atual > 0"
+        params.append(datetime.now().date().isoformat())
     return _paginacao(
         connection,
         sql,
         params,
         filtros,
-        " ORDER BY CASE WHEN lotes.quantidade_atual > 0 AND lotes.validade IS NOT NULL THEN 0 ELSE 1 END, date(lotes.validade), lotes.id DESC",
+        " ORDER BY CASE WHEN lotes.quantidade_atual > 0 AND lotes.validade IS NOT NULL THEN 0 ELSE 1 END, lotes.validade, lotes.id DESC",
     )
 
 
@@ -215,10 +225,10 @@ def listar_movimentacoes(connection, filtros=None, limite=None):
         sql += " AND movimentacoes_estoque.tipo = ?"
         params.append(filtros["tipo"])
     if filtros.get("data_inicio"):
-        sql += " AND date(movimentacoes_estoque.criado_em) >= date(?)"
+        sql += " AND substr(CAST(movimentacoes_estoque.criado_em AS TEXT),1,10) >= ?"
         params.append(filtros["data_inicio"])
     if filtros.get("data_fim"):
-        sql += " AND date(movimentacoes_estoque.criado_em) <= date(?)"
+        sql += " AND substr(CAST(movimentacoes_estoque.criado_em AS TEXT),1,10) <= ?"
         params.append(filtros["data_fim"])
     sql += " ORDER BY movimentacoes_estoque.criado_em DESC, movimentacoes_estoque.id DESC"
     if filtros.get("paginado"):
@@ -242,15 +252,15 @@ def resumo_estoque(connection):
             GROUP BY produtos.id
             HAVING COALESCE(SUM(lotes.quantidade_atual), 0) < produtos.estoque_minimo
                AND produtos.estoque_minimo > 0
-        )
+        ) AS produtos_baixos
         """
     ).fetchone()[0]
     vencendo = connection.execute(
         """
         SELECT COUNT(*) FROM lotes
         WHERE ativo = 1 AND quantidade_atual > 0 AND validade IS NOT NULL
-          AND date(validade) BETWEEN date('now') AND date('now', '+30 day')
-        """
+          AND validade BETWEEN ? AND ?
+        """, (datetime.now().date().isoformat(),(datetime.now().date()+timedelta(days=30)).isoformat())
     ).fetchone()[0]
     return {"produtos": produtos, "unidades": estoque, "valor_estoque": float(valor_estoque or 0), "baixo": baixo, "vencendo": vencendo}
 
@@ -260,19 +270,15 @@ def registrar_entrada(connection, produto_id, fornecedor_id, numero_lote, quanti
         raise EstoqueError("Informe o número do lote.")
     quantidade = _quantidade(quantidade)
     validade = _data_valida(validade, "validade")
-    try:
-        valor = float(valor or 0)
-    except (TypeError, ValueError):
-        raise EstoqueError("Informe um valor de compra válido.")
-    if valor < 0:
-        raise EstoqueError("O valor de compra não pode ser negativo.")
+    valor = _numero(valor if valor not in (None, "") else 0, "um valor de compra", MAX_VALOR)
     produto = connection.execute("SELECT margem_lucro_percentual FROM produtos WHERE id = ?", (produto_id,)).fetchone()
     if not produto:
         raise EstoqueError("Produto não encontrado.")
-    valor_sugerido = round(valor * (1 + float(produto["margem_lucro_percentual"] or 0) / 100), 2)
+    margem = _numero(produto["margem_lucro_percentual"] or 0, "uma margem", MAX_MARGEM)
+    valor_sugerido = _valor_praticado(valor * (1 + margem / 100))
     agora = _agora()
     try:
-        connection.execute("BEGIN IMMEDIATE")
+        begin_write(connection)
         cursor = connection.execute(
             """
             INSERT INTO lotes (produto_id, fornecedor_id, numero_lote, quantidade_inicial, quantidade_atual, validade, valor_compra_unitario, valor_venda_sugerido_unitario, data_entrada)
@@ -299,7 +305,7 @@ def registrar_saida_fefo(connection, produto_id, quantidade, usuario_id, motivo=
     quantidade = _quantidade(quantidade)
     hoje = datetime.now().strftime("%Y-%m-%d")
     try:
-        connection.execute("BEGIN IMMEDIATE")
+        begin_write(connection)
         lotes = connection.execute(
             """
             SELECT * FROM lotes
@@ -352,7 +358,7 @@ def registrar_uso_consulta(connection, consulta_id, produto_id, quantidade, usua
         raise EstoqueError("Consulta não encontrada.")
     hoje = datetime.now().strftime("%Y-%m-%d")
     try:
-        connection.execute("BEGIN IMMEDIATE")
+        begin_write(connection)
         lotes = connection.execute(
             """
             SELECT * FROM lotes
@@ -405,22 +411,17 @@ def registrar_uso_consulta(connection, consulta_id, produto_id, quantidade, usua
 
 
 def registrar_ajuste(connection, lote_id, nova_quantidade, usuario_id, motivo):
+    nova_quantidade = _numero(nova_quantidade, "uma quantidade", MAX_QUANTIDADE)
     try:
-        nova_quantidade = float(nova_quantidade)
-    except (TypeError, ValueError):
-        raise EstoqueError("Informe uma quantidade válida.")
-    if nova_quantidade < 0:
-        raise EstoqueError("A quantidade ajustada não pode ser negativa.")
-    lote = connection.execute("SELECT * FROM lotes WHERE id = ?", (lote_id,)).fetchone()
-    if not lote:
-        raise EstoqueError("Lote não encontrado.")
-    diferenca = nova_quantidade - float(lote["quantidade_atual"])
-    if abs(diferenca) < 0.000001:
-        raise EstoqueError("A nova quantidade é igual ao saldo atual.")
-    descricao = motivo.strip() if motivo and motivo.strip() else "Ajuste de inventário"
-    descricao = f"{descricao} ({'aumento' if diferenca > 0 else 'redução'})"
-    try:
-        connection.execute("BEGIN IMMEDIATE")
+        begin_write(connection)
+        lote = connection.execute("SELECT * FROM lotes WHERE id = ?", (lote_id,)).fetchone()
+        if not lote:
+            raise EstoqueError("Lote não encontrado.")
+        diferenca = nova_quantidade - _numero(lote["quantidade_atual"], "um saldo", MAX_QUANTIDADE)
+        if abs(diferenca) < 0.000001:
+            raise EstoqueError("A nova quantidade é igual ao saldo atual.")
+        descricao = motivo.strip() if motivo and motivo.strip() else "Ajuste de inventário"
+        descricao = f"{descricao} ({'aumento' if diferenca > 0 else 'redução'})"
         atualizado = connection.execute(
             "UPDATE lotes SET quantidade_atual = ? WHERE id = ? AND quantidade_atual + ? >= 0",
             (nova_quantidade, lote_id, diferenca),
@@ -459,29 +460,29 @@ def listar_itens_consulta(connection, consulta_id):
 
 
 def registrar_estorno(connection, movimentacao_id, usuario_id, motivo="Estorno"):
-    origem = connection.execute("SELECT * FROM movimentacoes_estoque WHERE id = ?", (movimentacao_id,)).fetchone()
-    if not origem:
-        raise EstoqueError("Movimentação não encontrada.")
-    if origem["tipo"] not in ("Saída", "Ajuste"):
-        raise EstoqueError("Somente saídas e ajustes podem ser estornados.")
-    ja_estornada = connection.execute(
-        "SELECT 1 FROM movimentacoes_estoque WHERE movimentacao_origem_id = ? AND tipo = 'Estorno'",
-        (movimentacao_id,),
-    ).fetchone()
-    if ja_estornada:
-        raise EstoqueError("Esta movimentação já possui um estorno.")
-    variacao_origem = origem["quantidade_variacao"]
-    if variacao_origem is None:
-        variacao_origem = -origem["quantidade"] if origem["tipo"] == "Saída" else origem["quantidade"]
-    variacao_estorno = -float(variacao_origem)
     try:
-        connection.execute("BEGIN IMMEDIATE")
+        begin_write(connection)
+        origem = connection.execute("SELECT * FROM movimentacoes_estoque WHERE id = ?", (movimentacao_id,)).fetchone()
+        if not origem:
+            raise EstoqueError("Movimentação não encontrada.")
+        if origem["tipo"] not in ("Saída", "Ajuste"):
+            raise EstoqueError("Somente saídas e ajustes podem ser estornados.")
+        ja_estornada = connection.execute(
+            "SELECT 1 FROM movimentacoes_estoque WHERE movimentacao_origem_id = ? AND tipo = 'Estorno'",
+            (movimentacao_id,),
+        ).fetchone()
+        if ja_estornada:
+            raise EstoqueError("Esta movimentação já possui um estorno.")
+        variacao_origem = origem["quantidade_variacao"]
+        if variacao_origem is None:
+            variacao_origem = -origem["quantidade"] if origem["tipo"] == "Saída" else origem["quantidade"]
+        variacao_estorno = -_numero(variacao_origem, "uma variação", MAX_QUANTIDADE, -MAX_QUANTIDADE)
         atualizado = connection.execute(
-            "UPDATE lotes SET quantidade_atual = quantidade_atual + ? WHERE id = ? AND quantidade_atual + ? >= 0",
-            (variacao_estorno, origem["lote_id"], variacao_estorno),
+            "UPDATE lotes SET quantidade_atual = quantidade_atual + ? WHERE id = ? AND quantidade_atual + ? BETWEEN 0 AND ?",
+            (variacao_estorno, origem["lote_id"], variacao_estorno, MAX_QUANTIDADE),
         )
         if atualizado.rowcount != 1:
-            raise EstoqueError("O estorno resultaria em estoque negativo.")
+            raise EstoqueError("O estorno resultaria em estoque negativo ou acima do limite.")
         estorno = connection.execute(
             """
             INSERT INTO movimentacoes_estoque (produto_id, lote_id, tipo, quantidade, quantidade_variacao, valor_unitario_sugerido, valor_unitario_praticado, motivo, consulta_id, usuario_id, movimentacao_origem_id)
@@ -500,12 +501,12 @@ def consumo_por_produto(connection, produto_id, dias=30):
     dados = connection.execute(
         """
         SELECT COALESCE(SUM(quantidade), 0) AS quantidade,
-               COUNT(DISTINCT date(criado_em)) AS dias_com_uso
+               COUNT(DISTINCT substr(CAST(criado_em AS TEXT),1,10)) AS dias_com_uso
         FROM movimentacoes_estoque
         WHERE produto_id = ? AND tipo = 'Saída'
-          AND date(criado_em) >= date('now', ?)
+          AND substr(CAST(criado_em AS TEXT),1,10) >= ?
         """,
-        (produto_id, f"-{int(dias)} day"),
+        (produto_id, (datetime.now().date()-timedelta(days=int(dias))).isoformat()),
     ).fetchone()
     quantidade = float(dados["quantidade"] or 0)
     medio_diario = quantidade / dias if quantidade else 0
@@ -515,14 +516,14 @@ def consumo_por_produto(connection, produto_id, dias=30):
 def historico_consumo_diario(connection, produto_id, dias=7):
     registros = connection.execute(
         """
-        SELECT date(criado_em) AS dia, COALESCE(SUM(quantidade), 0) AS quantidade
+        SELECT substr(CAST(criado_em AS TEXT),1,10) AS dia, COALESCE(SUM(quantidade), 0) AS quantidade
         FROM movimentacoes_estoque
         WHERE produto_id = ? AND tipo = 'Saída'
-          AND date(criado_em) >= date('now', ?)
-        GROUP BY date(criado_em)
+          AND substr(CAST(criado_em AS TEXT),1,10) >= ?
+        GROUP BY substr(CAST(criado_em AS TEXT),1,10)
         ORDER BY dia ASC
         """,
-        (produto_id, f"-{int(dias) - 1} day"),
+        (produto_id, (datetime.now().date()-timedelta(days=int(dias)-1)).isoformat()),
     ).fetchall()
     por_dia = {item["dia"]: float(item["quantidade"]) for item in registros}
     hoje = datetime.now().date()
@@ -539,7 +540,7 @@ def relatorio_consumo(connection, dias=30, produto_id=None, categoria_id=None):
         FROM produtos
         LEFT JOIN categorias ON categorias.id = produtos.categoria_id
         LEFT JOIN movimentacoes_estoque ON movimentacoes_estoque.produto_id = produtos.id
-          AND date(movimentacoes_estoque.criado_em) >= date('now', ?)
+          AND substr(CAST(movimentacoes_estoque.criado_em AS TEXT),1,10) >= ?
         WHERE produtos.ativo = 1
     """
     params = [f"-{int(dias)} day"]
@@ -549,7 +550,7 @@ def relatorio_consumo(connection, dias=30, produto_id=None, categoria_id=None):
     if categoria_id:
         sql += " AND produtos.categoria_id = ?"
         params.append(categoria_id)
-    sql += " GROUP BY produtos.id ORDER BY consumo DESC, produtos.nome ASC"
+    sql += " GROUP BY produtos.id, categorias.nome ORDER BY consumo DESC, produtos.nome ASC"
     return connection.execute(sql, params).fetchall()
 
 

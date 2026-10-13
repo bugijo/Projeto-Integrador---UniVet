@@ -1,0 +1,126 @@
+# Estado atual — 28/09/2026
+
+## Go-live controlado autorizado — 29/09/2026
+
+- Aprovação humana/clínica concedida. Deploy live no commit `860978e` no início da operação; TLS preservado (`verify-full`, `sslrootcert=system`, `channel_binding=require`).
+- Backup pré-go-live aprovado: `pg_dump -Fc`, timestamp UTC `2026-09-29T00:01:47Z`, 63.993 bytes, SHA-256 `f501bad491a0acff13637a806d64ac15525a346790d9f4831144c149d03c901b`, `pg_restore --list` com 177 objetos.
+- Conta `DrFernanda` criada uma única vez, papel `admin`, ativa, senha armazenada somente como hash e `must_change_password=1`. A senha temporária foi gerada aleatoriamente e entregue fora deste repositório/documentação; não foi registrada em texto, logs ou Git.
+- Primeiro login controlado passou e redirecionou para `/conta/senha`; a sessão de teste foi revogada. A senha definitiva não foi definida pelo sistema.
+- Smoke pós-go-live: `/health=200`, `/login=200`, API sem sessão `401`, CSV sem sessão `302`; headers de segurança presentes. Neon `production` mantém Alembic `002_session_indexes`, zero sessões, zero QA e zero registros clínicos.
+- Demo continua no projeto Neon separado com `environment=demo`. Nenhum cliente, animal, prontuário, estoque, consulta ou dado real foi inserido.
+- **Classificação: APTO PARA INÍCIO DE OPERAÇÃO CLÍNICA.** Operação clínica deve começar somente com a usuária escolhendo sua senha definitiva no primeiro acesso.
+
+## Homologação remota parcial — 28/09/2026
+
+## Homologação remota QA concluída — 28/09/2026
+
+## Homologação técnica final — 28/09/2026
+
+## Última rodada — carga local corrigida no harness — 28/09/2026
+
+- O resultado anterior foi classificado como `TEST_HARNESS_LIMITATION`: as 10 recusas do nível 20 vieram do login compartilhado e do rate limit esperado, sem 5xx, timeout, corrupção ou falha de banco.
+- O harness foi corrigido, sem alteração da aplicação: 50 contas `bench_qa_*` fictícias em banco temporário e IPs locais distintos via `UNIVET_TRUST_PROXY=1`; o rate limit permaneceu ativo. Commit `9a3340b`.
+- Carga local final: 20 usuários `2857/2857`, 30 usuários `1929/1929`, 50 usuários `3304/3304`; zero erros em todos, integridade OK e zero foreign-key errors. p50/p95/p99: 20 = 13/270/1400 ms; 30 = 88/1800/3000 ms; 50 = 89/1000/3100 ms. CPU média no nível 50: 92,85%, sem 5xx ou timeout.
+- Sanidade Neon pós-carga: usuários, sessões, tutores, pets, consultas, produtos, lotes e movimentações = zero; `alembic_version=002_session_indexes`; ambiente `production`. `/health` e `/login` remotos = 200.
+- Bandit: `app.py:2067` = `ACCEPTED_RISK` (bind exclusivo do servidor de desenvolvimento); `estoque/services.py:103` = `FALSE_POSITIVE/ACCEPTED_RISK` (SQL estrutural interno com valores parametrizados). HIGH=0.
+- **Classificação: TECNICAMENTE APTO — AGUARDANDO APROVAÇÃO CLÍNICA.** Não criar `DrFernanda` nem inserir dados reais sem autorização humana explícita.
+
+- Auditoria final: branch `security/demo-producao-isolados`, HEAD `f0289b51f43fadb1cfdc3c920f5ed42dc0d9e87e`, árvore limpa antes desta atualização; Render live no mesmo commit documental.
+- Suítes atuais: `unittest` completo executou 119 testes, 81 passaram, 0 falharam, 0 errors e 38 foram skipped por PostgreSQL opt-in; PostgreSQL opt-in executou 38 testes e 74 subtestes, todos aprovados. `compileall` e `git diff --check` passaram.
+- Segurança estática atual: `pip-audit` sem vulnerabilidades conhecidas; Bandit com 0 HIGH, 2 MEDIUM conhecidos (bind de desenvolvimento em `app.py:2067` e SQL interno de paginação em `estoque/services.py:103`) e 0 LOW.
+- Backup lógico final: `pg_dump` custom via container PostgreSQL 17, origem Neon production, timestamp UTC `2026-09-28T20:25:46Z`, 64.038 bytes, SHA-256 `c9c6eba3a3c85eaa47e4b9d22ca26ef8d0ed7e786c73a10497e5cedd9b8992a1`; `pg_restore --list` encontrou 177 objetos.
+- Restore isolado: PostgreSQL 17 temporário, `--no-owner --no-acl`, restore concluído; sanity `002_session_indexes|22 tabelas|28 FKs|0 usuários|1 ambiente`. Container e arquivos temporários foram removidos ao terminar. A falha inicial por role `neondb_owner` foi específica do ownership do ambiente temporário e não afetou o backup.
+- Soak remoto conservador: 601 s, 212 requests, 212 sucessos, 0 errors, 0 timeouts, 0 respostas 5xx, p50 276,0 ms, p95 646,3 ms, p99 744,7 ms.
+- Carga remota `/health`: níveis 2/5/10/15/20, todos sem erro ou 5xx; o nível 2 registrou cold start p99 21.863 ms, enquanto 5–20 ficaram com p99 entre 711 e 799 ms.
+- Carga local oficial: perfis 1/5/10 passaram sem falhas; no perfil 20 ocorreram 10 falhas de login por rate limit legítimo de conta compartilhada pelo gerador, com integridade e FKs OK. O runner interrompeu antes de 30/50 conforme protocolo; esses níveis são NOT_AVAILABLE nesta rodada.
+- Fluxo remoto adicional: troca de senha passou, senha antiga falhou, senha nova passou, usuário veterinário recebeu 403 em escrita administrativa, CSRF inválido 400, CSV sem sessão 302 e markers sensíveis ausentes.
+- Não existe capability Render separada de restart nas ferramentas autenticadas disponíveis; classificado `NOT_AVAILABLE_SEPARATELY`. O redeploy live reiniciou o runtime e preservou o banco Neon.
+- **Classificação: NÃO APTO PARA DADOS REAIS.** O bloqueador técnico restante é a carga local progressiva interrompida em 20 por rate limit, além da aprovação humana/clínica; `DrFernanda` não foi criada.
+
+- O Neon MCP autenticado confirmou `univet-clinica` (`bold-truth-16986362`), ambiente `production` e `alembic_version=002_session_indexes`, igual ao head local. Nenhuma migration foi aplicada nesta etapa.
+- Foi criado o snapshot Neon `homologacao-pre-qa-20260928` (`snap-withered-unit-arp2b8xz`) antes dos testes. O Neon recusou um segundo snapshot por limite do projeto; nenhum restore sobre a branch live foi executado.
+- Foram inseridos somente registros QA explicitamente fictícios, incluindo login temporário, tutor, pet, veterinário, consulta e estoque. Eles sobreviveram ao redeploy `dep-datbt38u01pc73e1e10g` e foram removidos por IDs explícitos; a verificação final deixou os contadores QA e `auth_sessions` em zero.
+- Fluxos remotos observados: login 302→dashboard 200, primeiro acesso 302→`/conta/senha`, API sem sessão 401, API autenticada 200, CSV autenticado 200, cookie `Secure; HttpOnly; SameSite=Lax`, logout POST 302 e acesso posterior protegido 302→`/login`.
+- Isolamento de banco confirmado pelos projetos Neon independentes: Clínica `environment=production`; Demo `environment=demo`. Não houve escrita no projeto Demo.
+- Carga remota curta de `/health`: concorrência 2/5/10, todos HTTP 200, sem soak prolongado. A carga local PostgreSQL permanece em 38 testes/74 subtestes aprovados.
+- Limites restantes: rotina completa de backup/restore final em branch temporária não repetida por limite de snapshots; restart manual separado não exposto pelo Render MCP; carga remota longa não executada. `DrFernanda` não foi criada.
+- **Classificação: NÃO APTO PARA DADOS REAIS.**
+
+- A conexão Render → Neon está operacional no commit corretivo `10e09dc`: `/health`, `/login` e `/` retornam 200; psycopg 3.3.6 e libpq 18.6 foram confirmados nos logs.
+- A suíte PostgreSQL local foi concluída: **38 testes e 74 subtestes aprovados em 365,87 s**. O travamento anterior foi causado por containers descartáveis `univet-test-*` órfãos após interrupção do runner; eles foram removidos e a execução normal passou.
+- `pip-audit` não encontrou vulnerabilidades conhecidas. Bandit encontrou dois médios já conhecidos: bind local em `app.py` e SQL interno de paginação em `estoque/services.py`; nenhum alto.
+- Acesso Neon MCP está sem autenticação nesta sessão, portanto a leitura direta de `alembic_version`, criação de dados fictícios, backup/restore final e validação remota de persistência não foram executados.
+- **Classificação: NÃO APTO PARA DADOS REAIS.**
+
+## Verificação do deploy TLS da Clínica — 28/09/2026
+
+- O commit `2901932` foi solicitado no serviço Render `univet-clinica`, após `DATABASE_URL` receber `sslmode=verify-full`, `sslrootcert=system` e `channel_binding=require`. Nenhum segredo foi registrado nesta documentação.
+- A URL pública `https://univet-clinica.onrender.com` responde via HTTPS, mas `/`, `/login` e `/health` retornam **503** com `Banco temporariamente indisponível.`. O processo Gunicorn está acessível, porém a aplicação não está operacional.
+- A resposta pública observada contém `Strict-Transport-Security`, `Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Permissions-Policy`, `Referrer-Policy`, `Cache-Control: no-store` e `server: cloudflare`; isso confirma a camada HTTP observada, não a saúde do banco nem a versão de libpq.
+- Ainda não há evidência dos logs do Render confirmando a versão efetiva de libpq, conexão Neon, migrations, login, cookies, persistência após restart/redeploy, isolamento remoto ou carga. Esses itens permanecem bloqueadores.
+- `DrFernanda` não foi criada e nenhuma senha temporária foi gerada.
+- **Classificação: BLOQUEADO / NÃO APTO PARA DADOS REAIS.** Não prosseguir para homologação destrutiva, carga remota ou criação de conta enquanto o banco não estiver saudável.
+
+## Correção Render → Neon — 28/09/2026
+
+- Logs autenticados do Render confirmaram inicialmente `SSL error: certificate verify failed` para o endpoint pooler Neon e tentativas IPv6 sem rota. O runtime foi identificado como Python 3.14, psycopg `3.3.6` e, após probe sanitizado, libpq `18.6`.
+- A resolução `sslrootcert=system` foi mantida na configuração declarada, mas o código passou a explicitar um bundle CA somente quando legível no sistema (`/etc/ssl/certs/ca-certificates.crt` ou equivalente). Não há certificado privado no repositório.
+- O erro seguinte foi `unsupported startup parameter in options: statement_timeout`, rejeitado pelo pooler Neon. Os parâmetros de startup foram removidos apenas para hosts `-pooler.`; o pool e os timeouts de aquisição permanecem ativos. Endpoints diretos mantêm os timeouts de sessão.
+- O commit `10e09dc` está live no serviço `univet-clinica`. O log sanitizado confirma `psycopg=3.3.6`, `libpq=18.6`, `tls=verify-full`, `sslrootcert=system` e `channel_binding=require`.
+- Verificação pública pós-deploy: `/health` 200, `/login` 200 e `/` 200. Login com identidade fictícia inexistente foi rejeitado sem inserir dados. O schema respondeu às consultas da aplicação; a versão Alembic não é exposta por endpoint e permanece baseada na migração remota previamente aplicada.
+- Nenhum dado real foi inserido, nenhuma credencial foi alterada e `DrFernanda` não foi criada. Carga, concorrência, restart operacional e validação independente da versão Alembic continuam fora desta correção.
+- **Classificação: NÃO APTO PARA DADOS REAIS.** A conexão está operacional, mas a homologação clínica completa ainda não foi aprovada.
+
+## Atualização do redeploy da Clínica — 26/09/2026
+
+- O serviço Render `univet-clinica` foi criado e permanece no plano Free, sem alteração do serviço Demo `univet`.
+- Redeploy controlado do commit `716d29e859a87d2fc45263b212744e835eb306b3` concluiu o build, mas falhou na inicialização (`update_failed`).
+- O log não expôs segredo e registrou `DATABASE_URL PostgreSQL incompleta.`; portanto o valor efetivamente recebido pelo processo ainda não contém uma URL PostgreSQL completa, apesar da correção manual informada. A causa não foi resolvida por código.
+- A URL pública clínica ainda não está homologável: login, persistência HTTP, restart/redeploy, fluxo fictício, isolamento remoto, carga e concorrência remota permanecem pendentes. Não houve dados reais nem criação de `DrFernanda`.
+- Testes locais continuam válidos: SQLite 116 OK; PostgreSQL HTTP 14 OK; estoque/concorrência PostgreSQL 24 OK; regressão de configuração/segurança 21 OK; `git diff --check` OK.
+- **Classificação: NÃO APTO PARA DADOS REAIS.** Ação humana necessária no Render: revisar o campo secreto `DATABASE_URL`, colar a URL Neon completa (sem aspas, sem `DATABASE_URL=`, sem placeholder), salvar e só então solicitar novo redeploy.
+
+## Homologação remota parcial — Neon Free — 23/09/2026
+
+- A conta/organização Neon foi confirmada pela CLI oficial no plano **Free**. A API de limite de gastos não está disponível nesse plano; não houve upgrade, cartão cadastrado por esta tarefa ou recurso pago criado.
+- Foram criados dois projetos PostgreSQL independentes, ambos sem dados reais: `univet-demo` (`winter-resonance-45187411`) e `univet-clinica` (`bold-truth-16986362`).
+- Conexões remotas foram validadas com SSL `verify-full` e CA do sistema. Migrations Alembic concluídas nos dois bancos.
+- Demo recebeu somente seed fictício. Verificação: `usuarios=2`, `tutores=5`, `pets=8`, `consultas=4`, `produtos=5`, `lotes=7`, `movimentacoes_estoque=10`.
+- Clínica recebeu apenas o schema e dados estruturais de referência; os contadores de negócio verificados estão zerados. Não houve seed demo nem importação real.
+- `pg_dump` remoto foi gerado com cliente PostgreSQL 17 em container descartável. O restore em banco de teste separado ainda não foi aprovado devido a incompatibilidades/instabilidade do ensaio descartável; não declarar backup/restore operacional até repetir com evidência limpa.
+- Restore remoto foi posteriormente concluído em projeto temporário separado e removido após a validação: 22 tabelas, 28 foreign keys, versão Alembic `002_session_indexes`, contagens equivalentes e fingerprints iguais nas 22 tabelas. `univet-demo` e `univet-clinica` não foram usados como destino.
+- O MCP Neon não está exposto como ferramenta nesta sessão do Codex; a CLI oficial autenticada foi o fallback. Nenhum token foi colocado no Git, na documentação ou no chat.
+- Nenhum segundo serviço Render foi criado. O serviço Demo existente permaneceu inalterado; a criação de um serviço clínico Free foi bloqueada preventivamente pelos riscos de cobrança suplementar, suspensão e ausência de persistência adequada do plano Free.
+- **Classificação: NÃO APTO PARA DADOS REAIS.** O procedimento de backup/restore remoto foi validado em banco separado. Persistem bloqueadores de serviço clínico isolado, headers/HTTPS efetivos, restart/redeploy, fluxo remoto, carga e revisão operacional.
+- Regressão focada após esta rodada: **20 testes OK** (`tests.test_environments` + `tests.test_security`) em 73,542 s, usando `PYTHONPATH=tests`; nenhum código de aplicação foi alterado.
+
+## Atualização da validação PostgreSQL e carga local — 22/09/2026
+
+- A regressão identificada no primeiro teste de carga PostgreSQL foi corrigida no adaptador de linhas: timestamps `datetime` retornam novamente a precisão de minuto esperada pelas rotas legadas. A regressão de agenda foi adicionada a `tests/test_postgres.py`.
+- Pós-correção: **14 testes HTTP PostgreSQL OK** em 82,301 s; regressão SQLite **115 testes OK, 38 ignorados**, em 20,312 s. Os 38 ignorados são os grupos PostgreSQL opt-in quando a suíte roda sem `UNIVET_TEST_POSTGRES=1`.
+- A nova carga local descartável, com Gunicorn/2 workers e dados fictícios, teve 0 falhas nos perfis de 1 e 5 usuários. Nos perfis de 10–50 e no soak de 10 usuários/120 s, as falhas foram exclusivamente `POST /login` recusados pelo limite de segurança de 10 tentativas por conta em 15 minutos, porque todos os usuários virtuais reutilizaram a mesma conta `admin`. Isso não é aprovado como teste de capacidade autenticada; o limitador não será desativado e a medição precisa ser repetida com contas fictícias independentes.
+- A carga continua pendente para aprovação: não houve execução remota, nem soak de 10–20 minutos com identidades independentes. A falha funcional de timestamp está fechada localmente; a estabilidade operacional continua aberta.
+
+## Atualização desta etapa — PostgreSQL, migração e continuidade
+
+- O suporte PostgreSQL foi implementado localmente com `DATABASE_URL`, adaptador psycopg, pool limitado e migrações Alembic versionadas. A migração cria o schema completo sem seeds de demonstração; o ambiente é gravado e validado no banco.
+- Dependências instaladas no `.venv`: `psycopg[binary,pool]` e `alembic`, com intervalos compatíveis. Nenhuma dependência paga foi adicionada.
+- Validação SQLite regressiva: **114 testes OK, 37 ignorados**, 18,863 s, sem alteração funcional observada. Log: `artifacts/sqlite-regression-after-pg-adapter.log`.
+- Validação PostgreSQL em containers descartáveis locais, criada exclusivamente para os testes: **13 testes HTTP OK** (`artifacts/postgres-http-final.log`) e **24 testes de estoque/concorrência OK** (`artifacts/postgres-stock-concurrency-final.log`). A execução agregada foi separada porque o runner acumulou tempo/limpeza de containers; isso não substitui uma execução CI limpa.
+- Backup/restore PostgreSQL local validado com `pg_dump`/`pg_restore` em formato custom, banco de destino vazio e comparação de fingerprint de **22 tabelas**. O ensaio usou somente dados fictícios e container descartável; ainda não valida provedor externo.
+- A limitação de compatibilidade entre SQL legado SQLite e PostgreSQL ficou encapsulada no adaptador; rotas, regras FEFO, estoque, histórico e agenda não foram redesenhados nesta etapa.
+
+- Branch: `security/demo-producao-isolados`, criada de `chore/contexto-auditoria-producao` conforme novo roteiro. Base pública `95d1369`; confirmar HEAD/status no Git. Sem push, deploy ou alteração de dados reais.
+- **NÃO APTO PARA DADOS REAIS. Tarefa ampla ainda não concluída.** Critérios e pendências em `prontidao-clinica.md`; auditoria inicial preservada como histórico, atualização no topo de `auditoria-seguranca.md` prevalece.
+- Commits locais: `7531f4d` concorrência; `ee20d1f` segurança HTTP/agenda; `3368d38` backup; `6a50dde` validações; `9718c20` isolamento/primeiro acesso; `0124788` histórico atômico/preservação clínica.
+- Testes anteriores: 77/77 em 18,673 s = 27 originais +50 novos, incluindo primeiro acesso HTTPS/restart em produção fictícia. A regressão atual SQLite é registrada no checkpoint acima; bancos descartáveis, nunca `banco.db`.
+- Ambiente: `config.py`, DEMO_DATABASE_URL/DATABASE_URL independentes, marca persistente do ambiente, cookies/salt distintos. URLs SQLite absolutas e PostgreSQL suportados localmente; produção SQLite exige declaração de disco local persistente e é recusada no Render. O provedor recomendado está documentado em `docs/provedor-postgresql.md`, mas ainda não foi contratado/configurado.
+- Conta: CLI gera senha temporária aleatória apenas em TTY, hash Werkzeug, troca obrigatória, revogação/rotação; primeiro acesso redireciona dashboard após troca. DrFernanda **não criada** e nenhuma senha dela gerada.
+- Proteções verificadas: CSRF, RBAC server-side, API/CSV, sessão, headers, limites, FEFO/transações, estorno/ajuste/agenda concorrentes; restore SQLite fictício integral. Consultas canceladas sem exclusão; concluídas protegidas. Política formal de adendos ainda pendente.
+- Carga anterior: seis perfis 1–50 sem erros; soak 600 s = 1 timeout/37.680, integridade ok. Não aprovar estabilidade plena; resultados são de snapshot anterior às mudanças PostgreSQL. Ver `relatorio-carga.md`.
+- Ferramentas: `pip-audit` em ambiente temporário após as dependências atuais: **0 vulnerabilidades conhecidas**. Bandit atual: 4 médios/22 baixos, sem altos; os médios são bind local, identificadores SQL internos e subprocessos controlados de testes, registrados para revisão. Codex Security 0.1.29 executa com Node22 temporário, somente dry-run antes/depois, autenticação não verificada; sem scan pago. PostgreSQL local migrado e testado em containers descartáveis; ainda não é homologação externa.
+- CI: o workflow agora executa a regressão SQLite e um job PostgreSQL opt-in em containers descartáveis, separado por classes HTTP e estoque/concorrência. O run `35715470083` do commit `251bcdf` passou nos jobs `test` e `postgres`; `deploy` foi ignorado fora da `main`.
+- Render somente leitura: serviço `univet`, plano Free, branch `main`, URL `https://univet.onrender.com`, deploy live no commit `95d1369`; não é a clínica homologada. Não há PostgreSQL Render provisionado. A URL responde HTTPS, mas a resposta observada não apresentou os headers de segurança esperados; o serviço não foi alterado.
+- Próximos passos locais: ação humana para criar dois projetos PostgreSQL gratuitos e um segundo serviço Render isolado; depois executar homologação remota, restart/redeploy, backup/restore e carga final. Corrigir/decidir lacunas SEC-09/13/14. Não refazer achados já corrigidos sem mudança relevante.
+- Dependências externas: identificar backend/URLs/SHA, escolher persistência gratuita sem cartão/cobrança, validar restart/redeploy/backup do alvo e responsáveis. Não alterar produção sem confirmação. PDFs no histórico remoto (SEC-12) exigem autorização específica para saneamento.
+- Artefatos brutos em `artifacts/` e `perf/results/`, ignorados. Não executar `docs/audit_local.py`: reprodução histórica das falhas antigas; usar regressões atuais.
