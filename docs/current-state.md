@@ -9,6 +9,16 @@
 - Render permanece sujeito à confirmação de disponibilidade gratuita. Nenhuma cobrança, cartão ou plano pago será usado; Koyeb só será considerado se não exigir cartão nem criar risco de cobrança.
 - As seções históricas abaixo são preservadas como evidência e não substituem este escopo acadêmico.
 
+## Validação acadêmica local — commit `ed7f74f`
+
+- `main` permaneceu limpa após a atualização documental e `git fetch --all --prune` confirmou `main` alinhada a `origin/main`.
+- Suíte local: **119 testes, 0 falhas, 0 errors e 38 skips** PostgreSQL opt-in.
+- Suíte PostgreSQL descartável: **38 testes, 0 falhas**.
+- Smoke demo idempotente: 2 usuários, 5 tutores, 8 pets, 4 consultas, 4 categorias, 2 fornecedores, 5 produtos, 7 lotes e 10 movimentações; segunda execução manteve as contagens e não criou `DrFernanda`.
+- Smoke funcional local: login, dashboard, tutores, pets, veterinários, serviços, consultas, histórico, estoque, categorias, fornecedores, lotes, relatórios, API, CSV e logout responderam conforme esperado.
+- Gunicorn demo local: `/health`, `/login` e `/` retornaram 200; headers de segurança observados e logs sem traceback ou secrets.
+- Render continua suspenso: as URLs conhecidas retornaram 503. Koyeb permanece fora do escopo sem intervenção porque a documentação oficial exige cartão para a conta, incompatível com a restrição desta rodada.
+
 ## Checkpoint atual da consolidação — 13/10/2026
 
 - Base consolidada localmente e publicada em `main`: commit `b1eda26` (`merge: consolidar segurança e prontidão de produção do UniVet`). A branch `security/demo-producao-isolados` permanece preservada em `a9a73b7`; nenhuma reescrita de histórico foi feita.
