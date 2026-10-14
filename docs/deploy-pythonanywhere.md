@@ -2,7 +2,7 @@
 
 Este roteiro publica o UniVet como demonstração acadêmica gratuita, usando apenas dados fictícios e SQLite persistente dentro do diretório da aplicação. Não use dados reais, Neon ou qualquer plano pago neste deploy.
 
-O plano Free do PythonAnywhere oferece um web app com um worker e espaço limitado; isso é suficiente para uma avaliação acadêmica, não para operação clínica. O subdomínio `SEU_USUARIO.pythonanywhere.com` recebe HTTPS do próprio PythonAnywhere.
+O plano Free do PythonAnywhere oferece um web app com um worker, espaço e CPU limitados, além de expiração periódica da conta/site conforme as regras atuais da plataforma; isso é suficiente para uma avaliação acadêmica temporária, não para operação clínica. O subdomínio `SEU_USUARIO.pythonanywhere.com` recebe HTTPS do próprio PythonAnywhere.
 
 ## 1. Código e ambiente no console Bash
 

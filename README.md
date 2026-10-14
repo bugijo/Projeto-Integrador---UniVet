@@ -32,8 +32,8 @@ O UniVet demonstra cadastros, agenda, prontuário clínico, operação de estoqu
 
 - Python 3
 - Flask
-- PostgreSQL compatível com Neon para o ambiente online/demo
-- SQLite para desenvolvimento e testes locais isolados
+- SQLite persistente para a demonstração acadêmica gratuita no PythonAnywhere
+- PostgreSQL compatível com Neon para ambientes separados que exigirem banco externo
 - HTML5
 - CSS3
 - Jinja2
@@ -118,7 +118,7 @@ http://127.0.0.1:5000
 
 ## Demonstração acadêmica
 
-O banco demo deve ser configurado com `UNIVET_ENV=demo` e uma `DEMO_DATABASE_URL` apontando para um PostgreSQL separado, como o projeto gratuito `univet-demo` no Neon. O seed opt-in de `init_db.py --demo` cria dados fictícios de tutores, animais, veterinários, serviços, consultas, categorias, fornecedores, produtos, lotes e movimentações.
+O banco demo deve ser configurado com `UNIVET_ENV=demo` e uma `DEMO_DATABASE_URL` apontando para o arquivo SQLite persistente `data/univet-demo.db` no PythonAnywhere. O seed opt-in de `init_db.py --demo` cria dados fictícios de tutores, animais, veterinários, serviços, consultas, categorias, fornecedores, produtos, lotes e movimentações. PostgreSQL/Neon continua suportado pelo projeto, mas não é necessário nem usado no deploy acadêmico gratuito.
 
 A conta acadêmica é o usuário fictício `admin`, com nome “Administrador de testes”. A senha deve ser informada somente no ambiente local/demo ou pelo responsável pela apresentação; ela não é documentada neste repositório.
 
@@ -128,7 +128,7 @@ A conta acadêmica é o usuário fictício `admin`, com nome “Administrador de
 python -m unittest discover -s tests -v
 ```
 
-O projeto não depende de APIs pagas, serviços com cobrança por requisição ou bibliotecas comerciais. O ambiente online/demo deve usar PostgreSQL externo persistente; SQLite permanece restrito ao desenvolvimento e aos testes locais. Hospedagem gratuita pode suspender o serviço por limites da plataforma, portanto disponibilidade online precisa ser verificada antes da avaliação.
+O projeto não depende de APIs pagas, serviços com cobrança por requisição ou bibliotecas comerciais. O ambiente online/demo usa SQLite persistente no diretório da aplicação, adequado ao único worker do PythonAnywhere Free e somente para avaliação acadêmica. Hospedagem gratuita pode suspender ou expirar o serviço por limites da plataforma, portanto disponibilidade online precisa ser verificada antes da avaliação.
 
 ## Avaliação acadêmica
 
@@ -138,7 +138,7 @@ Para executar localmente com dados fictícios:
 
 ```bash
 export UNIVET_ENV=demo
-export DEMO_DATABASE_URL='<URL Neon com sslmode=verify-full, sslrootcert=system e channel_binding=require>'
+export DEMO_DATABASE_URL="sqlite:////home/SEU_USUARIO/UniVet/data/univet-demo.db"
 python init_db.py --demo
 gunicorn -w 2 -b 127.0.0.1:5000 app:app
 ```
