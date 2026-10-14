@@ -145,6 +145,8 @@ gunicorn -w 2 -b 127.0.0.1:5000 app:app
 
 Nunca publique os valores das variáveis de ambiente, use dados reais ou apresente o projeto como pronto para uma clínica.
 
+Para publicar a demonstração no PythonAnywhere, siga [docs/deploy-pythonanywhere.md](docs/deploy-pythonanywhere.md).
+
 ## Rotas principais do estoque
 
 - `/estoque`: dashboard operacional;
