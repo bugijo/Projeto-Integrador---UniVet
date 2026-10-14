@@ -9,7 +9,7 @@
 - Render permanece sujeito à confirmação de disponibilidade gratuita. Nenhuma cobrança, cartão ou plano pago será usado; Koyeb só será considerado se não exigir cartão nem criar risco de cobrança.
 - As seções históricas abaixo são preservadas como evidência e não substituem este escopo acadêmico.
 
-## Validação acadêmica local — commit `ed7f74f`
+## Validação acadêmica local — commits `ed7f74f` e `4874805`
 
 - `main` permaneceu limpa após a atualização documental e `git fetch --all --prune` confirmou `main` alinhada a `origin/main`.
 - Suíte local: **119 testes, 0 falhas, 0 errors e 38 skips** PostgreSQL opt-in.
