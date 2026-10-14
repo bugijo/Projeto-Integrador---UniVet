@@ -1,5 +1,9 @@
 # Auditoria defensiva e prontidão de produção — UniVet
 
+## Escopo acadêmico vigente — 13/10/2026
+
+Esta auditoria acompanha uma demonstração acadêmica com dados fictícios. Não há autorização para dados reais, criação de `DrFernanda`, downgrade de controles, plano pago ou exposição de secrets. A configuração demo deve usar `UNIVET_ENV=demo` e banco PostgreSQL separado; qualquer disponibilidade online depende de hospedagem gratuita efetivamente acessível.
+
 ## Checkpoint atual da consolidação — 13/10/2026
 
 - `main` foi consolidada com merge explícito `--no-ff` no commit `b1eda26`; a branch Security e a referência local de recuperação foram preservadas. Nenhum force-push, reset ou rebase foi usado.

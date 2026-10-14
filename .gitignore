@@ -4,6 +4,7 @@ __pycache__/
 *.pyd
 .Python
 .venv/
+.superpowers/
 venv/
 env/
 banco.db

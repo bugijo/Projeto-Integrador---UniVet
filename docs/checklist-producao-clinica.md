@@ -1,5 +1,12 @@
 # Checklist de liberação — 28/09/2026
 
+## Escopo da rodada acadêmica — 13/10/2026
+
+- [ ] Serviço online demo gratuito validado sem cobrança, cartão ou plano pago.
+- [ ] PostgreSQL demo separado confirmado com migrations, persistência e dados exclusivamente fictícios.
+- [ ] Fluxo acadêmico completo validado no endereço público.
+- [ ] Nenhuma conta `DrFernanda` criada enquanto houver bloqueadores.
+
 ## Checkpoint atual — 13/10/2026
 
 - [x] `main` consolidada por merge explícito no commit `b1eda26`; branch Security preservada.

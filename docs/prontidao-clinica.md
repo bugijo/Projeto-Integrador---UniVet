@@ -1,5 +1,9 @@
 # Prontidão da clínica — 28/09/2026
 
+## Nota de escopo acadêmico — 13/10/2026
+
+O UniVet está sendo preparado para avaliação acadêmica e demonstração online com dados fictícios. Este documento não autoriza uso clínico real. A classificação desta rodada será `NÃO APTO PARA DADOS REAIS` enquanto houver bloqueadores de hospedagem, banco remoto, persistência ou isolamento.
+
 ## Estado atual da prontidão — 13/10/2026
 
 O código foi consolidado e publicado em `main` no commit `b1eda26`. As suítes pós-merge passaram: 119 testes locais e 38 testes PostgreSQL opt-in, sem falhas; `git diff --check` passou. Isso comprova a árvore local, não a operação online.

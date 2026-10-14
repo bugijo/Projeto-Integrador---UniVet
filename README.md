@@ -1,10 +1,10 @@
-# UniVet
+# UniVet — Projeto Integrador II
 
-Sistema de gestão veterinária desenvolvido para o Projeto Integrador da UNIVESP e continuado no Projeto Integrador II.
+Aplicação acadêmica de gestão veterinária para avaliação da faculdade. O UniVet é uma demonstração funcional com dados exclusivamente fictícios; não está liberado para dados reais de uma clínica.
 
 ## Visão geral
 
-O UniVet organiza a rotina da Clínica Veterinária Fernanda Calixto com foco em cadastros, agenda, prontuário clínico e operação diária.
+O UniVet demonstra cadastros, agenda, prontuário clínico, operação de estoque e controles de segurança em um ambiente acadêmico isolado. A referência visual da clínica não significa que este repositório esteja pronto para uso clínico real.
 
 ## Funcionalidades do UniVet 2.0
 
@@ -32,7 +32,8 @@ O UniVet organiza a rotina da Clínica Veterinária Fernanda Calixto com foco em
 
 - Python 3
 - Flask
-- SQLite
+- PostgreSQL compatível com Neon para o ambiente online/demo
+- SQLite para desenvolvimento e testes locais isolados
 - HTML5
 - CSS3
 - Jinja2
@@ -115,10 +116,11 @@ python run_server.py
 http://127.0.0.1:5000
 ```
 
-## Credenciais iniciais
+## Demonstração acadêmica
 
-- Administrador de testes: `admin / 123456`
-- Dra. Fernanda Calixto: `fernanda.calixto / Fer123`
+O banco demo deve ser configurado com `UNIVET_ENV=demo` e uma `DEMO_DATABASE_URL` apontando para um PostgreSQL separado, como o projeto gratuito `univet-demo` no Neon. O seed opt-in de `init_db.py --demo` cria dados fictícios de tutores, animais, veterinários, serviços, consultas, categorias, fornecedores, produtos, lotes e movimentações.
+
+A conta acadêmica é o usuário fictício `admin`, com nome “Administrador de testes”. A senha deve ser informada somente no ambiente local/demo ou pelo responsável pela apresentação; ela não é documentada neste repositório.
 
 ## Testes
 
@@ -126,7 +128,22 @@ http://127.0.0.1:5000
 python -m unittest discover -s tests -v
 ```
 
-O projeto não depende de APIs pagas, serviços com cobrança por requisição ou bibliotecas comerciais. O protótipo utiliza Flask, SQLite, JavaScript, CSS e SVG próprios. O deploy descrito em `render.yaml` continua sujeito às limitações de persistência do SQLite em hospedagens gratuitas.
+O projeto não depende de APIs pagas, serviços com cobrança por requisição ou bibliotecas comerciais. O ambiente online/demo deve usar PostgreSQL externo persistente; SQLite permanece restrito ao desenvolvimento e aos testes locais. Hospedagem gratuita pode suspender o serviço por limites da plataforma, portanto disponibilidade online precisa ser verificada antes da avaliação.
+
+## Avaliação acadêmica
+
+Fluxo recomendado: entrar pelo login, abrir o dashboard e demonstrar tutores, animais, veterinários, serviços, agendamentos, consultas e histórico; depois navegar pelo estoque para cadastrar categoria, fornecedor, produto, lote, entrada, saída, FEFO, baixa automática, alertas, relatórios, API, CSV e logout.
+
+Para executar localmente com dados fictícios:
+
+```bash
+export UNIVET_ENV=demo
+export DEMO_DATABASE_URL='<URL Neon com sslmode=verify-full, sslrootcert=system e channel_binding=require>'
+python init_db.py --demo
+gunicorn -w 2 -b 127.0.0.1:5000 app:app
+```
+
+Nunca publique os valores das variáveis de ambiente, use dados reais ou apresente o projeto como pronto para uma clínica.
 
 ## Rotas principais do estoque
 
@@ -140,7 +157,7 @@ O projeto não depende de APIs pagas, serviços com cobrança por requisição o
 
 ## Cobertura de testes
 
-A suíte atual possui 27 testes automatizados cobrindo autenticação, módulos clínicos, estoque, FEFO, validade, estoque negativo, estornos, integração com consultas, filtros, paginação, CSV, API e parâmetros inválidos.
+A suíte automatizada cobre autenticação, módulos clínicos, estoque, FEFO, validade, estoque negativo, estornos, integração com consultas, concorrência, filtros, paginação, CSV, API, PostgreSQL, migrations, CSRF, sessões e parâmetros inválidos. O PostgreSQL é executado somente em banco descartável local quando o teste opt-in é ativado.
 
 ## Pipeline GitHub
 
@@ -154,7 +171,7 @@ O workflow `.github/workflows/ci.yml` executa:
 
 ## Regras implementadas
 
-- apenas os usuários `admin` e `fernanda.calixto` permanecem ativos no banco
+- o seed acadêmico cria somente contas fictícias de demonstração
 - toda senha é salva com hash seguro
 - todo tutor precisa de CPF válido
 - todo animal precisa estar vinculado a um tutor

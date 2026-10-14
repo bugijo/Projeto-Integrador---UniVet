@@ -1,5 +1,14 @@
 # Estado atual — 28/09/2026
 
+## Prioridade acadêmica vigente — 13/10/2026
+
+- O objetivo vigente é uma versão acadêmica completa e demonstrável, não operação com dados reais de clínica.
+- O ambiente demo deve usar `UNIVET_ENV=demo`, PostgreSQL separado (`DEMO_DATABASE_URL`) e somente dados fictícios.
+- A conta acadêmica é o usuário fictício `admin`, com nome “Administrador de testes”; a senha não é documentada.
+- `DrFernanda` não deve ser criada enquanto houver bloqueadores acadêmicos ou de hospedagem.
+- Render permanece sujeito à confirmação de disponibilidade gratuita. Nenhuma cobrança, cartão ou plano pago será usado; Koyeb só será considerado se não exigir cartão nem criar risco de cobrança.
+- As seções históricas abaixo são preservadas como evidência e não substituem este escopo acadêmico.
+
 ## Checkpoint atual da consolidação — 13/10/2026
 
 - Base consolidada localmente e publicada em `main`: commit `b1eda26` (`merge: consolidar segurança e prontidão de produção do UniVet`). A branch `security/demo-producao-isolados` permanece preservada em `a9a73b7`; nenhuma reescrita de histórico foi feita.
