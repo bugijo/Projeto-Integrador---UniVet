@@ -120,6 +120,8 @@ http://127.0.0.1:5000
 
 O banco demo deve ser configurado com `UNIVET_ENV=demo` e uma `DEMO_DATABASE_URL` apontando para o arquivo SQLite persistente `data/univet-demo.db` no PythonAnywhere. O seed opt-in de `init_db.py --demo` cria dados fictícios de tutores, animais, veterinários, serviços, consultas, categorias, fornecedores, produtos, lotes e movimentações. PostgreSQL/Neon continua suportado pelo projeto, mas não é necessário nem usado no deploy acadêmico gratuito.
 
+A demonstração acadêmica publicada está disponível em: https://bugijo.pythonanywhere.com
+
 A conta acadêmica é o usuário fictício `admin`, com nome “Administrador de testes”. A senha deve ser informada somente no ambiente local/demo ou pelo responsável pela apresentação; ela não é documentada neste repositório.
 
 ## Testes
