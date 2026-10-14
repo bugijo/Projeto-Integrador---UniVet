@@ -1,5 +1,16 @@
 # Estado atual — 28/09/2026
 
+## Checkpoint atual da consolidação — 13/10/2026
+
+- Base consolidada localmente e publicada em `main`: commit `b1eda26` (`merge: consolidar segurança e prontidão de produção do UniVet`). A branch `security/demo-producao-isolados` permanece preservada em `a9a73b7`; nenhuma reescrita de histórico foi feita.
+- A árvore do clone oficial está limpa. `git diff --check` e `compileall` passaram.
+- Após o merge, a suíte SQLite/HTTP/segurança executou **119 testes, 0 falhas, 0 errors e 38 skips PostgreSQL opt-in**. A suíte PostgreSQL opt-in executou **38 testes, 0 falhas**, usando PostgreSQL Docker descartável local.
+- O smoke local com Gunicorn confirmou `/health`, `/` e `/login` em 200; rotas protegidas anônimas retornaram 302/401 conforme esperado. Headers observados: HSTS, CSP, nosniff, frame protection, Referrer-Policy, Permissions-Policy e `Cache-Control: no-store`.
+- O Render foi consultado sem mutação. O workspace está **suspenso por não pagamento**; não houve pagamento, cartão, upgrade, alteração de serviço ou deploy nesta rodada. `univet-clinica` permanece na branch `security/demo-producao-isolados`, último deploy `a9a73b7`; `univet` permanece em `main`, último deploy `95d1369`.
+- As URLs públicas `https://univet.onrender.com` e `https://univet-clinica.onrender.com` retornaram **503** por causa da suspensão. Não há evidência atual de deploy do commit `b1eda26`, persistência online, restart/redeploy ou isolamento remoto após essa consolidação.
+- O serviço clínico possui, por nome, `DATABASE_URL`, `SECRET_KEY` e `UNIVET_ENV`; os valores não foram lidos nem expostos. Build e start permanecem `pip install -r requirements.txt` e `gunicorn -w 2 -b 0.0.0.0:$PORT app:app`.
+- Nenhuma conta `DrFernanda` foi criada nesta rodada e nenhum dado real foi usado. **Classificação atual: NÃO APTO PARA DADOS REAIS / NÃO APTO PARA PILOTO CONTROLADO enquanto o Render estiver suspenso e os bloqueadores operacionais não forem revalidados.**
+
 ## Go-live controlado autorizado — 29/09/2026
 
 - Aprovação humana/clínica concedida. Deploy live no commit `860978e` no início da operação; TLS preservado (`verify-full`, `sslrootcert=system`, `channel_binding=require`).

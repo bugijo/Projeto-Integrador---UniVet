@@ -1,5 +1,18 @@
 # Checklist de liberação — 28/09/2026
 
+## Checkpoint atual — 13/10/2026
+
+- [x] `main` consolidada por merge explícito no commit `b1eda26`; branch Security preservada.
+- [x] Pós-merge: 119 testes locais sem falhas e 38 testes PostgreSQL opt-in sem falhas.
+- [x] `git diff --check`, `compileall` e smoke local Gunicorn concluídos.
+- [x] Render inspecionado sem expor valores de secrets.
+- [ ] Render operacional: workspace suspenso por não pagamento; URLs Demo e Clínica retornam 503.
+- [ ] Deploy de `b1eda26` no Render.
+- [ ] Revalidar Neon, `SELECT 1`, migrations, persistência, restart/redeploy e isolamento após o serviço voltar a operar.
+- [ ] Criar `DrFernanda` somente depois de zero bloqueadores; não criada nesta rodada.
+
+**Classificação atual: NÃO APTO PARA DADOS REAIS / NÃO APTO PARA PILOTO CONTROLADO.**
+
 **NÃO APTO PARA DADOS REAIS.** [Auditoria](auditoria-seguranca.md) contém evidências e classificação. O serviço clínico agora responde 200, mas a homologação de continuidade, isolamento e carga ainda está pendente.
 
 ## Checkpoint remoto

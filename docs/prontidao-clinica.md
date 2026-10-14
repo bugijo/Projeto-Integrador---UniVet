@@ -1,5 +1,13 @@
 # Prontidão da clínica — 28/09/2026
 
+## Estado atual da prontidão — 13/10/2026
+
+O código foi consolidado e publicado em `main` no commit `b1eda26`. As suítes pós-merge passaram: 119 testes locais e 38 testes PostgreSQL opt-in, sem falhas; `git diff --check` passou. Isso comprova a árvore local, não a operação online.
+
+O workspace Render está suspenso por não pagamento. `univet-clinica` permanece Free, na branch `security/demo-producao-isolados`, com último deploy `a9a73b7`; `univet` permanece na `main`, com último deploy `95d1369`. Ambas as URLs retornam 503. Não houve alteração de plano, cobrança, secret, branch, serviço ou deploy nesta rodada.
+
+Enquanto a suspensão não for resolvida dentro das opções gratuitas e o serviço não for revalidado no commit `b1eda26`, ficam bloqueados: saúde pública, conexão Neon, `SELECT 1`, migrations no alvo, persistência após restart/redeploy, isolamento Demo/Clínica e qualquer piloto. **Classificação: NÃO APTO PARA DADOS REAIS e NÃO APTO PARA PILOTO CONTROLADO.** `DrFernanda` não foi criada.
+
 ## Checkpoint da homologação remota
 
 O serviço `univet-clinica` está operacional com PostgreSQL Neon, TLS forte e runtime confirmado (`psycopg 3.3.6`, `libpq 18.6`). `/health`, `/login` e `/` retornam 200; cookies e headers foram observados remotamente. A classificação permanece **NÃO APTO PARA DADOS REAIS** porque ainda não há confirmação direta do `alembic_version`, persistência após restart/redeploy, isolamento remoto, backup/restore final e carga com contas independentes. `DrFernanda` não foi criada.

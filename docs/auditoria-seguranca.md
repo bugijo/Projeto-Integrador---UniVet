@@ -1,5 +1,15 @@
 # Auditoria defensiva e prontidão de produção — UniVet
 
+## Checkpoint atual da consolidação — 13/10/2026
+
+- `main` foi consolidada com merge explícito `--no-ff` no commit `b1eda26`; a branch Security e a referência local de recuperação foram preservadas. Nenhum force-push, reset ou rebase foi usado.
+- Verificação pós-merge: `unittest` completo = 119 testes, 0 falhas/errors e 38 skips opt-in; PostgreSQL descartável opt-in = 38 testes, 0 falhas; `compileall` e `git diff --check` passaram.
+- Smoke local Gunicorn passou para `/health`, `/` e `/login` (200), com rotas protegidas anônimas devolvendo 302/401 e sem traceback. Controles HTTP observados incluem HSTS, CSP, nosniff, X-Frame-Options, Referrer-Policy, Permissions-Policy e no-store.
+- O Render foi apenas inspecionado. O workspace está suspenso por não pagamento; não houve alteração de plano, cobrança, secrets, branch, serviço ou deploy. O serviço `univet-clinica` continua em `security/demo-producao-isolados` no último deploy `a9a73b7`; o Demo `univet` continua em `main` no último deploy `95d1369`.
+- As duas URLs Render retornam 503 enquanto a conta está suspensa. Portanto, não foram confirmados para `b1eda26`: `/health`, `/login`, persistência, `SELECT 1`, migrations no alvo, restart/redeploy ou isolamento remoto.
+- `DATABASE_URL`, `SECRET_KEY` e `UNIVET_ENV` foram confirmadas somente pela existência dos nomes no serviço clínico; valores não foram exibidos. Nenhum segredo foi exposto.
+- **Classificação atual: NÃO APTO PARA DADOS REAIS.** A suspensão do Render e a falta de validação online pós-merge são bloqueadores. `DrFernanda` não foi criada nesta rodada.
+
 ## Go-live controlado — 29/09/2026
 
 - Aprovação humana/clínica registrada. Backup pré-go-live verificado (`pg_dump -Fc`, 63.993 bytes, SHA-256 `f501bad491a0acff13637a806d64ac15525a346790d9f4831144c149d03c901b`, 177 objetos).
