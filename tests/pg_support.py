@@ -17,6 +17,7 @@ class LocalPostgres:
 
     def start(self):
         subprocess.run(['docker','run','--detach','--rm','--name',self.name,
+            '--tmpfs','/var/lib/postgresql/data:rw,size=1g',
             '-e','POSTGRES_PASSWORD','-p','127.0.0.1::5432','postgres:16-alpine'],
             env=dict(os.environ,POSTGRES_PASSWORD=self.password),check=True,capture_output=True,timeout=120)
         self.started=True

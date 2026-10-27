@@ -107,14 +107,14 @@ class EstoqueServicesTests(unittest.TestCase):
         self.assertEqual(vencido, 10)
 
     def test_fefo_prioriza_validade_mais_proxima(self):
-        self.entrada("L-2027", 10, "2027-12-31")
-        self.entrada("L-2026", 20, "2026-10-20")
+        self.entrada("L-2027", 10, "2099-12-31")
+        self.entrada("L-2026", 20, "2099-10-20")
         alocacoes = registrar_saida_fefo(self.connection, self.produto_id, 10, 1)
         self.assertEqual([(item["numero_lote"], item["quantidade"]) for item in alocacoes], [("L-2026", 10.0)])
 
     def test_saida_pode_ser_dividida_entre_dois_lotes(self):
-        self.entrada("L-2026", 3, "2026-10-20")
-        self.entrada("L-2027", 5, "2027-12-31")
+        self.entrada("L-2026", 3, "2099-10-20")
+        self.entrada("L-2027", 5, "2099-12-31")
         alocacoes = registrar_saida_fefo(self.connection, self.produto_id, 6, 1)
         self.assertEqual([(item["numero_lote"], item["quantidade"]) for item in alocacoes], [("L-2026", 3.0), ("L-2027", 3.0)])
         self.assertEqual(self.saldo(), 2)
