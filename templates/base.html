@@ -78,7 +78,9 @@
                     </a>
                     <div class="menu-subitems" aria-label="Submenu de estoque">
                         <a href="{{ url_for('listar_produtos_page') }}" class="{% if estoque_subsecao == 'produtos' %}active{% endif %}">Produtos</a>
-                        <a href="{{ url_for('listar_lotes_page') }}" class="{% if estoque_subsecao == 'lotes' %}active{% endif %}">Lotes e entradas</a>
+                        <a href="{{ url_for('listar_lotes_page') }}" class="{% if estoque_subsecao == 'lotes' %}active{% endif %}">Lotes</a>
+                        <a href="{{ url_for('registrar_entrada_estoque') }}">Entrada</a>
+                        <a href="{{ url_for('registrar_saida_estoque') }}">Saída</a>
                         <a href="{{ url_for('listar_movimentacoes_page') }}" class="{% if estoque_subsecao == 'movimentacoes' %}active{% endif %}">Movimentações</a>
                         <a href="{{ url_for('listar_fornecedores_page') }}" class="{% if estoque_subsecao == 'fornecedores' %}active{% endif %}">Fornecedores</a>
                         <a href="{{ url_for('listar_categorias_page') }}" class="{% if estoque_subsecao == 'categorias' %}active{% endif %}">Categorias</a>
