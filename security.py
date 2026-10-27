@@ -23,6 +23,7 @@ class EnvironmentSessionInterface(SecureCookieSessionInterface):
         return serializer
 
 ADMIN_WRITES = {
+    'criar_servico', 'criar_veterinario',
     'criar_produto', 'editar_produto', 'alternar_produto', 'listar_categorias_page',
     'editar_categoria', 'alternar_categoria', 'listar_fornecedores_page',
     'editar_fornecedor', 'alternar_fornecedor', 'registrar_entrada_estoque',

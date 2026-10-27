@@ -8,6 +8,7 @@
             <h1>Serviços</h1>
             <p>Procedimentos e tempos padrão utilizados pela agenda.</p>
         </div>
+        {% if usuario_logado and usuario_logado.perfil == 'admin' %}<a class="btn" href="{{ url_for('criar_servico') }}">Novo serviço</a>{% endif %}
     </section>
 
     <section class="card table-card">

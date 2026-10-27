@@ -24,7 +24,7 @@
             const opcao = produtoEntrada.options[produtoEntrada.selectedIndex];
             const custo = Number.parseFloat(String(custoEntrada.value).replace(",", ".")) || 0;
             const margem = Number.parseFloat(opcao?.dataset.margem || "0") || 0;
-            sugestaoEntrada.value = `R$ ${(custo * (1 + margem / 100)).toFixed(2).replace(".", ",")}`;
+            sugestaoEntrada.value = `${new Intl.NumberFormat("pt-BR", {style: "currency", currency: "BRL"}).format(custo * (1 + margem / 100))}`;
         }
         produtoEntrada.addEventListener("change", atualizarSugestaoEntrada);
         custoEntrada.addEventListener("input", atualizarSugestaoEntrada);

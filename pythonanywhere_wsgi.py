@@ -27,3 +27,7 @@ if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
 from app import app as application  # noqa: E402
+
+# Este entrypoint publicado exige Force HTTPS no painel da hospedagem.
+# O servidor HTTP local continua usando app.py e sua configuração própria.
+application.config['SESSION_COOKIE_SECURE'] = True

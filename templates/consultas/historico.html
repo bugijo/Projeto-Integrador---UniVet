@@ -101,7 +101,7 @@
                     <div><span class="eyebrow">Atendimento selecionado</span><h2>Produtos utilizados no atendimento</h2></div>
                     <span class="field-help">A baixa segue o lote com validade mais próxima.</span>
                 </div>
-                <form method="post" action="{{ url_for('adicionar_produto_consulta', consulta_id=consulta['id']) }}" class="filter-bar">
+                <form method="post" action="{{ url_for('adicionar_produto_consulta', consulta_id=consulta['id']) }}" class="filter-bar"><input type="hidden" name="operacao_token" value="{{ stock_operation_token('consulta:' ~ consulta['id']) }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="field-group"><label for="produto_id">Produto</label><select id="produto_id" name="produto_id" required><option value="">Selecione um produto</option>{% for produto in produtos_estoque %}<option value="{{ produto['id'] }}" data-sugerido="{{ '%.2f'|format(produto['valor_venda_sugerido'] or 0) }}">{{ produto['nome'] }} · {{ produto['estoque_total']|round(2) }} {{ produto['unidade_medida'] }}</option>{% endfor %}</select><span id="valor-sugerido-ajuda" class="field-help">Valor sugerido: R$ 0,00 por unidade.</span></div>
                     <div class="field-group"><label for="quantidade">Quantidade</label><input id="quantidade" name="quantidade" type="number" min="0.01" step="0.01" required></div>
@@ -113,7 +113,7 @@
                     <table>
                         <caption class="sr-only">Produtos utilizados nesta consulta</caption>
                         <thead><tr><th>Produto</th><th>Lote</th><th>Quantidade</th><th>Valor sugerido</th><th>Valor praticado</th><th>Total</th><th>Movimentação</th><th>Data</th></tr></thead>
-                        <tbody>{% for item in itens_consulta %}<tr><td>{{ item['produto_nome'] }}</td><td>{{ item['numero_lote'] }}</td><td>{{ item['quantidade']|round(2) }} {{ item['unidade_medida'] }}</td><td>{% if item['valor_unitario_sugerido'] is not none %}R$ {{ '%.2f'|format(item['valor_unitario_sugerido']) }}{% else %}Não informado{% endif %}</td><td>{% if item['valor_unitario_praticado'] is not none %}R$ {{ '%.2f'|format(item['valor_unitario_praticado']) }}{% else %}Não informado{% endif %}</td><td>{% if item['valor_unitario_praticado'] is not none %}R$ {{ '%.2f'|format((item['quantidade'] * item['valor_unitario_praticado'])) }}{% else %}Não informado{% endif %}</td><td><span class="movement-badge movement-saída">Saída</span></td><td>{{ item['criado_em']|data_hora_br }}</td></tr>{% else %}<tr><td colspan="8" class="empty-state">Nenhum produto foi registrado nesta consulta.</td></tr>{% endfor %}</tbody>
+                        <tbody>{% for item in itens_consulta %}<tr><td>{{ item['produto_nome'] }}</td><td>{{ item['numero_lote'] }}</td><td>{{ item['quantidade']|round(2) }} {{ item['unidade_medida'] }}</td><td>{% if item['valor_unitario_sugerido'] is not none %}{{ (item['valor_unitario_sugerido'])|moeda_br }}{% else %}Não informado{% endif %}</td><td>{% if item['valor_unitario_praticado'] is not none %}{{ (item['valor_unitario_praticado'])|moeda_br }}{% else %}Não informado{% endif %}</td><td>{% if item['valor_unitario_praticado'] is not none %}{{ ((item['quantidade'] * item['valor_unitario_praticado']))|moeda_br }}{% else %}Não informado{% endif %}</td><td><span class="movement-badge movement-saída">Saída</span></td><td>{{ item['criado_em']|data_hora_br }}</td></tr>{% else %}<tr><td colspan="8" class="empty-state">Nenhum produto foi registrado nesta consulta.</td></tr>{% endfor %}</tbody>
                     </table>
                 </div>
             </div>
@@ -125,7 +125,7 @@
             function atualizarValorConsulta() {
                 const opcao = produtoConsulta.options[produtoConsulta.selectedIndex];
                 const sugerido = Number.parseFloat(opcao?.dataset.sugerido || "0") || 0;
-                ajudaConsulta.textContent = `Valor sugerido: R$ ${sugerido.toFixed(2).replace(".", ",")} por unidade.`;
+                ajudaConsulta.textContent = `Valor sugerido: ${new Intl.NumberFormat("pt-BR", {style: "currency", currency: "BRL"}).format(sugerido)} por unidade.`;
                 if (!valorConsulta.value) valorConsulta.value = sugerido.toFixed(2);
             }
             produtoConsulta.addEventListener("change", () => { valorConsulta.value = ""; atualizarValorConsulta(); });

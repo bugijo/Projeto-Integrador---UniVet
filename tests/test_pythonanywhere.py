@@ -38,6 +38,7 @@ print(json.dumps({
     'database_url': os.environ['DEMO_DATABASE_URL'],
     'database_exists': Path(os.environ['DEMO_DATABASE_URL'].removeprefix('sqlite:///')).exists(),
     'application_name': application.name,
+    'secure_cookie': application.config['SESSION_COOKIE_SECURE'],
 }))
 """
             result = subprocess.run(
@@ -57,6 +58,7 @@ print(json.dumps({
             )
             self.assertFalse(payload["database_exists"])
             self.assertEqual(payload["application_name"], "app")
+            self.assertTrue(payload['secure_cookie'])
 
 
 if __name__ == "__main__":

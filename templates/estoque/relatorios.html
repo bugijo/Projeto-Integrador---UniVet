@@ -41,7 +41,7 @@
             </div>
         </article>
         <article class="card metric-card">
-            <div class="card-body"><span class="metric-label">Valor em estoque</span><strong class="metric-value">R$ {{ '%.2f'|format(relatorio|sum(attribute='valor_estoque')) }}</strong><span class="metric-context">Custo dos lotes ativos</span></div>
+            <div class="card-body"><span class="metric-label">Valor em estoque</span><strong class="metric-value">{{ (relatorio|sum(attribute='valor_estoque'))|moeda_br }}</strong><span class="metric-context">Custo dos lotes ativos</span></div>
         </article>
         <article class="card metric-card">
             <div class="card-body">

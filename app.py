@@ -9,8 +9,10 @@ from pathlib import Path
 import json
 import sqlite3
 import unicodedata
+import secrets
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
-from flask import Flask, Response, flash, g, has_request_context, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, abort, flash, g, has_request_context, jsonify, redirect, render_template, request, session, url_for
 import psycopg
 from werkzeug.security import check_password_hash
 from security import register_security, start_session, end_session, password_hash
@@ -508,6 +510,34 @@ def inject_now():
     }
 
 
+def stock_operation_token(scope):
+    return URLSafeTimedSerializer(app.secret_key, salt='stock-operation').dumps(
+        {'user': session.get('usuario_id'), 'scope': scope, 'nonce': secrets.token_hex(16)})
+
+
+app.jinja_env.globals['stock_operation_token'] = stock_operation_token
+
+
+def validate_stock_operation(scope):
+    token = request.form.get('operacao_token', '')
+    try:
+        payload = URLSafeTimedSerializer(app.secret_key, salt='stock-operation').loads(token, max_age=8*3600)
+        if payload.get('user') != session.get('usuario_id') or payload.get('scope') != scope:
+            raise BadSignature('scope')
+    except (BadSignature, SignatureExpired):
+        abort(400, description='Formulário expirado ou inválido. Recarregue a página.')
+    return token
+
+
+@app.template_filter("moeda_br")
+def moeda_br_filter(valor):
+    """Moeda brasileira, mantendo símbolo e número na mesma linha."""
+    from decimal import Decimal, ROUND_HALF_UP
+    number = Decimal(str(valor or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    formatted = format(number, ',.2f').translate(str.maketrans({',': '.', '.': ','}))
+    return 'R$\u00a0' + formatted
+
+
 @app.template_filter("status_slug")
 def status_slug_filter(valor):
     return slugify_status(valor)
@@ -937,6 +967,7 @@ def registrar_entrada_estoque():
 @app.route("/estoque/saidas", methods=["GET", "POST"])
 @login_obrigatorio
 def registrar_saida_estoque():
+    operation = validate_stock_operation('saida') if request.method == 'POST' else None
     connection = get_db_connection()
     produtos = listar_produtos(connection, {"somente_ativos": True})
     if request.method == "POST":
@@ -948,17 +979,21 @@ def registrar_saida_estoque():
                 session.get("usuario_id"),
                 request.form.get("motivo", "Saída manual"),
                 valor_unitario_praticado=request.form.get("valor_unitario_praticado", ""),
+                operacao_id=operation,
             )
         except (EstoqueError, EstoqueInsuficiente, *INTEGRITY_ERRORS) as erro:
             connection.close()
             flash(str(erro) or "Não foi possível registrar a saída.", "erro")
             return render_template("estoque/saidas/form.html", produtos=produtos, dados=request.form, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Saída manual", None)))
         connection.close()
+        if not alocacoes:
+            flash("Esta saída já foi registrada. O estoque não foi baixado novamente.", "sucesso")
+            return redirect(url_for("listar_movimentacoes_page"))
         lotes = ", ".join(f"{item['numero_lote']} ({item['quantidade']:g})" for item in alocacoes)
-        flash(f"Saída registrada por FEFO. Lotes utilizados: {lotes}.", "sucesso")
+        flash(f"Saída registrada com sucesso. Lotes utilizados por FEFO: {lotes}.", "sucesso")
         return redirect(url_for("listar_movimentacoes_page"))
     connection.close()
-    return render_template("estoque/saidas/form.html", produtos=produtos, dados={}, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Saída manual", None)))
+    return render_template("estoque/saidas/form.html", produtos=produtos, dados={"produto_id": request.args.get("produto_id", type=int)}, secao="estoque", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Saída manual", None)))
 
 
 @app.route("/estoque/lotes")
@@ -1667,12 +1702,13 @@ def editar_consulta(consulta_id):
 @app.route("/consultas/<int:consulta_id>/produtos", methods=["POST"])
 @login_obrigatorio
 def adicionar_produto_consulta(consulta_id):
+    operation = validate_stock_operation('consulta:' + str(consulta_id))
     produto_id = request.form.get("produto_id", type=int)
     quantidade = request.form.get("quantidade", "")
     motivo = request.form.get("motivo", "Uso em atendimento").strip()
     connection = get_db_connection()
     try:
-        registrar_uso_consulta(
+        itens = registrar_uso_consulta(
             connection,
             consulta_id,
             produto_id,
@@ -1680,8 +1716,9 @@ def adicionar_produto_consulta(consulta_id):
             session.get("usuario_id"),
             motivo,
             request.form.get("valor_unitario_praticado", ""),
+            operacao_id=operation,
         )
-        flash("Produto utilizado registrado e estoque atualizado por FEFO.", "sucesso")
+        flash("Produto utilizado registrado e estoque atualizado por FEFO." if itens else "Esta utilização já foi registrada. O estoque não foi baixado novamente.", "sucesso")
     except (EstoqueError, EstoqueInsuficiente, *INTEGRITY_ERRORS) as erro:
         flash(str(erro) or "Não foi possível registrar o produto utilizado.", "erro")
     finally:
@@ -1852,6 +1889,56 @@ def listar_servicos_page():
 @login_obrigatorio
 def listar_veterinarios_page():
     return render_template("veterinarios/lista.html", veterinarios=listar_veterinarios(), secao="veterinarios", breadcrumbs=breadcrumbs_padrao(("Veterinários", None)))
+
+
+@app.route("/servicos/novo", methods=["GET", "POST"])
+@login_obrigatorio
+def criar_servico():
+    dados = {'nome': request.form.get('nome', '').strip(), 'duracao_minutos': request.form.get('duracao_minutos', type=int)}
+    if request.method == 'POST':
+        if not dados['nome'] or not dados['duracao_minutos'] or not 20 <= dados['duracao_minutos'] <= 1440:
+            flash('Informe um nome e duração entre 20 e 1440 minutos.', 'erro')
+        else:
+            connection = get_db_connection()
+            try:
+                begin_write(connection)
+                cursor = connection.execute('INSERT INTO servicos(nome,duracao_minutos) VALUES (?,?)', (dados['nome'], dados['duracao_minutos']))
+                registrar_historico('servicos', cursor.lastrowid, 'criado', dados, connection)
+                connection.commit()
+                limpar_caches_referencia()
+                flash('Serviço cadastrado com sucesso.', 'sucesso')
+                return redirect(url_for('listar_servicos_page'))
+            except INTEGRITY_ERRORS:
+                connection.rollback()
+                flash('Já existe um serviço com esse nome.', 'erro')
+            finally:
+                connection.close()
+    return render_template('servicos/form.html', servico=dados if request.method=='POST' else None, acao='Novo serviço', secao='servicos', breadcrumbs=breadcrumbs_padrao(('Serviços',url_for('listar_servicos_page')),('Novo serviço',None)))
+
+
+@app.route("/veterinarios/novo", methods=["GET", "POST"])
+@login_obrigatorio
+def criar_veterinario():
+    dados = {'nome': request.form.get('nome', '').strip()}
+    if request.method == 'POST':
+        if not dados['nome']:
+            flash('Informe o nome do veterinário.', 'erro')
+        else:
+            connection = get_db_connection()
+            try:
+                begin_write(connection)
+                cursor = connection.execute('INSERT INTO veterinarios(nome) VALUES (?)', (dados['nome'],))
+                registrar_historico('veterinarios', cursor.lastrowid, 'criado', dados, connection)
+                connection.commit()
+                limpar_caches_referencia()
+                flash('Veterinário cadastrado com sucesso.', 'sucesso')
+                return redirect(url_for('listar_veterinarios_page'))
+            except INTEGRITY_ERRORS:
+                connection.rollback()
+                flash('Já existe um veterinário com esse nome.', 'erro')
+            finally:
+                connection.close()
+    return render_template('veterinarios/form.html', veterinario=dados if request.method=='POST' else None, acao='Novo veterinário', secao='veterinarios', breadcrumbs=breadcrumbs_padrao(('Veterinários',url_for('listar_veterinarios_page')),('Novo veterinário',None)))
 
 
 @app.route("/servicos/<int:servico_id>/editar", methods=["GET", "POST"])

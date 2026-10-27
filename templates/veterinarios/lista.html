@@ -8,6 +8,7 @@
             <h1>Veterinários</h1>
             <p>Profissionais disponíveis para alocação na agenda.</p>
         </div>
+        {% if usuario_logado and usuario_logado.perfil == 'admin' %}<a class="btn" href="{{ url_for('criar_veterinario') }}">Novo veterinário</a>{% endif %}
     </section>
 
     <section class="card table-card">

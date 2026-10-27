@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 from database import begin_write
 import math
+import hashlib
 
 
 TIPOS_PRODUTO = ("Medicamento", "Vacina", "Material", "Produto")
@@ -202,7 +203,8 @@ def listar_movimentacoes(connection, filtros=None, limite=None):
     sql = """
         SELECT movimentacoes_estoque.*, produtos.nome AS produto_nome,
                lotes.numero_lote, usuarios.nome AS usuario_nome,
-               consultas.data_hora AS consulta_data_hora, pets.nome AS pet_nome
+               consultas.data_hora AS consulta_data_hora, pets.nome AS pet_nome,
+               movimentacoes_estoque.quantidade * movimentacoes_estoque.valor_unitario_praticado AS valor_total
         FROM movimentacoes_estoque
         INNER JOIN produtos ON produtos.id = movimentacoes_estoque.produto_id
         INNER JOIN lotes ON lotes.id = movimentacoes_estoque.lote_id
@@ -301,11 +303,25 @@ def registrar_entrada(connection, produto_id, fornecedor_id, numero_lote, quanti
         raise
 
 
-def registrar_saida_fefo(connection, produto_id, quantidade, usuario_id, motivo="Uso em atendimento", consulta_id=None, valor_unitario_praticado=None):
+def _claim_operation(connection, usuario_id, operacao_id):
+    """Audita e deduplica sob o mesmo lock/transação da baixa, sem novo schema."""
+    if not operacao_id:
+        return True
+    event = 'stock_operation:' + hashlib.sha256(operacao_id.encode()).hexdigest()
+    if connection.execute('SELECT 1 FROM security_events WHERE usuario_id=? AND evento=?', (usuario_id, event)).fetchone():
+        return False
+    connection.execute('INSERT INTO security_events(usuario_id,evento) VALUES (?,?)', (usuario_id, event))
+    return True
+
+
+def registrar_saida_fefo(connection, produto_id, quantidade, usuario_id, motivo="Uso em atendimento", consulta_id=None, valor_unitario_praticado=None, operacao_id=None):
     quantidade = _quantidade(quantidade)
     hoje = datetime.now().strftime("%Y-%m-%d")
     try:
         begin_write(connection)
+        if not _claim_operation(connection, usuario_id, operacao_id):
+            connection.rollback()
+            return []
         lotes = connection.execute(
             """
             SELECT * FROM lotes
@@ -350,7 +366,7 @@ def registrar_saida_fefo(connection, produto_id, quantidade, usuario_id, motivo=
         raise
 
 
-def registrar_uso_consulta(connection, consulta_id, produto_id, quantidade, usuario_id, motivo="Uso em atendimento", valor_unitario_praticado=None):
+def registrar_uso_consulta(connection, consulta_id, produto_id, quantidade, usuario_id, motivo="Uso em atendimento", valor_unitario_praticado=None, operacao_id=None):
     """Baixa produtos por FEFO e vincula todas as parcelas à consulta em uma transação."""
     quantidade = _quantidade(quantidade)
     consulta = connection.execute("SELECT id FROM consultas WHERE id = ?", (consulta_id,)).fetchone()
@@ -359,6 +375,9 @@ def registrar_uso_consulta(connection, consulta_id, produto_id, quantidade, usua
     hoje = datetime.now().strftime("%Y-%m-%d")
     try:
         begin_write(connection)
+        if not _claim_operation(connection, usuario_id, operacao_id):
+            connection.rollback()
+            return []
         lotes = connection.execute(
             """
             SELECT * FROM lotes
