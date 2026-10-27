@@ -1,4 +1,19 @@
-# Estado atual — 28/09/2026
+# Estado atual — 27/10/2026
+
+## Rodada acadêmica de correções — 26–27/10/2026
+
+- Escopo vigente: PythonAnywhere Free, `UNIVET_ENV=demo`, SQLite persistente em `data/univet-demo.db`, exclusivamente dados fictícios. As referências a Render/Neon abaixo são históricas.
+- Base desta rodada: `main` em `3b0af2e`, alinhada ao GitHub antes das alterações. Nenhum outro clone foi alterado.
+- Causa de Movimentações confirmada nos logs remotos: `valor_total` ausente no SELECT, apesar de usado pelo template. A saída já havia sido confirmada antes do redirect.
+- Correções funcionais publicadas até `f40b52d`: total calculado na consulta SQL; ordenação de timestamps legados; operação assinada e deduplicada atomicamente para saída/uso em consulta; produto pré-selecionado e botão de saída; moeda brasileira; menu mobile fixo; contenção do gráfico de relatórios; cadastro de serviços/veterinários pelos formulários existentes, com autorização de administrador. Assets CSS/JS recebem hash de conteúdo na URL para atualizar também navegadores com cache antigo.
+- Testes locais finais: 135 executados, 97 aprovados, zero falhas, 38 skips PostgreSQL opt-in, em 35,707 s. Execução PostgreSQL final separada: 38/38 aprovados em 65,585 s. Novas regressões: 15. `compileall`, sintaxe JavaScript e `git diff --check` aprovados.
+- Esperas de I/O e timeouts de infraestrutura foram investigados, não ignorados. Bancos temporários SQLite e PostgreSQL dos testes usam memória; o banco publicado permanece persistente.
+- Backup remoto pré-alteração validado fora do Git com `integrity_check=ok` e `foreign_key_check=ok`. Nenhum seed será reaplicado ao banco publicado.
+- PythonAnywhere atualizado por fast-forward e reload. Fluxo público fictício aprovado: cadastros, três lotes, saída FEFO, replay/refresh/paginação/filtros, consulta com dois produtos e animal, relatórios, API, CSV, CSRF, autorização por perfil e logout. Cookies `Secure`, HttpOnly e SameSite=Lax confirmados, com HTTP redirecionado para HTTPS.
+- Persistência após reload: saldos QA 7,5 e 2,0, dois itens na consulta QA e vínculo com o animal preservados, além da sessão do navegador. `integrity_check=ok`, zero erros de FK e zero novos tracebacks desde a linha 379 do log, sem apagar histórico de logs.
+- Mobile publicado aprovado de 320 a 740 px, inclusive topo/meio/fim da página e orientação horizontal; desktop 1366×768 e 1920×1080 sem overflow nas telas verificadas. O relato de bolinhas nos nomes não foi reproduzido; nomes/acentos e pseudo-elementos foram verificados sem alterar dados.
+- Detalhes e limites das evidências em [regressão acadêmica](regressao-academica-2026-10-27.md). Ambiente exclusivamente acadêmico; nenhuma conta real ou `DrFernanda` foi criada.
+
 
 ## Prioridade acadêmica vigente — 13/10/2026
 

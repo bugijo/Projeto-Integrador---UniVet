@@ -122,6 +122,8 @@ O banco demo deve ser configurado com `UNIVET_ENV=demo` e uma `DEMO_DATABASE_URL
 
 A demonstração acadêmica publicada está disponível em: https://bugijo.pythonanywhere.com
 
+Correções e evidências da rodada acadêmica: [regressão de 27/10/2026](docs/regressao-academica-2026-10-27.md).
+
 A conta acadêmica é o usuário fictício `admin`, com nome “Administrador de testes”. A senha deve ser informada somente no ambiente local/demo ou pelo responsável pela apresentação; ela não é documentada neste repositório.
 
 ## Testes

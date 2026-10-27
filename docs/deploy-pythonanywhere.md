@@ -81,6 +81,8 @@ from pythonanywhere_wsgi import application
 
 O arquivo `pythonanywhere_wsgi.py` do repositório valida o diretório, configura o SQLite demo e importa `app` como `application`. Ele não cria nem recria o banco durante o import.
 
+Ative **Force HTTPS** na seção Security da aba Web. O entrypoint WSGI usa cookies `Secure`, portanto o login publicado deve ser acessado por HTTPS.
+
 Clique em **Reload** depois de salvar o WSGI e após cada atualização do código.
 
 ## 5. Verificação online
