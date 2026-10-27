@@ -232,9 +232,10 @@ def listar_movimentacoes(connection, filtros=None, limite=None):
     if filtros.get("data_fim"):
         sql += " AND substr(CAST(movimentacoes_estoque.criado_em AS TEXT),1,10) <= ?"
         params.append(filtros["data_fim"])
-    sql += " ORDER BY movimentacoes_estoque.criado_em DESC, movimentacoes_estoque.id DESC"
+    ordem = " ORDER BY REPLACE(CAST(movimentacoes_estoque.criado_em AS TEXT), 'T', ' ') DESC, movimentacoes_estoque.id DESC"
     if filtros.get("paginado"):
-        return _paginacao(connection, sql.removesuffix(" ORDER BY movimentacoes_estoque.criado_em DESC, movimentacoes_estoque.id DESC"), params, filtros, " ORDER BY movimentacoes_estoque.criado_em DESC, movimentacoes_estoque.id DESC")
+        return _paginacao(connection, sql, params, filtros, ordem)
+    sql += ordem
     if limite:
         sql += " LIMIT ?"
         params.append(limite)

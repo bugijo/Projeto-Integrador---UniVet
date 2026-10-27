@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ static_url('style.css') }}">
 </head>
 <body>
     <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
@@ -139,7 +139,7 @@
             </main>
         </div>
     </div>
-    <script src="{{ url_for('static', filename='js/navigation.js') }}" defer></script>
-    <script src="{{ url_for('static', filename='js/estoque.js') }}" defer></script>
+    <script src="{{ static_url('js/navigation.js') }}" defer></script>
+    <script src="{{ static_url('js/estoque.js') }}" defer></script>
 </body>
 </html>

@@ -40,6 +40,25 @@ class AcademicRegressions(unittest.TestCase):
                 with web.app.app_context():
                     self.assertEqual(web.app.jinja_env.from_string('{{ value|moeda_br }}').render(value=value), expected)
 
+    def test_styles_and_navigation_have_content_version_in_rendered_urls(self):
+        from urllib.parse import urlsplit, parse_qs
+        class Assets(HTMLParser):
+            def __init__(self):
+                super().__init__(); self.urls=[]
+            def handle_starttag(self, tag, attrs):
+                attrs=dict(attrs)
+                value=attrs.get('href') if tag=='link' else attrs.get('src') if tag=='script' else None
+                if value and value.startswith('/static/') and ('.css' in value or '.js' in value):
+                    self.urls.append(value)
+        parser=Assets()
+        parser.feed(self.client.get('/pagina-inicial').get_data(as_text=True))
+        self.assertEqual(len(parser.urls),3)
+        for url in parser.urls:
+            with self.subTest(url=url):
+                version=parse_qs(urlsplit(url).query).get('v',[''])[0]
+                self.assertRegex(version,r'^[0-9a-f]{12}$')
+                self.assertEqual(self.client.get(url).status_code,200)
+
     def test_product_exit_preselected(self):
         page = self.client.get('/estoque/saidas?produto_id=1').get_data(as_text=True)
         from html.parser import HTMLParser
@@ -80,6 +99,18 @@ class AcademicRegressions(unittest.TestCase):
         for query in ['', '?produto_id=1', '?tipo=Entrada', '?pagina=2&por_pagina=1', '?tipo=Estorno', '?data_inicio=2099-01-01']:
             with self.subTest(query=query):
                 self.assertEqual(self.client.get('/estoque/movimentacoes'+query).status_code,200)
+
+    def test_movement_order_accepts_both_legacy_timestamp_separators(self):
+        from estoque.services import listar_movimentacoes
+        with self.fixture._conexao() as conn:
+            ids=[row[0] for row in conn.execute('SELECT id FROM movimentacoes_estoque ORDER BY id LIMIT 2')]
+            conn.execute("UPDATE movimentacoes_estoque SET criado_em='2000-01-01 00:00:00'")
+            conn.execute("UPDATE movimentacoes_estoque SET criado_em='2099-01-01T13:29' WHERE id=?",(ids[0],))
+            conn.execute("UPDATE movimentacoes_estoque SET criado_em='2099-01-01 13:43:00' WHERE id=?",(ids[1],))
+            for filters in ({},{'paginado':True,'por_pagina':1}):
+                result=listar_movimentacoes(conn,filters)
+                rows=result['itens'] if filters else result
+                self.assertEqual(rows[0]['id'],ids[1])
 
     def test_empty_movements_render(self):
         with self.fixture._conexao() as conn:

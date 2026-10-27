@@ -10,6 +10,7 @@ import json
 import sqlite3
 import unicodedata
 import secrets
+import hashlib
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from flask import Flask, Response, abort, flash, g, has_request_context, jsonify, redirect, render_template, request, session, url_for
@@ -499,6 +500,18 @@ def calendario_mensal(ano, mes):
             })
         semanas.append(dias)
     return semanas
+
+
+@lru_cache(maxsize=32)
+def static_asset_version(filename):
+    return hashlib.sha256((BASE_DIR / 'static' / filename).read_bytes()).hexdigest()[:12]
+
+
+def static_url(filename):
+    return url_for('static', filename=filename, v=static_asset_version(filename))
+
+
+app.jinja_env.globals['static_url'] = static_url
 
 
 @app.context_processor
