@@ -66,17 +66,17 @@ jobs:
         run: python -m unittest test_postgres.PostgresStockTests test_postgres.PostgresConcurrencyTests -v
 
   deploy:
-    needs: test
+    name: Smoke do demo publicado
+    needs: [test, postgres]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Smoke test
+      - name: Verificar demo no PythonAnywhere
         env:
-          PRODUCTION_BASE_URL: ${{ secrets.PRODUCTION_BASE_URL }}
+          DEMO_BASE_URL: https://bugijo.pythonanywhere.com
         run: |
-          if [ -n "$PRODUCTION_BASE_URL" ]; then
-            curl -fsSL "$PRODUCTION_BASE_URL/login"
-          else
-            echo "PRODUCTION_BASE_URL não configurado."
-            exit 1
-          fi
+          for path in /health /login /; do
+            curl --fail --silent --show-error --location --retry 2 --max-time 30 \
+              --output /dev/null "$DEMO_BASE_URL$path"
+            echo "HTTP 200: $path"
+          done
