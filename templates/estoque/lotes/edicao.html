@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}UniVet | Editar cadastro do lote{% endblock %}
+{% block content %}
+    <section class="page-header">
+        <div><span class="eyebrow">Estoque · Lotes</span><h1>Editar cadastro do lote</h1><p>{{ lote['numero_lote'] }} · saldo atual: {{ lote['quantidade_atual']|round(2) }} {{ lote['unidade_medida'] }}</p></div>
+        <a class="btn btn-secondary" href="{{ url_for('listar_lotes_page', produto_id=lote['produto_id']) }}">Voltar</a>
+    </section>
+    {% if tem_historico %}
+        <div class="highlight-box">O produto deste lote não pode ser alterado porque já existem movimentações vinculadas. Os demais dados cadastrais podem ser corrigidos; o saldo e o histórico permanecem intactos.</div>
+    {% else %}
+        <div class="highlight-box">Este lote ainda não possui movimentações. Corrigir o produto não altera o saldo nem cria uma entrada ou saída.</div>
+    {% endif %}
+    <section class="card form-card"><div class="card-body">
+        <form method="post" class="form-grid">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="field-group"><label for="produto_id">Produto</label><select id="produto_id" name="produto_id" {% if tem_historico %}disabled aria-describedby="produto-lote-bloqueado"{% endif %}>{% for produto in produtos %}<option value="{{ produto['id'] }}" {% if (dados.get('produto_id') or lote['produto_id'])|int == produto['id'] %}selected{% endif %}>{{ produto['nome'] }}</option>{% endfor %}</select>{% if tem_historico %}<small class="field-help" id="produto-lote-bloqueado">Produto bloqueado para preservar as referências já registradas.</small>{% endif %}</div>
+            <div class="field-group"><label for="numero_lote">Código do lote</label><input id="numero_lote" name="numero_lote" maxlength="100" value="{{ dados.get('numero_lote', lote['numero_lote']) }}" required></div>
+            <div class="field-group"><label for="validade">Validade</label><input id="validade" name="validade" type="date" value="{{ dados.get('validade', lote['validade'] or '') or '' }}"></div>
+            <div class="field-group"><label for="fornecedor_id">Fornecedor</label><select id="fornecedor_id" name="fornecedor_id"><option value="">Não informado</option>{% for fornecedor in fornecedores %}<option value="{{ fornecedor['id'] }}" {% if (dados.get('fornecedor_id') or lote['fornecedor_id'])|int == fornecedor['id'] %}selected{% endif %}>{{ fornecedor['nome'] }}</option>{% endfor %}</select></div>
+            <div class="actions"><button class="btn" type="submit">Salvar dados cadastrais</button><a class="btn btn-secondary" href="{{ url_for('ajustar_lote', lote_id=lote['id']) }}">Ajustar estoque</a><a class="btn btn-secondary" href="{{ url_for('listar_lotes_page', produto_id=lote['produto_id']) }}">Cancelar</a></div>
+        </form>
+    </div></section>
+{% endblock %}

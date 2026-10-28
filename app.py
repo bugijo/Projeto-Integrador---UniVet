@@ -32,6 +32,8 @@ from estoque.services import (
     listar_itens_consulta,
     listar_movimentacoes,
     listar_produtos,
+    produto_tem_historico,
+    lote_tem_historico,
     relatorio_consumo,
     registrar_entrada,
     registrar_ajuste,
@@ -811,6 +813,44 @@ def detalhar_produto(produto_id):
     )
 
 
+@app.route("/estoque/produtos/<int:produto_id>/excluir", methods=["POST"])
+@login_obrigatorio
+def excluir_produto(produto_id):
+    if request.form.get("confirmar_exclusao") != "sim":
+        flash("Confirme a exclusão para continuar.", "erro")
+        return redirect(url_for("detalhar_produto", produto_id=produto_id))
+    connection = get_db_connection()
+    begin_write(connection)
+    produto = connection.execute("SELECT id FROM produtos WHERE id = ?", (produto_id,)).fetchone()
+    if not produto:
+        connection.rollback()
+        connection.close()
+        flash("Produto não encontrado.", "erro")
+        return redirect(url_for("listar_produtos_page"))
+    if produto_tem_historico(connection, produto_id):
+        connection.rollback()
+        connection.close()
+        flash(
+            "Este produto possui histórico de estoque e não pode ser excluído. Utilize Desativar para preservação da rastreabilidade.",
+            "erro",
+        )
+        return redirect(url_for("detalhar_produto", produto_id=produto_id))
+    try:
+        connection.execute("DELETE FROM produtos WHERE id = ?", (produto_id,))
+        connection.commit()
+    except INTEGRITY_ERRORS:
+        connection.rollback()
+        connection.close()
+        flash(
+            "Este produto possui histórico de estoque e não pode ser excluído. Utilize Desativar para preservação da rastreabilidade.",
+            "erro",
+        )
+        return redirect(url_for("detalhar_produto", produto_id=produto_id))
+    connection.close()
+    flash("Produto excluído com sucesso.", "sucesso")
+    return redirect(url_for("listar_produtos_page"))
+
+
 @app.route("/estoque/produtos/<int:produto_id>/alternar", methods=["POST"])
 @login_obrigatorio
 def alternar_produto(produto_id):
@@ -1020,6 +1060,189 @@ def listar_lotes_page():
     fornecedores = listar_fornecedores(connection, somente_ativos=True)
     connection.close()
     return render_template("estoque/lotes/lista.html", lotes=pagina_resultado["itens"], pagina_resultado=pagina_resultado, produtos=produtos, fornecedores=fornecedores, filtros=filtros, secao="estoque", estoque_subsecao="lotes", breadcrumbs=breadcrumbs_padrao(("Estoque", url_for("estoque_dashboard")), ("Lotes", None)))
+
+
+def _dados_form_lote(connection, lote, dados=None):
+    dados = dados or {
+        "produto_id": lote["produto_id"],
+        "numero_lote": lote["numero_lote"],
+        "validade": lote["validade"],
+        "fornecedor_id": lote["fornecedor_id"],
+    }
+    produtos = connection.execute(
+        "SELECT id, nome, ativo FROM produtos WHERE ativo = 1 OR id = ? ORDER BY ativo DESC, nome ASC",
+        (lote["produto_id"],),
+    ).fetchall()
+    fornecedores = connection.execute(
+        "SELECT id, nome, ativo FROM fornecedores WHERE ativo = 1 OR id = ? ORDER BY ativo DESC, nome ASC",
+        (lote["fornecedor_id"],),
+    ).fetchall() if lote["fornecedor_id"] else connection.execute(
+        "SELECT id, nome, ativo FROM fornecedores WHERE ativo = 1 ORDER BY nome ASC"
+    ).fetchall()
+    return render_template(
+        "estoque/lotes/edicao.html",
+        lote=lote,
+        produtos=produtos,
+        fornecedores=fornecedores,
+        dados=dados or lote,
+        tem_historico=lote_tem_historico(connection, lote["id"]),
+        secao="estoque",
+        breadcrumbs=breadcrumbs_padrao(
+            ("Estoque", url_for("estoque_dashboard")),
+            ("Lotes", url_for("listar_lotes_page")),
+            ("Editar lote", None),
+        ),
+    )
+
+
+@app.route("/estoque/lotes/<int:lote_id>/editar", methods=["GET", "POST"])
+@login_obrigatorio
+def editar_lote(lote_id):
+    connection = get_db_connection()
+    lote = connection.execute(
+        """SELECT lotes.*, produtos.nome AS produto_nome, produtos.unidade_medida,
+                  fornecedores.nome AS fornecedor_nome
+           FROM lotes
+           JOIN produtos ON produtos.id = lotes.produto_id
+           LEFT JOIN fornecedores ON fornecedores.id = lotes.fornecedor_id
+           WHERE lotes.id = ?""",
+        (lote_id,),
+    ).fetchone()
+    if not lote:
+        connection.close()
+        flash("Lote não encontrado.", "erro")
+        return redirect(url_for("listar_lotes_page"))
+    if request.method == "GET":
+        response = _dados_form_lote(connection, lote)
+        connection.close()
+        return response
+
+    dados = {
+        "produto_id": request.form.get("produto_id", type=int),
+        "numero_lote": request.form.get("numero_lote", "").strip(),
+        "validade": request.form.get("validade", "").strip() or None,
+        "fornecedor_id": request.form.get("fornecedor_id", type=int) or None,
+    }
+    begin_write(connection)
+    lote_atual = connection.execute("SELECT * FROM lotes WHERE id = ?", (lote_id,)).fetchone()
+    if not lote_atual:
+        connection.rollback()
+        connection.close()
+        flash("Lote não encontrado.", "erro")
+        return redirect(url_for("listar_lotes_page"))
+    tem_historico = lote_tem_historico(connection, lote_id)
+    produto_id = dados["produto_id"] or lote_atual["produto_id"]
+    if tem_historico and produto_id != lote_atual["produto_id"]:
+        connection.rollback()
+        flash("O produto deste lote não pode ser alterado porque já existem movimentações vinculadas.", "erro")
+        render_connection = get_db_connection()
+        lote_render = render_connection.execute(
+            """SELECT lotes.*, produtos.nome AS produto_nome, produtos.unidade_medida,
+                      fornecedores.nome AS fornecedor_nome
+               FROM lotes JOIN produtos ON produtos.id = lotes.produto_id
+               LEFT JOIN fornecedores ON fornecedores.id = lotes.fornecedor_id
+               WHERE lotes.id = ?""",
+            (lote_id,),
+        ).fetchone()
+        response = _dados_form_lote(render_connection, lote_render, dados)
+        render_connection.close()
+        connection.close()
+        return response
+
+    validade = dados["validade"]
+    try:
+        if not dados["numero_lote"] or len(dados["numero_lote"]) > 100:
+            raise ValueError
+        if validade:
+            datetime.strptime(validade, "%Y-%m-%d")
+        produto_valido = connection.execute(
+            "SELECT id FROM produtos WHERE id = ? AND (ativo = 1 OR id = ?)",
+            (produto_id, lote_atual["produto_id"]),
+        ).fetchone()
+        if not produto_valido:
+            raise ValueError
+        if dados["fornecedor_id"] and not connection.execute(
+            "SELECT id FROM fornecedores WHERE id = ? AND (ativo = 1 OR id = ?)",
+            (dados["fornecedor_id"], lote_atual["fornecedor_id"] or -1),
+        ).fetchone():
+            raise ValueError
+        connection.execute(
+            "UPDATE lotes SET produto_id = ?, numero_lote = ?, validade = ?, fornecedor_id = ? WHERE id = ?",
+            (produto_id, dados["numero_lote"], validade, dados["fornecedor_id"], lote_id),
+        )
+        connection.commit()
+    except ValueError:
+        connection.rollback()
+        connection.close()
+        flash("Confira produto, fornecedor, número do lote e validade.", "erro")
+        render_connection = get_db_connection()
+        lote_render = render_connection.execute(
+            """SELECT lotes.*, produtos.nome AS produto_nome, produtos.unidade_medida,
+                      fornecedores.nome AS fornecedor_nome
+               FROM lotes JOIN produtos ON produtos.id = lotes.produto_id
+               LEFT JOIN fornecedores ON fornecedores.id = lotes.fornecedor_id
+               WHERE lotes.id = ?""",
+            (lote_id,),
+        ).fetchone()
+        response = _dados_form_lote(render_connection, lote_render, dados)
+        render_connection.close()
+        return response
+    except INTEGRITY_ERRORS:
+        connection.rollback()
+        connection.close()
+        flash("Já existe um lote com esse número para o produto selecionado.", "erro")
+        render_connection = get_db_connection()
+        lote_render = render_connection.execute(
+            """SELECT lotes.*, produtos.nome AS produto_nome, produtos.unidade_medida,
+                      fornecedores.nome AS fornecedor_nome
+               FROM lotes JOIN produtos ON produtos.id = lotes.produto_id
+               LEFT JOIN fornecedores ON fornecedores.id = lotes.fornecedor_id
+               WHERE lotes.id = ?""",
+            (lote_id,),
+        ).fetchone()
+        response = _dados_form_lote(render_connection, lote_render, dados)
+        render_connection.close()
+        return response
+    connection.close()
+    flash("Dados cadastrais do lote atualizados. O saldo e o histórico não foram alterados.", "sucesso")
+    return redirect(url_for("listar_lotes_page", produto_id=produto_id))
+
+
+@app.route("/estoque/lotes/<int:lote_id>/excluir", methods=["POST"])
+@login_obrigatorio
+def excluir_lote(lote_id):
+    if request.form.get("confirmar_exclusao") != "sim":
+        flash("Confirme a exclusão para continuar.", "erro")
+        return redirect(url_for("listar_lotes_page"))
+    connection = get_db_connection()
+    begin_write(connection)
+    lote = connection.execute("SELECT id, produto_id, quantidade_atual FROM lotes WHERE id = ?", (lote_id,)).fetchone()
+    if not lote:
+        connection.rollback()
+        connection.close()
+        flash("Lote não encontrado.", "erro")
+        return redirect(url_for("listar_lotes_page"))
+    if lote_tem_historico(connection, lote_id):
+        connection.rollback()
+        connection.close()
+        flash("Este lote possui movimentações e não pode ser excluído para preservar o histórico.", "erro")
+        return redirect(url_for("listar_lotes_page", produto_id=lote["produto_id"]))
+    if float(lote["quantidade_atual"] or 0) != 0:
+        connection.rollback()
+        connection.close()
+        flash("Este lote possui saldo atual e não pode ser excluído. Regularize o saldo e preserve o registro para manter a rastreabilidade.", "erro")
+        return redirect(url_for("listar_lotes_page", produto_id=lote["produto_id"]))
+    try:
+        connection.execute("DELETE FROM lotes WHERE id = ?", (lote_id,))
+        connection.commit()
+    except INTEGRITY_ERRORS:
+        connection.rollback()
+        connection.close()
+        flash("Este lote possui movimentações e não pode ser excluído para preservar o histórico.", "erro")
+        return redirect(url_for("listar_lotes_page", produto_id=lote["produto_id"]))
+    connection.close()
+    flash("Lote excluído com sucesso.", "sucesso")
+    return redirect(url_for("listar_lotes_page", produto_id=lote["produto_id"]))
 
 
 @app.route("/estoque/lotes/<int:lote_id>/ajuste", methods=["GET", "POST"])

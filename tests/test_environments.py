@@ -186,7 +186,7 @@ print(json.dumps([c.get(p).status_code for p in ('/pagina-inicial','/consultas',
         self.assertEqual(result,[200,200,200,200,True])
 
     def test_admin_cli_refuses_password_output_to_pipe(self):
-        result = subprocess.run([sys.executable,'admin_cli.py','--database','not-opened.db','create-user','--login','fictitious'],capture_output=True,text=True,timeout=10)
+        result = subprocess.run([sys.executable,'admin_cli.py','--database','not-opened.db','create-user','--login','fictitious'],capture_output=True,text=True,timeout=30)
         self.assertNotEqual(result.returncode,0)
         self.assertEqual(result.stdout,'')
         self.assertIn('terminal local interativo',result.stderr)

@@ -167,7 +167,7 @@ c=app.app.test_client()
 r=c.get('/static/style.css',base_url='https://localhost')
 print(json.dumps([app.app.config['SESSION_COOKIE_SECURE'],app.app.debug,r.headers.get('Strict-Transport-Security'),c.get('/static/style.css',base_url='http://localhost').status_code]))
 """
-        result=subprocess.run([sys.executable,'-c',script],env=env,capture_output=True,text=True,timeout=10,check=True)
+        result=subprocess.run([sys.executable,'-c',script],env=env,capture_output=True,text=True,timeout=30,check=True)
         self.assertEqual(json.loads(result.stdout),[True,False,'max-age=31536000',400])
 
 

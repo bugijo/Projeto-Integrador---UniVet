@@ -1,4 +1,13 @@
-# Estado atual — 27/10/2026
+# Estado atual — 28/10/2026
+
+## Manutenção segura de produtos e lotes — 28/10/2026
+
+- Implementação local em andamento na branch `main`, baseada no clone oficial. Escopo: exclusão física de produto/lote só sem referências e histórico, edição cadastral de lote separada de ajuste de saldo, troca de produto bloqueada após histórico, rotas mutáveis autenticadas/admin/CSRF e preservação de desativação.
+- Nenhuma migration ou cascade foi adicionada. Referências de lotes, movimentações e itens de consulta são verificadas sob transação de escrita; saldo diferente de zero também bloqueia exclusão de lote.
+- Testes focados: 13/13 aprovados. Reexecução em cópia de trabalho temporária segura: suíte SQLite completa 148 testes, zero falhas/erros (38 skips PostgreSQL opt-in); os três testes que haviam expirado por subprocesso WSGI/app também passaram isoladamente e na suíte. PostgreSQL opt-in: 38/38 passaram, incluindo estoque, FEFO, baixa automática, concorrência e ciclo de container descartável. Execução isolada em Docker levou 162,6 s, mas terminou com código 0. `python -m compileall -q .` e `git diff --check`: aprovados no clone oficial após a cópia.
+- Diagnóstico do volume: espaço (40% usado), inodes (1% usado), mount RW e permissões estavam normais. Entretanto, o processo `mount.ntfs` esteve em estado D por longo período e leituras/diff chegaram a bloquear; a cópia segura em `/tmp` permitiu validar sem substituir o clone. O acesso voltou a responder para as verificações finais. Não foi desmontado volume nem encerrado processo de sistema.
+- PythonAnywhere: backup privado pré-auditoria em `/home/Bugijo/univet-demo-pre-audit-20261028-145234.sqlite3`, `integrity_check=ok`, zero violações FK. Auditoria encontrou 3 produtos QA (`QA acadêmico 20261027-*`), todos já desativados e todos com movimentações; 2 também aparecem em itens de consulta. Todos os 7 lotes auditados têm movimentações; dois estão associados a consultas. Nenhum candidato é elegível para hard delete. Histórico foi preservado, sem alteração/limpeza do banco nesta rodada.
+- Evidências e limites estão em [auditoria de dados QA e regressão de manutenção](regressao-manutencao-estoque-2026-10-28.md). Revisão independente do diff não encontrou bloqueadores. Commit, push, reload e validação das novas rotas online ainda estão pendentes; a implementação continua não publicada até essas etapas.
 
 ## Rodada acadêmica de correções — 26–27/10/2026
 

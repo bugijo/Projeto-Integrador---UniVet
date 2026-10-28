@@ -14,6 +14,27 @@ MAX_VALOR = 1_000_000_000
 MAX_MARGEM = 10_000
 
 
+def produto_tem_historico(connection, produto_id):
+    row = connection.execute(
+        """SELECT
+             EXISTS (SELECT 1 FROM lotes WHERE produto_id = ?) OR
+             EXISTS (SELECT 1 FROM movimentacoes_estoque WHERE produto_id = ?) OR
+             EXISTS (SELECT 1 FROM itens_consulta WHERE produto_id = ?)""",
+        (produto_id, produto_id, produto_id),
+    ).fetchone()
+    return bool(row[0])
+
+
+def lote_tem_historico(connection, lote_id):
+    row = connection.execute(
+        """SELECT
+             EXISTS (SELECT 1 FROM movimentacoes_estoque WHERE lote_id = ?) OR
+             EXISTS (SELECT 1 FROM itens_consulta WHERE lote_id = ?)""",
+        (lote_id, lote_id),
+    ).fetchone()
+    return bool(row[0])
+
+
 class EstoqueError(Exception):
     """Erro de regra de negócio apresentado ao usuário."""
 
@@ -118,6 +139,9 @@ def listar_produtos(connection, filtros=None):
     filtros = filtros or {}
     sql = """
         SELECT produtos.*, categorias.nome AS categoria_nome,
+               (EXISTS (SELECT 1 FROM lotes hl WHERE hl.produto_id = produtos.id) OR
+                EXISTS (SELECT 1 FROM movimentacoes_estoque hm WHERE hm.produto_id = produtos.id) OR
+                EXISTS (SELECT 1 FROM itens_consulta hi WHERE hi.produto_id = produtos.id)) AS tem_historico,
                COALESCE(SUM(CASE WHEN lotes.ativo = 1 THEN lotes.quantidade_atual ELSE 0 END), 0) AS estoque_total,
                COALESCE(SUM(CASE WHEN lotes.ativo = 1 THEN lotes.quantidade_atual * lotes.valor_compra_unitario ELSE 0 END), 0) AS valor_estoque,
                COUNT(DISTINCT CASE WHEN lotes.ativo = 1 THEN lotes.id END) AS total_lotes,
@@ -153,6 +177,9 @@ def buscar_produto(connection, produto_id):
     return connection.execute(
         """
         SELECT produtos.*, categorias.nome AS categoria_nome,
+               (EXISTS (SELECT 1 FROM lotes hl WHERE hl.produto_id = produtos.id) OR
+                EXISTS (SELECT 1 FROM movimentacoes_estoque hm WHERE hm.produto_id = produtos.id) OR
+                EXISTS (SELECT 1 FROM itens_consulta hi WHERE hi.produto_id = produtos.id)) AS tem_historico,
                COALESCE(SUM(CASE WHEN lotes.ativo = 1 THEN lotes.quantidade_atual ELSE 0 END), 0) AS estoque_total,
                COUNT(DISTINCT CASE WHEN lotes.ativo = 1 THEN lotes.id END) AS total_lotes,
                COALESCE(MIN(CASE WHEN lotes.ativo = 1 AND lotes.quantidade_atual > 0 THEN lotes.valor_venda_sugerido_unitario END), 0) AS valor_venda_sugerido
@@ -170,6 +197,8 @@ def listar_lotes(connection, filtros=None):
     filtros = filtros or {}
     sql = """
         SELECT lotes.*, produtos.nome AS produto_nome, produtos.codigo AS produto_codigo,
+               (EXISTS (SELECT 1 FROM movimentacoes_estoque hm WHERE hm.lote_id = lotes.id) OR
+                EXISTS (SELECT 1 FROM itens_consulta hi WHERE hi.lote_id = lotes.id)) AS tem_historico,
                produtos.unidade_medida, produtos.margem_lucro_percentual, fornecedores.nome AS fornecedor_nome
         FROM lotes
         INNER JOIN produtos ON produtos.id = lotes.produto_id
